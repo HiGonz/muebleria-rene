@@ -1,7 +1,7 @@
 "use client";
 
 import { Canvas, useThree } from "@react-three/fiber";
-import { Environment, Grid, OrbitControls, Text } from "@react-three/drei";
+import { Grid, OrbitControls } from "@react-three/drei";
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { cameraPresets } from "./CameraControls";
@@ -78,15 +78,11 @@ export function SceneCanvas({
         </mesh>
         {model}
         {showMeasures && (
-          <group>
-            <mesh position={[0, height / 200 + 0.12, depth / 200 + 0.18]}>
-              <boxGeometry args={[width / 100, 0.01, 0.01]} />
-              <meshStandardMaterial color="#10b981" />
-            </mesh>
-            <Text position={[0, height / 200 + 0.18, depth / 200 + 0.18]} fontSize={0.09} color="#c7d2fe">{width} cm</Text>
-          </group>
+          <mesh position={[0, height / 200 + 0.12, depth / 200 + 0.18]}>
+            <boxGeometry args={[width / 100, 0.01, 0.01]} />
+            <meshStandardMaterial color="#10b981" />
+          </mesh>
         )}
-        <Environment preset="warehouse" />
         <OrbitControls enableDamping dampingFactor={0.08} />
       </Canvas>
     </div>
