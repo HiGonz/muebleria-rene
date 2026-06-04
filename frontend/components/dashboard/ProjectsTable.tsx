@@ -50,7 +50,7 @@ export function ProjectsTable({ projects }: { projects: ProjectRecord[] }) {
           ))}
         </select>
       </div>
-      <div className="overflow-hidden rounded-2xl border border-white/10">
+      <div className="overflow-x-auto rounded-2xl border border-white/10">
         <table className="min-w-full text-left text-sm">
           <thead className="bg-white/5 text-zinc-400">
             <tr>

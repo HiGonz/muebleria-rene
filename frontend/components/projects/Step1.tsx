@@ -22,6 +22,7 @@ export function Step1({ draft, updateDraft }: { draft: ProjectDraft; updateDraft
           <option className="bg-[#111118]">Closet</option>
           <option className="bg-[#111118]">Escritorio</option>
           <option className="bg-[#111118]">Mueble TV</option>
+          <option className="bg-[#111118]">Cocina</option>
         </select>
       </label>
     </div>

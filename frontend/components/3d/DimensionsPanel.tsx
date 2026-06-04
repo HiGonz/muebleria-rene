@@ -1,24 +1,28 @@
 import { Card } from "@/components/ui/card";
+import type { FurnitureType } from "@/services/materialCalculator";
 
 export function DimensionsPanel({
+  type,
   height,
   width,
   depth,
   shelves,
   doors,
 }: {
+  type?: FurnitureType;
   height: number;
   width: number;
   depth: number;
   shelves: number;
   doors: number;
 }) {
+  const isKitchen = type === "Cocina";
   const rows = [
     ["Alto", `${height} cm`],
     ["Ancho", `${width} cm`],
     ["Fondo", `${depth} cm`],
-    ["Repisas", `${shelves}`],
-    ["Puertas", `${doors}`],
+    [isKitchen ? "P. altas" : "Repisas", `${shelves}`],
+    [isKitchen ? "P. bajas" : "Puertas", `${doors}`],
   ];
 
   return (

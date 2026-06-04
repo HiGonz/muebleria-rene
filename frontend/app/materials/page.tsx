@@ -17,7 +17,7 @@ export default async function MaterialsPage() {
           </div>
           <Button>Nuevo material</Button>
         </div>
-        <div className="overflow-hidden rounded-2xl border border-white/10">
+        <div className="overflow-x-auto rounded-2xl border border-white/10">
           <table className="min-w-full text-left text-sm">
             <thead className="bg-white/5 text-zinc-400">
               <tr>{['Nombre', 'Tipo', 'Unidad', 'Costo unitario', 'Stock', 'Estado', 'Acciones'].map((item) => <th key={item} className="px-4 py-3 font-medium">{item}</th>)}</tr>

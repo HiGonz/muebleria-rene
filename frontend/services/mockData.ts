@@ -165,3 +165,35 @@ export function getQuoteForProject(projectId: string) {
 export function getQuotes() {
   return baseProjects.map((project) => getQuoteForProject(project.id));
 }
+
+// ─── Kitchen Projects (Mock) ───────────────────────────────────────────────────
+export interface KitchenProjectSummary {
+  id: string;
+  projectName: string;
+  clientName: string;
+  clientPhone: string;
+  kitchenStyle: string;
+  status: string;
+  modulesCount: number;
+  total: number | null;
+  createdAt: string;
+}
+
+const baseKitchenProjects: KitchenProjectSummary[] = [
+  {
+    id: "KIT-001",
+    projectName: "Cocina Moderna Blanca",
+    clientName: "Ana González",
+    clientPhone: "871 321 0987",
+    kitchenStyle: "En L",
+    status: "Cotizado",
+    modulesCount: 12,
+    total: 145000,
+    createdAt: "2026-05-28T10:00:00.000Z",
+  },
+];
+
+export function getKitchenProjects() {
+  return baseKitchenProjects;
+}
+

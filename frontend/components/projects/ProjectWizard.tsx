@@ -29,7 +29,7 @@ export function ProjectWizard() {
 
   return (
     <div className="grid gap-6 xl:grid-cols-[minmax(360px,30%)_1fr]">
-      <Card className="space-y-6">
+      <Card className="min-w-0 space-y-6">
         <div>
           <p className="text-sm text-indigo-300">Wizard de 3 pasos</p>
           <h3 className="mt-1 text-2xl font-semibold">Nuevo proyecto</h3>

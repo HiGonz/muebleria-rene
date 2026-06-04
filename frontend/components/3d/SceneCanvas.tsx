@@ -2,22 +2,33 @@
 
 import { Canvas, useThree } from "@react-three/fiber";
 import { Grid, OrbitControls } from "@react-three/drei";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { cameraPresets } from "./CameraControls";
 import { ClosetModel } from "./ClosetModel";
 import { DeskModel } from "./DeskModel";
+import { KitchenModel } from "./KitchenModel";
 import { TvStandModel } from "./TvStandModel";
 import { DimensionsPanel } from "./DimensionsPanel";
 import type { FurnitureType } from "@/services/materialCalculator";
+import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 
-function CameraRig({ target }: { target: [number, number, number] }) {
+function CameraRig({ target, lookAtY, controlsRef }: {
+  target: [number, number, number];
+  lookAtY: number;
+  controlsRef: React.RefObject<OrbitControlsImpl | null>;
+}) {
   const { camera } = useThree();
 
   useEffect(() => {
     camera.position.set(...target);
-    camera.lookAt(0, 0.8, 0);
-  }, [camera, target]);
+    if (controlsRef.current) {
+      controlsRef.current.target.set(0, lookAtY, 0);
+      controlsRef.current.update();
+    } else {
+      camera.lookAt(0, lookAtY, 0);
+    }
+  }, [camera, target, lookAtY, controlsRef]);
 
   return null;
 }
@@ -44,6 +55,7 @@ export function SceneCanvas({
   const [wireframe, setWireframe] = useState(false);
   const [showMeasures, setShowMeasures] = useState(true);
   const [cameraTarget, setCameraTarget] = useState(cameraPresets.reset);
+  const controlsRef = useRef<OrbitControlsImpl>(null);
 
   const model = useMemo(() => {
     if (type === "Closet") {
@@ -52,22 +64,25 @@ export function SceneCanvas({
     if (type === "Escritorio") {
       return <DeskModel width={width} height={height} depth={depth} shelves={shelves} drawers={drawers} color={color} wireframe={wireframe} />;
     }
+    if (type === "Cocina") {
+      return <KitchenModel width={width} height={height} depth={depth} shelves={shelves} drawers={drawers} doors={doors} color={color} wireframe={wireframe} />;
+    }
     return <TvStandModel width={width} height={height} depth={depth} shelves={shelves} doors={doors} color={color} wireframe={wireframe} />;
   }, [color, depth, doors, drawers, height, shelves, type, width, wireframe]);
 
   return (
-    <div className="relative h-[620px] overflow-hidden rounded-[28px] border border-white/10 bg-[#0d0d14]">
-      <DimensionsPanel height={height} width={width} depth={depth} shelves={shelves} doors={doors} />
-      <div className="absolute right-4 top-4 z-10 flex flex-wrap gap-2">
-        <Button variant="secondary" className="h-9" onClick={() => setCameraTarget(cameraPresets.reset)}>Reset vista</Button>
-        <Button variant="secondary" className="h-9" onClick={() => setCameraTarget(cameraPresets.front)}>Frontal</Button>
-        <Button variant="secondary" className="h-9" onClick={() => setCameraTarget(cameraPresets.side)}>Lateral</Button>
-        <Button variant="secondary" className="h-9" onClick={() => setCameraTarget(cameraPresets.top)}>Superior</Button>
-        <Button variant="secondary" className="h-9" onClick={() => setWireframe((value) => !value)}>{wireframe ? "Sólido" : "Wireframe"}</Button>
-        <Button variant="secondary" className="h-9" onClick={() => setShowMeasures((value) => !value)}>{showMeasures ? "Ocultar cotas" : "Mostrar cotas"}</Button>
+    <div className="relative h-[420px] overflow-hidden rounded-[28px] border border-white/10 bg-[#0d0d14] md:h-[620px]">
+      <DimensionsPanel type={type} height={height} width={width} depth={depth} shelves={shelves} doors={doors} />
+      <div className="absolute right-2 top-2 z-10 flex flex-wrap justify-end gap-1.5 md:right-4 md:top-4 md:gap-2">
+        <Button variant="secondary" className="h-8 px-2 text-xs md:h-9 md:px-3" onClick={() => setCameraTarget(cameraPresets.reset)}>Reset</Button>
+        <Button variant="secondary" className="h-8 px-2 text-xs md:h-9 md:px-3" onClick={() => setCameraTarget(cameraPresets.front)}>Frontal</Button>
+        <Button variant="secondary" className="h-8 px-2 text-xs md:h-9 md:px-3" onClick={() => setCameraTarget(cameraPresets.side)}>Lateral</Button>
+        <Button variant="secondary" className="h-8 px-2 text-xs md:h-9 md:px-3" onClick={() => setCameraTarget(cameraPresets.top)}>Superior</Button>
+        <Button variant="secondary" className="h-8 px-2 text-xs md:h-9 md:px-3" onClick={() => setWireframe((value) => !value)}>{wireframe ? "Sólido" : "Wire"}</Button>
+        <Button variant="secondary" className="h-8 px-2 text-xs md:h-9 md:px-3" onClick={() => setShowMeasures((value) => !value)}>{showMeasures ? "− cotas" : "+ cotas"}</Button>
       </div>
       <Canvas shadows camera={{ position: cameraPresets.reset, fov: 45 }}>
-        <CameraRig target={cameraTarget} />
+        <CameraRig target={cameraTarget} lookAtY={height / 200} controlsRef={controlsRef} />
         <ambientLight intensity={0.85} />
         <directionalLight position={[3, 4, 2]} intensity={1.2} castShadow shadow-mapSize-width={1024} shadow-mapSize-height={1024} />
         <pointLight position={[-2, 3, -2]} intensity={0.5} />
@@ -83,7 +98,7 @@ export function SceneCanvas({
             <meshStandardMaterial color="#10b981" />
           </mesh>
         )}
-        <OrbitControls enableDamping dampingFactor={0.08} />
+        <OrbitControls ref={controlsRef} enableDamping dampingFactor={0.08} />
       </Canvas>
     </div>
   );

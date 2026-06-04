@@ -5,6 +5,7 @@ const clampByType = {
   Closet: { height: [180, 280], width: [120, 320], depth: [45, 80] },
   Escritorio: { height: [70, 85], width: [100, 240], depth: [50, 90] },
   "Mueble TV": { height: [45, 90], width: [120, 300], depth: [35, 65] },
+  Cocina: { height: [200, 250], width: [150, 400], depth: [55, 70] },
 } as const;
 
 export function Step2({ draft, updateDraft }: { draft: ProjectDraft; updateDraft: (payload: Partial<ProjectDraft>) => void }) {
@@ -26,7 +27,7 @@ export function Step2({ draft, updateDraft }: { draft: ProjectDraft; updateDraft
       {numberField("width", "Ancho", limits.width[0], limits.width[1])}
       {numberField("depth", "Fondo", limits.depth[0], limits.depth[1])}
       <label className="space-y-2 text-sm text-zinc-300">
-        <span>Número de repisas</span>
+        <span>{draft.type === "Cocina" ? "Puertas gabinetes altos" : "Número de repisas"}</span>
         <Input type="number" min={0} max={8} value={draft.shelves} onChange={(e) => updateDraft({ shelves: Number(e.target.value) })} />
       </label>
       <label className="space-y-2 text-sm text-zinc-300">
@@ -34,7 +35,7 @@ export function Step2({ draft, updateDraft }: { draft: ProjectDraft; updateDraft
         <Input type="number" min={0} max={8} value={draft.drawers} onChange={(e) => updateDraft({ drawers: Number(e.target.value) })} />
       </label>
       <label className="space-y-2 text-sm text-zinc-300">
-        <span>Número de puertas</span>
+        <span>{draft.type === "Cocina" ? "Puertas gabinetes bajos" : "Número de puertas"}</span>
         <Input type="number" min={0} max={6} value={draft.doors} onChange={(e) => updateDraft({ doors: Number(e.target.value) })} />
       </label>
       <label className="space-y-2 text-sm text-zinc-300">
