@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\KitchenProjectController;
 use App\Http\Controllers\MaterialController;
 use App\Http\Controllers\ProjectController;
 use App\Http\Controllers\QuoteController;
@@ -24,4 +25,9 @@ Route::middleware('auth:sanctum')->group(function (): void {
     Route::put('/quotes/{quote}/status', [QuoteController::class, 'updateStatus']);
 
     Route::apiResource('materials', MaterialController::class)->except(['show']);
+
+    // Kitchen projects (modular builder)
+    Route::apiResource('kitchen-projects', KitchenProjectController::class);
+    Route::post('/kitchen-projects/{kitchenProject}/modules/sync', [KitchenProjectController::class, 'syncModules']);
+    Route::post('/kitchen-projects/{kitchenProject}/quote', [KitchenProjectController::class, 'quote']);
 });
