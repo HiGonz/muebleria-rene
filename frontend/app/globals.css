@@ -55,3 +55,12 @@ textarea {
   background-image: linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
   background-size: 40px 40px;
 }
+
+/* Keeps floating UI (FAB, mobile tab bars) clear of notches / home-indicators */
+.safe-bottom {
+  padding-bottom: max(1rem, env(safe-area-inset-bottom));
+}
+
+.safe-bottom-inset {
+  bottom: max(1.25rem, env(safe-area-inset-bottom));
+}

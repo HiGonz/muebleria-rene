@@ -27,10 +27,23 @@ export function ModuleEditor() {
   const module = getEditingModule();
 
   if (!module) {
+    // Defensive fallback — normally unreachable, since KitchenBuilder only
+    // mounts this component when a matching module exists. Kept so this is
+    // never a dead end (no back button) if that invariant is ever violated.
     return (
-      <div className="flex flex-1 flex-col items-center justify-center gap-3 py-10 px-6 text-center">
-        <div className="text-5xl opacity-30">✎</div>
-        <p className="text-sm text-zinc-400">Selecciona un módulo de la lista para personalizarlo</p>
+      <div className="flex h-full flex-col">
+        <div className="flex shrink-0 items-center justify-end border-b border-white/8 px-5 py-4">
+          <button
+            onClick={() => setEditingModule(null)}
+            className="shrink-0 text-xl leading-none text-zinc-500 transition-colors hover:text-white"
+          >
+            ×
+          </button>
+        </div>
+        <div className="flex flex-1 flex-col items-center justify-center gap-3 py-10 px-6 text-center">
+          <div className="text-5xl opacity-30">✎</div>
+          <p className="text-sm text-zinc-400">Selecciona un módulo de la lista para personalizarlo</p>
+        </div>
       </div>
     );
   }

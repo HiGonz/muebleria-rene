@@ -9,7 +9,59 @@ import type {
   CountertopMaterial,
   KitchenMaterialLine,
   KitchenQuoteSummary,
+  DrawerDef,
+  DoorDef,
+  KitchenDraft,
+  WallOpening,
 } from "@/types/kitchen";
+import { packSheets, STANDARD_SHEET_WIDTH_CM, STANDARD_SHEET_HEIGHT_CM, type CutPiece } from "./sheetPacking";
+
+// No front — drawer or door — reaches all the way up to the countertop
+// underside: a structural rail/apron above the top-most one leaves room for
+// mounting hardware. This comes off the whole usable face height before it's
+// split between doors and drawers.
+const TOP_FACE_MARGIN_CM = 6;
+
+// ─── Resolve effective doors/drawers (mirrors FaceEditor logic) ────────────────
+function resolveDoors(mod: KitchenModule): DoorDef[] {
+  const { options: o, dimensions: d } = mod;
+  if (o.useDetailedLayout && o.doorDefs?.length) return o.doorDefs;
+  const count = o.doors || 0;
+  if (!count) return [];
+  const toeKick = o.hasToeKick ? o.toeKickHeight : 0;
+  const ctThick = o.includesCountertop ? o.countertopThickness : 0;
+  const usableH = Math.max(d.height - toeKick - ctThick - TOP_FACE_MARGIN_CM, 0);
+  const drawerCount = o.drawers || 0;
+  const drawerZoneH = drawerCount > 0 ? Math.max(usableH - Math.max(usableH * 0.55, 40), 0) : 0;
+  const doorZoneH = usableH - drawerZoneH;
+  const doorW = 100 / count;
+  return Array.from({ length: count }, (_, i) => ({
+    id: `auto-dr${i}`, label: `Puerta ${i + 1}`,
+    widthPct: doorW, offsetPct: i * doorW,
+    fromBottomCm: 0, heightCm: doorZoneH,
+    hingeLeft: i % 2 === 0, doorStyle: o.doorStyle,
+  }));
+}
+
+function resolveDrawers(mod: KitchenModule): DrawerDef[] {
+  const { options: o, dimensions: d } = mod;
+  if (o.useDetailedLayout && o.drawerDefs?.length) return o.drawerDefs;
+  const count = o.drawers || 0;
+  if (!count) return [];
+  const toeKick = o.hasToeKick ? o.toeKickHeight : 0;
+  const ctThick = o.includesCountertop ? o.countertopThickness : 0;
+  const usableH = Math.max(d.height - toeKick - ctThick - TOP_FACE_MARGIN_CM, 0);
+  const doorCount = o.doors || 0;
+  const doorZoneH = doorCount > 0 ? Math.max(usableH * 0.55, 40) : 0;
+  const drawerZoneH = Math.max(usableH - doorZoneH, 0);
+  const drawerH = drawerZoneH / count;
+  return Array.from({ length: count }, (_, i) => ({
+    id: `auto-d${i}`, label: `Cajón ${i + 1}`,
+    heightCm: drawerH, fromBottomCm: doorZoneH + i * drawerH,
+    isGhost: mod.type === "bajo_tarja",
+    widthPct: 100, offsetPct: 0, drawerSystem: o.drawerSystem,
+  }));
+}
 
 // ─── Default Options ───────────────────────────────────────────────────────────
 export const DEFAULT_OPTIONS: ModuleOptions = {
@@ -47,16 +99,25 @@ export const DEFAULT_OPTIONS: ModuleOptions = {
   hoodType: "Telescópica",
   hoodWidth: 60,
   notes: "",
-  boardMaterial: "Melamina blanca 18mm",
-  color: "#e8e0d4",
+  // Interior board is fixed shop-wide — not user-configurable (see ModuleInspector).
+  boardMaterial: "Melamina blanca 15mm",
+  color: "#FFFFFF",
   finish: "Natural",
+  exteriorMaterial: "MDF 18mm",
+  exteriorColor: "#e8e0d4",
+  exteriorFinish: "Natural",
+  exteriorTexture: "blanco_liso",
+  leftSidePanel: "interior",
+  rightSidePanel: "interior",
   useDetailedLayout: false,
   drawerDefs: [],
   doorDefs: [],
+  countertopTexture: "ninguna",
 };
 
 // ─── Material Costs (MXN per unit) ────────────────────────────────────────────
 export const BOARD_COSTS: Record<BoardMaterial, number> = {
+  "Melamina blanca 15mm": 185,
   "MDF 15mm": 160,
   "MDF 18mm": 180,
   "Melamina blanca 18mm": 210,
@@ -124,8 +185,8 @@ export const MODULE_CATALOG: ModuleCatalogEntry[] = [
     description: "Mueble bajo con espacio reforzado para estufa empotrable",
     icon: "🔥",
     defaultDimensions: { height: 82, width: 60, depth: 60 },
-    defaultOptions: { drawers: 1, doors: 2, shelves: 0 },
-    configurableFields: ["height", "width", "depth", "drawers", "doors", "doorStyle", "includesCountertop", "countertopMaterial", "boardMaterial", "color"],
+    defaultOptions: { drawers: 1, doors: 2, shelves: 0, includesCountertop: false },
+    configurableFields: ["height", "width", "depth", "drawers", "doors", "doorStyle", "boardMaterial", "color"],
   },
   {
     type: "bajo_parrilla",
@@ -134,7 +195,7 @@ export const MODULE_CATALOG: ModuleCatalogEntry[] = [
     description: "Mueble base reforzado para parrilla de asador",
     icon: "🍖",
     defaultDimensions: { height: 82, width: 80, depth: 65 },
-    defaultOptions: { drawers: 0, doors: 2, shelves: 1, hasVentilation: true },
+    defaultOptions: { drawers: 0, doors: 2, shelves: 1, hasVentilation: true, includesCountertop: false },
     configurableFields: ["height", "width", "depth", "doors", "doorStyle", "hasVentilation", "boardMaterial", "color"],
   },
   {
@@ -588,7 +649,76 @@ export function getModulesByCategory(category: ModuleCategory): ModuleCatalogEnt
   return MODULE_CATALOG.filter((entry) => entry.category === category);
 }
 
-export function buildNewModule(type: KitchenModuleType, position = 0, wall: KitchenModule["wall"] = "A"): KitchenModule {
+// ─── Sample kitchen (demo draft) ────────────────────────────────────────────────
+// A single-wall run along the north wall (base + countertop + upper cabinets,
+// a tall pantry tower, sink/stove accessories and an extractor hood) plus a
+// freestanding island, three windows and a door — used by the "Cocina de
+// muestra" button so a first-time user sees a fully furnished room instead of
+// an empty one.
+export function buildSampleKitchen(): KitchenDraft {
+  const modules: KitchenModule[] = [];
+  const add = (type: KitchenModuleType, x: number, z: number, patch?: { dimensions?: Partial<ModuleDimensions>; options?: Partial<ModuleOptions> }) => {
+    const mod = buildNewModule(type, x, z, 0);
+    modules.push({
+      ...mod,
+      dimensions: patch?.dimensions ? { ...mod.dimensions, ...patch.dimensions } : mod.dimensions,
+      options: patch?.options ? { ...mod.options, ...patch.options } : mod.options,
+    });
+  };
+
+  // North-wall run (back against z=0), left to right: pantry tower, base
+  // cabinets, sink, stove, more base cabinets — widths sum to roomWidth (480).
+  // No separate "cubierta" modules: every base cabinet below already renders
+  // its own built-in countertop slab (options.includesCountertop, true by
+  // default), so a continuous counter comes for free without stacking a
+  // second overlapping slab on top.
+  add("torre_despensa", 22.5, 30);
+  add("gabinete_bajo_puertas", 75, 30);
+  add("cajonera", 135, 30);
+  add("bajo_tarja", 210, 30);
+  add("bajo_estufa", 285, 30, { options: { includesCountertop: true } });
+  add("gabinete_bajo_cajones", 345, 30);
+  add("gabinete_bajo_puertas", 405, 30);
+  add("despensero_bajo", 457.5, 27.5);
+
+  // Upper cabinets — a gap is left over the sink (165–240) for the window
+  add("alacena_aerea", 75, 17.5);
+  add("gabinete_superior", 135, 17.5);
+  add("alacena_cristal", 345, 17.5);
+  add("gabinete_superior", 405, 17.5);
+  add("despensero_alto", 457.5, 17.5);
+
+  // Sink, stovetop and a standalone factory-style extractor hood (no housing
+  // cabinet — see the campana_extractora mesh for the hood's own look)
+  add("tarja", 210, 31);
+  add("estufa", 285, 31);
+  add("campana_extractora", 285, 17.5, { options: { mountHeight: 150 } });
+
+  // Freestanding island
+  add("isla_central", 240, 190);
+
+  const openings: WallOpening[] = [
+    { id: "sample_win_north", type: "window", wall: "north", offset: 202.5, width: 70, height: 100, sillHeight: 95 },
+    { id: "sample_win_east", type: "window", wall: "east", offset: 160, width: 100, height: 140, sillHeight: 90 },
+    { id: "sample_win_west", type: "window", wall: "west", offset: 100, width: 90, height: 120, sillHeight: 90 },
+    { id: "sample_door_south", type: "door", wall: "south", offset: 240, width: 90, height: 205, sillHeight: 0 },
+  ];
+
+  return {
+    clientName: "Familia Rodríguez",
+    clientPhone: "871 123 4567",
+    projectName: "Cocina de muestra",
+    notes: "Diseño de ejemplo generado automáticamente para mostrar el constructor 3D.",
+    roomWidth: 480,
+    roomDepth: 320,
+    ceilingHeight: 240,
+    modules,
+    openings,
+    editingModuleId: null,
+  };
+}
+
+export function buildNewModule(type: KitchenModuleType, x = 0, z = 0, rotation: KitchenModule["rotation"] = 0): KitchenModule {
   const entry = getCatalogEntry(type)!;
   return {
     id: `${type}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
@@ -597,8 +727,9 @@ export function buildNewModule(type: KitchenModuleType, position = 0, wall: Kitc
     label: entry.label,
     dimensions: { ...entry.defaultDimensions },
     options: { ...DEFAULT_OPTIONS, ...entry.defaultOptions },
-    wall,
-    position,
+    x,
+    z,
+    rotation,
   };
 }
 
@@ -624,54 +755,214 @@ export const CATEGORY_ICONS: Record<ModuleCategory, string> = {
 export function calculateKitchenMaterials(modules: KitchenModule[]): { lines: KitchenMaterialLine[]; summary: KitchenQuoteSummary } {
   const lines: KitchenMaterialLine[] = [];
 
-  const addLine = (desc: string, qty: number, unit: string, unitCost: number) => {
+  const addLine = (
+    desc: string,
+    qty: number,
+    unit: string,
+    unitCost: number,
+    extra?: Partial<Pick<KitchenMaterialLine, "category" | "cutDetails" | "cutLayout" | "subLines">>,
+  ) => {
     if (qty <= 0) return;
-    lines.push({ description: desc, quantity: parseFloat(qty.toFixed(3)), unit, unitCost, subtotal: parseFloat((qty * unitCost).toFixed(2)) });
+    lines.push({ description: desc, quantity: parseFloat(qty.toFixed(3)), unit, unitCost, subtotal: parseFloat((qty * unitCost).toFixed(2)), ...extra });
   };
+
+  // Hardware (bisagras, correderas, etc.) is tallied by TYPE across the whole
+  // project instead of one line per module — grouped into a single "Herrajes"
+  // line with a sub-item per type once there's more than one type present.
+  const hardwareAgg = new Map<string, { label: string; quantity: number; unit: string; subtotal: number }>();
+  const addHardware = (key: string, label: string, qty: number, unit: string, unitCost: number) => {
+    if (qty <= 0) return;
+    const cur = hardwareAgg.get(key) ?? { label, quantity: 0, unit, subtotal: 0 };
+    cur.quantity += qty;
+    cur.subtotal += qty * unitCost;
+    hardwareAgg.set(key, cur);
+  };
+
+  // Board panels are pooled per material across the WHOLE project — not per
+  // module — because a real cutting shop nests the entire job's cut list
+  // together, so offcuts from one module's panel can still get reused by
+  // another module in the same board material. Interior board (carcass:
+  // top/bottom/back/shelves/drawer boxes) and exterior board (doors/drawer
+  // fronts, and any side panel manually marked "exterior") are pooled
+  // separately since they come from different sheets/finishes.
+  const interiorPieces = new Map<BoardMaterial, CutPiece[]>();
+  const exteriorPieces = new Map<BoardMaterial, CutPiece[]>();
+  const boardPools = { Interior: interiorPieces, Exterior: exteriorPieces } as const;
+  // Per-(pool, material, part, exact width×height) aggregation so the quote can
+  // show exactly which cuts to make ("2 de 60×82cm, 4 de 45×30cm...") under each
+  // sheet line, not just a total piece count.
+  const partPieces = new Map<string, { pool: keyof typeof boardPools; material: BoardMaterial; part: string; width: number; height: number; count: number }>();
+  const addPiece = (poolLabel: keyof typeof boardPools, material: BoardMaterial, width: number, height: number, part: string) => {
+    if (width <= 0 || height <= 0) return;
+    const pool = boardPools[poolLabel];
+    const list = pool.get(material) ?? [];
+    list.push({ width, height, label: part });
+    pool.set(material, list);
+
+    // Round to 1mm so near-identical floating point sizes (e.g. from percentage
+    // splits) still group into the same cut-size bucket.
+    const w = Math.round(width * 10) / 10;
+    const h = Math.round(height * 10) / 10;
+    const key = `${poolLabel}|${material}|${part}|${w}x${h}`;
+    const agg = partPieces.get(key) ?? { pool: poolLabel, material, part, width: w, height: h, count: 0 };
+    agg.count += 1;
+    partPieces.set(key, agg);
+  };
+  // Standard board thickness (cm) used to size the drawer box's inner width
+  // (between its two side panels) — matches the 1.8cm (18mm) used in the 3D preview.
+  const BOARD_THICKNESS_CM = 1.8;
+  // The box (sides/back/inner front) sits shorter than the visible exterior face:
+  // the face overlays the gap needed above/below the box for slide adjustment.
+  const DRAWER_BOX_HEIGHT_CLEARANCE_CM = 1;
 
   for (const mod of modules) {
     const { dimensions: d, options: o } = mod;
-    const boardCost = BOARD_COSTS[o.boardMaterial] ?? 180;
     const w = d.width / 100;
-    const h = d.height / 100;
     const dp = d.depth / 100;
 
-    if (mod.category === "lower") {
-      // Side panels × 2, top, bottom, back
-      const panelArea = (2 * h * dp + 2 * w * dp + w * h) * 1.08;
-      addLine(`[${mod.label}] Tableros ${o.boardMaterial}`, panelArea, "m²", boardCost);
-      if (o.shelves > 0) addLine(`[${mod.label}] Repisas interiores`, o.shelves * (w * dp) * 1.05, "m²", boardCost);
-      if (o.doors > 0) addLine(`[${mod.label}] Frentes de puerta ${o.doorStyle}`, o.doors * (h * (w / o.doors)), "m²", boardCost);
-      if (o.drawers > 0) addLine(`[${mod.label}] Frentes de cajón`, o.drawers * ((h * 0.2) * w), "m²", boardCost);
+    if (mod.category === "lower" || mod.category === "upper" || mod.category === "tower") {
+      // Structural carcass panels — always interior board (dimensions in cm)
+      addPiece("Interior", o.boardMaterial, d.width, d.depth, "Tapas y bases");  // top
+      addPiece("Interior", o.boardMaterial, d.width, d.depth, "Tapas y bases");  // bottom
+      addPiece("Interior", o.boardMaterial, d.width, d.height, "Respaldo");      // back
+      for (let i = 0; i < o.shelves; i++) addPiece("Interior", o.boardMaterial, d.width, d.depth, "Repisas");
+
+      // Side panels — manual per-module choice: skip, or route to interior/exterior pool
+      if (o.leftSidePanel !== "ninguno") {
+        const poolLabel = o.leftSidePanel === "exterior" ? "Exterior" : "Interior";
+        const material = o.leftSidePanel === "exterior" ? o.exteriorMaterial : o.boardMaterial;
+        addPiece(poolLabel, material, d.depth, d.height, poolLabel === "Exterior" ? "Costados (acabado)" : "Costados");
+      }
+      if (o.rightSidePanel !== "ninguno") {
+        const poolLabel = o.rightSidePanel === "exterior" ? "Exterior" : "Interior";
+        const material = o.rightSidePanel === "exterior" ? o.exteriorMaterial : o.boardMaterial;
+        addPiece(poolLabel, material, d.depth, d.height, poolLabel === "Exterior" ? "Costados (acabado)" : "Costados");
+      }
+
+      // ── Doors — always exterior board (visible face); use detailed defs when available ──
+      const doors = resolveDoors(mod);
+      for (const door of doors) {
+        addPiece("Exterior", o.exteriorMaterial, (door.widthPct / 100) * d.width, door.heightCm, "Puertas");
+      }
+      if (doors.length > 0) {
+        const hingeCost = o.drawerSystem === "Soft-close" ? 65 : 35;
+        addHardware("bisagra", "Bisagras", doors.length, "pares", hingeCost);
+      }
+
+      // ── Drawers have a DOUBLE front: an inner structural front in interior board
+      // (screwed directly to the box, same material as the carcass) plus the visible
+      // decorative front in exterior board on top of it. The box itself (sides, back,
+      // bottom) is also interior board. Ghost drawers (visual-only fronts, e.g. under
+      // a sink) are just a single fake exterior panel — no box, no inner front, no correderas.
+      const drawers = resolveDrawers(mod);
+      const realDrawers = drawers.filter((d) => !d.isGhost);
+      const ghostDrawers = drawers.filter((d) => d.isGhost);
+      for (const drawer of [...realDrawers, ...ghostDrawers]) {
+        addPiece("Exterior", o.exteriorMaterial, (drawer.widthPct / 100) * d.width, drawer.heightCm, "Cajones (frente exterior)");
+      }
+      for (const drawer of realDrawers) {
+        const faceW = (drawer.widthPct / 100) * d.width;
+        const faceH = drawer.heightCm;
+        const boxW = Math.max(faceW - 2 * BOARD_THICKNESS_CM, 0); // inner width between the two side panels
+        const boxD = Math.max(d.depth - 10, 0);                   // set back 10cm so there's free space behind the drawer
+        const boxH = Math.max(faceH - DRAWER_BOX_HEIGHT_CLEARANCE_CM, 0); // box is shorter than the face
+        addPiece("Interior", o.boardMaterial, boxW, boxH, "Cajones (frente interior)");     // inner front, behind the exterior face — same width as the box, not the outer face
+        addPiece("Interior", o.boardMaterial, boxD, boxH, "Cajones (costado)");             // side 1
+        addPiece("Interior", o.boardMaterial, boxD, boxH, "Cajones (costado)");             // side 2
+        addPiece("Interior", o.boardMaterial, boxW, boxH, "Cajones (trasero)");             // back
+        addPiece("Interior", o.boardMaterial, boxW, boxD, "Cajones (fondo)");                // bottom
+      }
+      if (realDrawers.length > 0) {
+        addHardware("corredera", "Correderas", realDrawers.length, "pares", HARDWARE_COSTS.corredera_softclose);
+      }
+
       // Edge banding
       const edgeMl = 2 * (d.width + d.height + d.depth) / 100 * 1.15;
-      addLine(`[${mod.label}] Canto ${o.edgeProfile}`, edgeMl, "ml", 12);
-      // Hardware
-      if (o.doors > 0) addLine(`[${mod.label}] Bisagras (pares)`, o.doors, "pares", o.drawerSystem === "Soft-close" ? 65 : 35);
-      if (o.drawers > 0) addLine(`[${mod.label}] Correderas cajón`, o.drawers, "pares", HARDWARE_COSTS.corredera_softclose);
-      if (o.includesCountertop && mod.type !== "base_refrigerador") {
+      addLine(`[${mod.label}] Canto ${o.edgeProfile}`, edgeMl, "ml", 12, { category: "edge" });
+
+      // Countertop (lower only)
+      if (mod.category === "lower" && o.includesCountertop && mod.type !== "base_refrigerador") {
         const ctCost = COUNTERTOP_COSTS[o.countertopMaterial] ?? 420;
-        addLine(`[${mod.label}] Cubierta ${o.countertopMaterial}`, w * (dp + o.countertopOverhang / 100), "m²", ctCost);
+        addLine(`[${mod.label}] Cubierta ${o.countertopMaterial}`, w * (dp + o.countertopOverhang / 100), "m²", ctCost, { category: "countertop" });
       }
-    } else if (mod.category === "upper") {
-      const panelArea = (2 * h * dp + 2 * w * dp + w * h) * 1.08;
-      addLine(`[${mod.label}] Tableros ${o.boardMaterial}`, panelArea, "m²", boardCost);
-      if (o.shelves > 0) addLine(`[${mod.label}] Repisas interiores`, o.shelves * w * dp * 1.05, "m²", boardCost);
-      if (o.doors > 0) addLine(`[${mod.label}] Frentes de puerta ${o.doorStyle}`, o.doors * h * (w / o.doors), "m²", boardCost);
-      const edgeMl = 2 * (d.width + d.height + d.depth) / 100 * 1.15;
-      addLine(`[${mod.label}] Canto ${o.edgeProfile}`, edgeMl, "ml", 12);
-      if (o.doors > 0) addLine(`[${mod.label}] Bisagras (pares)`, o.doors, "pares", 65);
-    } else if (mod.category === "tower") {
-      const panelArea = (2 * h * dp + 2 * w * dp + w * h) * 1.08;
-      addLine(`[${mod.label}] Tableros ${o.boardMaterial}`, panelArea, "m²", boardCost);
-      if (o.shelves > 0) addLine(`[${mod.label}] Repisas interiores`, o.shelves * w * dp * 1.05, "m²", boardCost);
-      if (o.doors > 0) addLine(`[${mod.label}] Frentes de puerta ${o.doorStyle}`, o.doors * (h / 3) * w, "m²", boardCost);
-      const edgeMl = 2 * (d.width + d.height + d.depth) / 100 * 1.15;
-      addLine(`[${mod.label}] Canto ${o.edgeProfile}`, edgeMl, "ml", 12);
     } else if (mod.category === "countertop") {
       const ctCost = COUNTERTOP_COSTS[o.countertopMaterial] ?? 420;
-      addLine(`[${mod.label}] ${o.countertopMaterial}`, w * (dp + o.countertopOverhang / 100), "m²", ctCost);
-      if (o.hasBacksplash) addLine(`[${mod.label}] Salpicadero ${o.backsplashMaterial}`, w * (o.backsplashHeight / 100), "m²", 350);
+      addLine(`[${mod.label}] ${o.countertopMaterial}`, w * (dp + o.countertopOverhang / 100), "m²", ctCost, { category: "countertop" });
+      if (o.hasBacksplash) addLine(`[${mod.label}] Salpicadero ${o.backsplashMaterial}`, w * (o.backsplashHeight / 100), "m²", 350, { category: "countertop" });
+    }
+  }
+
+  // ── Hardware — grouped into one "Herrajes" line once there's more than one
+  // type; a single type is shown directly without the group wrapper.
+  const hardwareEntries = Array.from(hardwareAgg.values());
+  if (hardwareEntries.length === 1) {
+    const h = hardwareEntries[0];
+    addLine(h.label, h.quantity, h.unit, h.subtotal / h.quantity, { category: "hardware" });
+  } else if (hardwareEntries.length > 1) {
+    const totalQty = hardwareEntries.reduce((s, h) => s + h.quantity, 0);
+    const totalSubtotal = hardwareEntries.reduce((s, h) => s + h.subtotal, 0);
+    lines.push({
+      description: "Herrajes",
+      quantity: totalQty,
+      unit: "pzas",
+      unitCost: parseFloat((totalSubtotal / totalQty).toFixed(2)),
+      subtotal: parseFloat(totalSubtotal.toFixed(2)),
+      category: "hardware",
+      subLines: hardwareEntries.map((h) => ({
+        label: h.label,
+        quantity: h.quantity,
+        unit: h.unit,
+        unitCost: parseFloat((h.subtotal / h.quantity).toFixed(2)),
+        subtotal: parseFloat(h.subtotal.toFixed(2)),
+      })),
+    });
+  }
+
+  // ── Resolve board panels into actual sheets needed, per material ──────────────
+  // This is a real 2D cutting-stock estimate (guillotine bin-packing), not just
+  // totalArea / sheetArea — a leftover offcut from one panel often isn't big
+  // enough to fit the next panel that's needed, forcing an extra sheet.
+  const sheetAreaM2 = (STANDARD_SHEET_WIDTH_CM * STANDARD_SHEET_HEIGHT_CM) / 10000;
+  for (const poolLabel of Object.keys(boardPools) as (keyof typeof boardPools)[]) {
+    for (const [material, pieces] of boardPools[poolLabel]) {
+      const boardCost = BOARD_COSTS[material] ?? 180;
+      const sheetCost = boardCost * sheetAreaM2;
+      const result = packSheets(pieces);
+      const netAreaM2 = result.usedAreaCm2 / 10000;
+      const utilization = Math.round(result.utilizationPct);
+      const waste = 100 - utilization;
+      const cutDetails = Array.from(partPieces.values())
+        .filter((p) => p.pool === poolLabel && p.material === material)
+        .map((p) => ({
+          part: p.part,
+          width: p.width,
+          height: p.height,
+          count: p.count,
+          areaM2: parseFloat(((p.width * p.height * p.count) / 10000).toFixed(2)),
+        }))
+        .sort((a, b) => a.part.localeCompare(b.part) || b.width * b.height - a.width * a.height);
+
+      // Simple per-sheet cut diagram: group each placed piece by sheet index
+      // so a carpenter can see roughly where each cut goes on each physical sheet.
+      const sheetLayouts: { part: string; x: number; y: number; width: number; height: number }[][] = Array.from(
+        { length: result.sheets },
+        () => []
+      );
+      for (const p of result.placements) {
+        sheetLayouts[p.sheet]?.push({ part: p.label ?? "", x: p.x, y: p.y, width: p.width, height: p.height });
+      }
+
+      addLine(
+        `Hojas ${poolLabel} ${material} — ${result.pieceCount} piezas (${netAreaM2.toFixed(2)} m² útiles · ${utilization}% aprovechamiento · ${waste}% desperdicio, por eso se necesitan ${result.sheets} hojas de ${STANDARD_SHEET_WIDTH_CM / 100}×${STANDARD_SHEET_HEIGHT_CM / 100} m)`,
+        result.sheets,
+        "hoja",
+        parseFloat(sheetCost.toFixed(2)),
+        {
+          category: "board",
+          cutDetails,
+          cutLayout: { sheetWidthCm: STANDARD_SHEET_WIDTH_CM, sheetHeightCm: STANDARD_SHEET_HEIGHT_CM, sheets: sheetLayouts },
+        },
+      );
     }
   }
 
@@ -682,9 +973,30 @@ export function calculateKitchenMaterials(modules: KitchenModule[]): { lines: Ki
   const profitCost = (subtotal + laborCost) * (profitPct / 100);
   const total = subtotal + laborCost + profitCost;
 
+  const categoryLabels: Record<string, string> = {
+    board: "Tableros (melamina/MDF)",
+    hardware: "Herrajes",
+    countertop: "Cubiertas",
+    edge: "Cantos",
+    other: "Otros",
+  };
+  const categoryTotals = new Map<string, number>();
+  for (const l of lines) {
+    const cat = l.category ?? "other";
+    categoryTotals.set(cat, (categoryTotals.get(cat) ?? 0) + l.subtotal);
+  }
+  const categoryBreakdown = Array.from(categoryTotals.entries())
+    .map(([category, catSubtotal]) => ({
+      category: category as KitchenQuoteSummary["categoryBreakdown"][number]["category"],
+      label: categoryLabels[category] ?? "Otros",
+      subtotal: parseFloat(catSubtotal.toFixed(2)),
+      pct: subtotal > 0 ? Math.round((catSubtotal / subtotal) * 100) : 0,
+    }))
+    .sort((a, b) => b.subtotal - a.subtotal);
+
   return {
     lines,
-    summary: { materialLines: lines, subtotalMaterials: subtotal, laborCost, profitCost, total, laborPct, profitPct },
+    summary: { materialLines: lines, subtotalMaterials: subtotal, laborCost, profitCost, total, laborPct, profitPct, categoryBreakdown },
   };
 }
 

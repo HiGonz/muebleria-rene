@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { MODULE_CATALOG, CATEGORY_LABELS, CATEGORY_ICONS, getModulesByCategory } from "@/services/kitchenData";
 import { useKitchenStore } from "@/store/useKitchenStore";
-import { Button } from "@/components/ui/button";
+import { useCatalogThumbnails, CatalogThumbnailGenerator } from "./CatalogThumbnails";
 import type { ModuleCategory } from "@/types/kitchen";
 
 const CATEGORIES: ModuleCategory[] = ["lower", "upper", "tower", "countertop", "appliance", "accessory"];
@@ -11,6 +11,7 @@ const CATEGORIES: ModuleCategory[] = ["lower", "upper", "tower", "countertop", "
 export function ModuleSelector() {
   const { addModule, closeSelector, selectorCategory, setSelectorCategory } = useKitchenStore();
   const [search, setSearch] = useState("");
+  const { thumbs, isGenerator } = useCatalogThumbnails();
 
   const category = selectorCategory;
   const modules = category ? getModulesByCategory(category) : MODULE_CATALOG;
@@ -20,6 +21,7 @@ export function ModuleSelector() {
 
   return (
     <div className="flex h-full flex-col">
+      {isGenerator && <CatalogThumbnailGenerator />}
       {/* Header */}
       <div className="flex items-center justify-between px-5 py-4 border-b border-white/8">
         <h2 className="text-base font-semibold text-white">Agregar módulo</h2>
@@ -56,7 +58,7 @@ export function ModuleSelector() {
         ))}
       </div>
 
-      {/* Module grid */}
+      {/* Module list — real 3D previews, one per row */}
       <div className="flex-1 overflow-y-auto px-4 pb-4">
         {!search && !category && (
           // Grouped by category
@@ -71,7 +73,7 @@ export function ModuleSelector() {
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     {catModules.map((entry) => (
-                      <ModuleChip key={entry.type} entry={entry} onAdd={() => addModule(entry.type)} />
+                      <ModuleChip key={entry.type} entry={entry} thumb={thumbs[entry.type]} onAdd={() => addModule(entry.type)} />
                     ))}
                   </div>
                 </div>
@@ -85,7 +87,7 @@ export function ModuleSelector() {
               <p className="col-span-2 py-8 text-center text-sm text-zinc-500">No se encontraron módulos</p>
             )}
             {filtered.map((entry) => (
-              <ModuleChip key={entry.type} entry={entry} onAdd={() => addModule(entry.type)} />
+              <ModuleChip key={entry.type} entry={entry} thumb={thumbs[entry.type]} onAdd={() => addModule(entry.type)} />
             ))}
           </div>
         )}
@@ -94,19 +96,29 @@ export function ModuleSelector() {
   );
 }
 
-function ModuleChip({ entry, onAdd }: { entry: typeof MODULE_CATALOG[number]; onAdd: () => void }) {
+function ModuleChip({ entry, thumb, onAdd }: { entry: typeof MODULE_CATALOG[number]; thumb?: string; onAdd: () => void }) {
   return (
     <button
       onClick={onAdd}
-      className="group flex flex-col gap-1.5 rounded-xl border border-white/8 bg-white/4 p-3 text-left transition-all hover:border-indigo-500/50 hover:bg-indigo-500/8 active:scale-[0.97]"
+      className="group flex flex-col overflow-hidden rounded-xl border border-white/8 bg-white/4 text-left transition-all hover:border-indigo-500/50 hover:bg-indigo-500/8 active:scale-[0.97]"
     >
-      <div className="flex items-center gap-2">
-        <span className="text-xl">{entry.icon}</span>
-        <span className="text-xs font-semibold text-white leading-tight">{entry.label}</span>
+      <div className="flex h-24 w-full items-center justify-center overflow-hidden bg-[#0a0a10]">
+        {thumb ? (
+          // eslint-disable-next-line @next/next/no-img-element -- runtime-generated data URL, not a static asset
+          <img src={thumb} alt={entry.label} className="h-full w-full object-contain" />
+        ) : (
+          <span className="text-2xl opacity-40 animate-pulse">{entry.icon}</span>
+        )}
       </div>
-      <p className="text-[11px] text-zinc-500 leading-relaxed line-clamp-2">{entry.description}</p>
-      <div className="mt-1 flex items-center gap-1 text-[10px] text-zinc-600">
-        <span className="rounded bg-white/6 px-1.5 py-0.5">{entry.defaultDimensions.width}×{entry.defaultDimensions.height}×{entry.defaultDimensions.depth} cm</span>
+      <div className="flex flex-col gap-1 p-2.5">
+        <div className="flex items-center gap-1.5">
+          <span className="text-sm shrink-0">{entry.icon}</span>
+          <span className="text-xs font-semibold text-white leading-tight">{entry.label}</span>
+        </div>
+        <p className="text-[10px] text-zinc-500 leading-relaxed line-clamp-2">{entry.description}</p>
+        <span className="w-fit rounded bg-white/6 px-1.5 py-0.5 text-[10px] text-zinc-600">
+          {entry.defaultDimensions.width}×{entry.defaultDimensions.height}×{entry.defaultDimensions.depth} cm
+        </span>
       </div>
     </button>
   );

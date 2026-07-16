@@ -60,27 +60,35 @@ export function FaceEditor({ module, onChange }: FaceEditorProps) {
   const patchOpts = (up: Partial<typeof options>) =>
     onChange({ options: { ...options, ...up } });
 
-  const suggestNextPos = () => {
-    const occupied = [
-      ...drawerDefs.map((d) => d.fromBottomCm + d.heightCm),
-      ...doorDefs.map((d) => d.fromBottomCm + d.heightCm),
-      0,
-    ];
-    return Math.min(Math.max(...occupied), interiorH - 10);
+  // A drawer participates in the auto-distributed stack when it spans the full
+  // width and hasn't been given a custom side-by-side placement.
+  const isStackDrawer = (d: Pick<DrawerDef, "widthPct" | "offsetPct" | "orientation">) =>
+    d.widthPct === 100 && d.offsetPct === 0 && d.orientation !== "vertical";
+
+  // Doors reserve the bottom of the cabinet; drawers stack above them and always
+  // split the remaining height evenly among however many are in the stack.
+  const drawerStackZone = (hasDoors: boolean) => {
+    const doorZoneH = hasDoors ? Math.max(interiorH * 0.55, 40) : 0;
+    return { doorZoneH, drawerZoneH: Math.max(interiorH - doorZoneH, 0) };
+  };
+
+  const redistributeStack = (stack: DrawerDef[], doorZoneH: number, drawerZoneH: number) => {
+    const h = drawerZoneH / stack.length;
+    return stack.map((dd, i) => ({ ...dd, heightCm: h, fromBottomCm: doorZoneH + i * h }));
   };
 
   const openAddDrawer = () => {
     setActiveId(null);
     setAddMode("drawer");
-    const pos = suggestNextPos();
     setDraft({
       label: `Cajón ${drawerDefs.length + 1}`,
-      heightCm: 12,
-      fromBottomCm: pos,
+      heightCm: 15,
+      fromBottomCm: 0,
       isGhost: false,
       widthPct: 100,
       offsetPct: 0,
       drawerSystem: options.drawerSystem,
+      orientation: "horizontal",
     });
   };
 
@@ -106,14 +114,53 @@ export function FaceEditor({ module, onChange }: FaceEditorProps) {
       const d: DrawerDef = {
         id: uid(),
         label: String(draft.label ?? "Cajón"),
-        heightCm: Number(draft.heightCm ?? 12),
+        heightCm: Number(draft.heightCm ?? 15),
         fromBottomCm: Number(draft.fromBottomCm ?? 0),
         isGhost: Boolean(draft.isGhost),
         widthPct: Number(draft.widthPct ?? 100),
         offsetPct: Number(draft.offsetPct ?? 0),
         drawerSystem: (draft.drawerSystem as DrawerSystem) ?? options.drawerSystem,
+        orientation: (draft.orientation as "horizontal" | "vertical") ?? "horizontal",
       };
-      patchOpts({ drawerDefs: [...drawerDefs, d], useDetailedLayout: true });
+
+      // If transitioning from simple → detailed layout, materialise the auto-generated
+      // doors/drawers so they're preserved as explicit defs going forward.
+      const baseDoors: DoorDef[] = options.useDetailedLayout
+        ? doorDefs
+        : getEffectiveDoors(module);
+      const baseDrawers: DrawerDef[] = options.useDetailedLayout
+        ? drawerDefs
+        : getEffectiveDrawers(module);
+
+      // Full-width drawers auto-distribute: adding one re-splits the whole stack
+      // evenly (1 drawer fills the space, 2 split it in half, 3 in thirds, ...).
+      let nextDrawers: DrawerDef[];
+      let stackBottom: number;
+      if (isStackDrawer(d)) {
+        const stack = baseDrawers.filter(isStackDrawer);
+        const others = baseDrawers.filter((dd) => !isStackDrawer(dd));
+        const { doorZoneH, drawerZoneH } = drawerStackZone(baseDoors.length > 0);
+        nextDrawers = [...others, ...redistributeStack([...stack, d], doorZoneH, drawerZoneH)];
+        stackBottom = doorZoneH;
+      } else {
+        nextDrawers = [...baseDrawers, d];
+        stackBottom = d.fromBottomCm;
+      }
+
+      // Clip/remove any door that overlaps the drawer stack's vertical range.
+      const clippedDoors = baseDoors
+        .map((door): DoorDef | null => {
+          const doorTop = door.fromBottomCm + door.heightCm;
+          if (doorTop <= stackBottom) return door;         // entirely below — keep
+          if (door.fromBottomCm >= stackBottom) return null; // fully inside/above the stack — remove
+          // Partial overlap: trim door so it ends at the stack's bottom edge
+          const newH = stackBottom - door.fromBottomCm;
+          if (newH < 2) return null;                       // too small to show
+          return { ...door, heightCm: newH };
+        })
+        .filter((door): door is DoorDef => door !== null);
+
+      patchOpts({ drawerDefs: nextDrawers, doorDefs: clippedDoors, useDetailedLayout: true });
     } else if (addMode === "door") {
       const d: DoorDef = {
         id: uid(),
@@ -132,8 +179,19 @@ export function FaceEditor({ module, onChange }: FaceEditorProps) {
   };
 
   const deleteEl = (kind: "drawer" | "door", id: string) => {
-    if (kind === "drawer") patchOpts({ drawerDefs: drawerDefs.filter((d) => d.id !== id) });
-    else patchOpts({ doorDefs: doorDefs.filter((d) => d.id !== id) });
+    if (kind === "drawer") {
+      const remaining = drawerDefs.filter((d) => d.id !== id);
+      const stack = remaining.filter(isStackDrawer);
+      const others = remaining.filter((dd) => !isStackDrawer(dd));
+      if (stack.length > 0) {
+        const { doorZoneH, drawerZoneH } = drawerStackZone(doorDefs.length > 0);
+        patchOpts({ drawerDefs: [...others, ...redistributeStack(stack, doorZoneH, drawerZoneH)] });
+      } else {
+        patchOpts({ drawerDefs: remaining });
+      }
+    } else {
+      patchOpts({ doorDefs: doorDefs.filter((d) => d.id !== id) });
+    }
     if (activeId === id) setActiveId(null);
   };
 
@@ -149,8 +207,21 @@ export function FaceEditor({ module, onChange }: FaceEditorProps) {
   const set = (key: string) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setDraft((p) => ({ ...p, [key]: e.target.type === "checkbox" ? e.target.checked : e.target.type === "number" ? Number(e.target.value) : e.target.value }));
 
-  const handleClick = (id: string) => {
+  const setVal = (key: string, value: string | number | boolean) =>
+    setDraft((p) => ({ ...p, [key]: value }));
+
+  // Selecting an element (to edit/delete it) works even in simple auto-layout
+  // mode: the first click materialises the auto-generated drawers/doors into
+  // explicit defs so they become individually editable and deletable.
+  const selectElement = (id: string) => {
     setAddMode(null);
+    if (!options.useDetailedLayout) {
+      patchOpts({
+        drawerDefs: getEffectiveDrawers(module),
+        doorDefs: getEffectiveDoors(module),
+        useDetailedLayout: true,
+      });
+    }
     setActiveId((prev) => (prev === id ? null : id));
   };
 
@@ -197,17 +268,16 @@ export function FaceEditor({ module, onChange }: FaceEditorProps) {
 
             {/* Door panels */}
             {visualDoors.map((door) => {
-              const isDetailed = options.useDetailedLayout;
               const x = (door.offsetPct / 100) * SVG_W + GAP;
               const w = (door.widthPct / 100) * SVG_W - GAP * 2;
               const y = toY(door.fromBottomCm, door.heightCm) + GAP;
               const h = toH(door.heightCm) - GAP;
-              const isActive = isDetailed && activeId === door.id;
+              const isActive = activeId === door.id;
               return (
                 <g
                   key={door.id}
-                  onClick={isDetailed ? () => handleClick(door.id) : undefined}
-                  style={{ cursor: isDetailed ? "pointer" : "default" }}
+                  onClick={() => selectElement(door.id)}
+                  style={{ cursor: "pointer" }}
                 >
                   <rect
                     x={x} y={y} width={w} height={h}
@@ -251,46 +321,37 @@ export function FaceEditor({ module, onChange }: FaceEditorProps) {
 
             {/* Drawer panels */}
             {visualDrawers.map((drawer) => {
-              const isDetailed = options.useDetailedLayout;
               const x = (drawer.offsetPct / 100) * SVG_W + GAP;
               const w = (drawer.widthPct / 100) * SVG_W - GAP * 2;
               const y = toY(drawer.fromBottomCm, drawer.heightCm) + GAP;
               const h = toH(drawer.heightCm) - GAP;
-              const isActive = isDetailed && activeId === drawer.id;
+              const isActive = activeId === drawer.id;
               return (
                 <g
                   key={drawer.id}
-                  onClick={isDetailed ? () => handleClick(drawer.id) : undefined}
-                  style={{ cursor: isDetailed ? "pointer" : "default" }}
+                  onClick={() => selectElement(drawer.id)}
+                  style={{ cursor: "pointer" }}
                 >
                   <rect
                     x={x} y={y} width={w} height={h}
-                    fill={isActive ? "#4a4680" : drawer.isGhost ? C.drawerGhost : C.drawerReal}
-                    stroke={isActive ? C.selected : drawer.isGhost ? "#38384a" : "#5a52a0"}
-                    strokeWidth={isActive ? 1.5 : 1}
-                    strokeDasharray={drawer.isGhost ? "5 3" : undefined}
+                    fill={isActive ? "#4a4680" : C.drawerReal}
+                    stroke={isActive ? C.selected : drawer.isGhost ? "#8888aa" : "#5a52a0"}
+                    strokeWidth={isActive ? 1.5 : drawer.isGhost ? 1 : 1}
+                    strokeDasharray={drawer.isGhost ? "4 2" : undefined}
+                    opacity={drawer.isGhost ? 0.72 : 1}
                     rx={1}
                   />
-                  {/* Ghost diagonal marks */}
-                  {drawer.isGhost && h > 10 && (
-                    <>
-                      <line x1={x + 5} y1={y + 4} x2={x + w - 5} y2={y + h - 4} stroke="#4a4a5a" strokeWidth={1} />
-                      <line x1={x + w - 5} y1={y + 4} x2={x + 5} y2={y + h - 4} stroke="#4a4a5a" strokeWidth={1} />
-                    </>
-                  )}
-                  {/* Handle bar */}
-                  {!drawer.isGhost && h > 12 && (
-                    <rect
-                      x={x + w / 2 - 12} y={y + h / 2 - 2}
-                      width={24} height={4}
-                      fill="#666" rx={2} opacity={0.7}
-                    />
+                  {/* Handle bar — orientation-aware, shown for both real and ghost */}
+                  {h > 12 && (
+                    drawer.orientation === "vertical"
+                      ? <rect key="vh" x={x + w / 2 - 2} y={y + h / 2 - 8} width={4} height={16} fill={drawer.isGhost ? "#555" : "#666"} rx={2} opacity={0.7} />
+                      : <rect key="hh" x={x + w / 2 - 12} y={y + h / 2 - 2} width={24} height={4} fill={drawer.isGhost ? "#555" : "#666"} rx={2} opacity={0.7} />
                   )}
                   {h > 18 && (
                     <text
                       x={x + w / 2} y={y + h / 2 + 4}
                       textAnchor="middle" fontSize={9}
-                      fill={drawer.isGhost ? "#505060" : "#9890d0"}
+                      fill={drawer.isGhost ? "#8888aa" : "#9890d0"}
                       fontFamily="system-ui,sans-serif"
                     >
                       {drawer.label}{drawer.isGhost ? " ◌" : ""}
@@ -318,7 +379,7 @@ export function FaceEditor({ module, onChange }: FaceEditorProps) {
       {/* ─── Mode hint ─────────────────────────────────────────────────── */}
       {!options.useDetailedLayout && (
         <p className="text-[10px] text-zinc-600 text-center">
-          Vista automática · Agrega elementos para activar modo detallado
+          Vista automática · Click en una pieza para editarla o eliminarla
         </p>
       )}
 
@@ -353,6 +414,7 @@ export function FaceEditor({ module, onChange }: FaceEditorProps) {
           mode={addMode}
           draft={draft}
           set={set}
+          setVal={setVal}
           onCancel={() => { setAddMode(null); setDraft({}); }}
           onCommit={commitAdd}
         />
@@ -380,6 +442,10 @@ export function FaceEditor({ module, onChange }: FaceEditorProps) {
           <FieldRow label="Desfase izq (%)">
             <Input type="number" min={0} max={99} value={activeDrawer.offsetPct} onChange={(e) => updateDrawer(activeDrawer.id, { offsetPct: +e.target.value })} className="h-8 text-xs" />
           </FieldRow>
+          <OrientToggle
+            value={activeDrawer.orientation ?? "horizontal"}
+            onChange={(v) => updateDrawer(activeDrawer.id, { orientation: v })}
+          />
           <CheckRow
             label="Cajón fantasma (solo visual, sin correderas)"
             checked={activeDrawer.isGhost}
@@ -453,6 +519,31 @@ function CheckRow({
   );
 }
 
+function OrientToggle({ value, onChange }: { value?: "horizontal" | "vertical"; onChange: (v: "horizontal" | "vertical") => void }) {
+  const cur = value ?? "horizontal";
+  return (
+    <div className="col-span-2">
+      <label className="mb-0.5 block text-[10px] text-zinc-500">Jalador</label>
+      <div className="flex gap-1">
+        {(["horizontal", "vertical"] as const).map((o) => (
+          <button
+            key={o}
+            type="button"
+            onClick={() => onChange(o)}
+            className={`flex-1 rounded-lg border py-1.5 text-xs font-medium transition-colors ${
+              cur === o
+                ? "border-indigo-500 bg-indigo-600/30 text-indigo-200"
+                : "border-white/10 bg-white/3 text-zinc-400 hover:text-white"
+            }`}
+          >
+            {o === "horizontal" ? "━ Horizontal" : "┃ Vertical"}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function ElementEditForm({
   title,
   color,
@@ -483,12 +574,14 @@ function AddForm({
   mode,
   draft,
   set,
+  setVal,
   onCancel,
   onCommit,
 }: {
   mode: "drawer" | "door";
   draft: Record<string, string | number | boolean>;
   set: (key: string) => (e: React.ChangeEvent<HTMLInputElement>) => void;
+  setVal: (key: string, value: string | number | boolean) => void;
   onCancel: () => void;
   onCommit: () => void;
 }) {
@@ -518,11 +611,20 @@ function AddForm({
           </>
         )}
         {mode === "drawer" && (
-          <CheckRow
-            label="Cajón fantasma (solo visual, sin correderas)"
-            checked={Boolean(draft.isGhost)}
-            onChange={(v) => set("isGhost")({ target: { type: "checkbox", checked: v } } as React.ChangeEvent<HTMLInputElement>)}
-          />
+          <>
+            <FieldRow label="Desfase izq (%)">
+              <Input type="number" min={0} max={99} value={Number(draft.offsetPct ?? 0)} onChange={set("offsetPct")} className="h-8 text-xs" />
+            </FieldRow>
+            <OrientToggle
+              value={(draft.orientation as "horizontal" | "vertical") ?? "horizontal"}
+              onChange={(v) => setVal("orientation", v)}
+            />
+            <CheckRow
+              label="Cajón fantasma (solo visual, sin correderas)"
+              checked={Boolean(draft.isGhost)}
+              onChange={(v) => set("isGhost")({ target: { type: "checkbox", checked: v } } as React.ChangeEvent<HTMLInputElement>)}
+            />
+          </>
         )}
       </div>
       <div className="flex gap-2 pt-1">

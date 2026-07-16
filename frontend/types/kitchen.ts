@@ -77,6 +77,7 @@ export type KitchenModuleType =
 
 // ─── Materials ─────────────────────────────────────────────────────────────────
 export type BoardMaterial =
+  | "Melamina blanca 15mm"
   | "MDF 15mm"
   | "MDF 18mm"
   | "Melamina blanca 18mm"
@@ -86,6 +87,12 @@ export type BoardMaterial =
   | "Triplay 18mm"
   | "MDF lacado brillante"
   | "MDF lacado mate";
+
+// ─── Exterior wood textures ────────────────────────────────────────────────────
+// Small hand-picked catalog for now — a future ERP screen will let the shop add
+// more. Each id maps to a procedurally-generated wood-grain texture (see
+// components/3d/woodTextures.ts) so no image assets are needed.
+export type ExteriorTextureId = "blanco_liso" | "roble_claro" | "nogal_oscuro" | "naranja_vibrante";
 
 export type CountertopMaterial =
   | "Granito natural"
@@ -104,7 +111,10 @@ export type DoorStyle = "Lisa" | "Marco y panel" | "Vidrio esmerilado" | "Vidrio
 export type DrawerSystem = "Simple" | "Extracción total" | "Soft-close" | "Con frente decorativo";
 export type EdgeProfile = "PVC 0.4mm" | "PVC 2mm" | "ABS 1mm" | "Madera sólida";
 export type HardwareFinish = "Acero inoxidable" | "Negro mate" | "Dorado" | "Bronce" | "Cromo" | "Sin jaladores";
-export type KitchenStyle = "Lineal" | "En L" | "En U" | "En G" | "Isla central" | "Dos paredes";
+
+// ─── Side panels ───────────────────────────────────────────────────────────────
+/** Whether a module's left/right side needs a panel, and which material pool it draws from. */
+export type SidePanelMode = "ninguno" | "interior" | "exterior";
 
 // ─── Module Dimensions ─────────────────────────────────────────────────────────
 export interface ModuleDimensions {
@@ -124,6 +134,7 @@ export interface DrawerDef {
   widthPct: number;        // percentage of interior width, 0-100 (default 100)
   offsetPct: number;       // left-offset percentage, 0-100 (default 0)
   drawerSystem: DrawerSystem;
+  orientation?: "horizontal" | "vertical";  // handle orientation (default "horizontal")
 }
 
 /** Individual door panel for detailed face layout */
@@ -188,14 +199,31 @@ export interface ModuleOptions {
   hoodWidth: number;
   // General
   notes: string;
-  // Materials
+  // Materials (interior board — carcass: top/bottom/back/shelves)
   boardMaterial: BoardMaterial;
   color: string;
   finish: "Natural" | "Lacado brillante" | "Lacado mate" | "Textured";
+  // Materials (exterior board — visible/finished faces: doors, drawer fronts, and
+  // any side panel manually marked "exterior". Comes from a different sheet/pool.)
+  exteriorMaterial: BoardMaterial;
+  exteriorColor: string;
+  exteriorFinish: "Natural" | "Lacado brillante" | "Lacado mate" | "Textured";
+  // Wood-grain finish for exterior faces (doors, drawer fronts, exterior side
+  // panels, and the zócalo's front) — takes over from exteriorColor when set.
+  exteriorTexture: ExteriorTextureId;
+  // Side panels: a module neighboring another on one side doesn't need a panel there;
+  // marked manually per module since adjacency isn't inferred from geometry.
+  leftSidePanel: SidePanelMode;
+  rightSidePanel: SidePanelMode;
   // Detailed face layout (when true, drawerDefs/doorDefs override drawers/doors count)
   useDetailedLayout?: boolean;
   drawerDefs?: DrawerDef[];
   doorDefs?: DoorDef[];
+  // Countertop appearance overrides (cubierta, isla, barra, peninsula) — when
+  // set, these take over from the countertopMaterial's default look so a shop
+  // can fine-tune a specific slab without inventing a whole new material.
+  countertopColor?: string;
+  countertopTexture?: ExteriorTextureId | "ninguna";
 }
 
 // ─── Kitchen Module ────────────────────────────────────────────────────────────
@@ -206,8 +234,23 @@ export interface KitchenModule {
   label: string;             // Custom label (e.g., "Cajonera bajo estufa")
   dimensions: ModuleDimensions;
   options: ModuleOptions;
-  wall: "A" | "B" | "C" | "isla"; // Which wall this module belongs to
-  position: number;          // Index within its wall
+  x: number;                 // cm — center of the module's footprint, room-space X
+  z: number;                 // cm — center of the module's footprint, room-space Z
+  rotation: 0 | 90 | 180 | 270; // degrees around Y, set at placement, changed via "rotate" button
+}
+
+// ─── Room Openings (windows & doors) ──────────────────────────────────────────
+export type WallSide = "north" | "south" | "east" | "west";
+export type OpeningType = "window" | "door";
+
+export interface WallOpening {
+  id: string;
+  type: OpeningType;
+  wall: WallSide;
+  offset: number;      // cm — from the wall's start corner (x=0 for north/south, z=0 for east/west) to the opening's center
+  width: number;       // cm
+  height: number;       // cm — opening height, sill to lintel
+  sillHeight: number;   // cm — floor to the opening's bottom edge (0 for doors)
 }
 
 // ─── Kitchen Draft (for project creation) ─────────────────────────────────────
@@ -217,17 +260,16 @@ export interface KitchenDraft {
   clientPhone: string;
   projectName: string;
   notes: string;
-  // Kitchen configuration
-  kitchenStyle: KitchenStyle;
-  wallALength: number;   // cm - primary wall
-  wallBLength: number;   // cm - secondary wall (for L/U)
-  wallCLength: number;   // cm - tertiary wall (for U/G)
+  // Kitchen configuration — a free rectangular room, modules placed freely inside it
+  roomWidth: number;     // cm
+  roomDepth: number;     // cm
   ceilingHeight: number; // cm
   // Modules
   modules: KitchenModule[];
+  // Windows & doors — rendered as gaps in the perimeter walls in the 3D view
+  openings: WallOpening[];
   // UI state
   editingModuleId: string | null;
-  activeWall: "A" | "B" | "C" | "isla";
 }
 
 // ─── Module Catalog Entry ─────────────────────────────────────────────────────
@@ -243,12 +285,25 @@ export interface ModuleCatalogEntry {
 }
 
 // ─── Kitchen Quote ─────────────────────────────────────────────────────────────
+export type KitchenCostCategory = "board" | "hardware" | "countertop" | "edge";
+
 export interface KitchenMaterialLine {
   description: string;
   quantity: number;
   unit: string;
   unitCost: number;
   subtotal: number;
+  category?: KitchenCostCategory;
+  /** Per-part cut breakdown (sheet lines only) — exact width×height (cm) and quantity of each cut. */
+  cutDetails?: { part: string; width: number; height: number; count: number; areaM2: number }[];
+  /** Simple per-sheet cut diagram (sheet lines only) — where each piece sits on its sheet. */
+  cutLayout?: {
+    sheetWidthCm: number;
+    sheetHeightCm: number;
+    sheets: { part: string; x: number; y: number; width: number; height: number }[][];
+  };
+  /** Sub-items when this line groups several related items (e.g. hardware types) under one row. */
+  subLines?: { label: string; quantity: number; unit: string; unitCost: number; subtotal: number }[];
 }
 
 export interface KitchenQuoteSummary {
@@ -259,4 +314,6 @@ export interface KitchenQuoteSummary {
   total: number;
   laborPct: number;
   profitPct: number;
+  /** Share of the materials subtotal each cost category takes — e.g. "Tableros: 76%". */
+  categoryBreakdown: { category: KitchenCostCategory | "other"; label: string; subtotal: number; pct: number }[];
 }

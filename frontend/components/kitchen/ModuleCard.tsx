@@ -10,7 +10,7 @@ interface Props {
 }
 
 export function ModuleCard({ module, isEditing }: Props) {
-  const { setEditingModule, removeModule, duplicateModule, moveModule } = useKitchenStore();
+  const { setEditingModule, removeModule, duplicateModule, rotateModule } = useKitchenStore();
 
   return (
     <div
@@ -34,18 +34,11 @@ export function ModuleCard({ module, isEditing }: Props) {
           {/* Actions */}
           <div className="flex items-center gap-1 shrink-0">
             <button
-              onClick={() => moveModule(module.id, "up")}
-              title="Mover arriba"
+              onClick={() => rotateModule(module.id)}
+              title="Rotar 90°"
               className="rounded-lg p-1 text-zinc-600 hover:text-zinc-300 hover:bg-white/8 transition-colors"
             >
-              ↑
-            </button>
-            <button
-              onClick={() => moveModule(module.id, "down")}
-              title="Mover abajo"
-              className="rounded-lg p-1 text-zinc-600 hover:text-zinc-300 hover:bg-white/8 transition-colors"
-            >
-              ↓
+              ⟳
             </button>
             <button
               onClick={() => duplicateModule(module.id)}
@@ -74,6 +67,9 @@ export function ModuleCard({ module, isEditing }: Props) {
               {module.options.boardMaterial}
             </span>
           )}
+          <span className="inline-flex items-center rounded-full border border-white/8 bg-white/5 px-2 py-0.5 text-[10px] text-zinc-400">
+            ⟳ {module.rotation}°
+          </span>
         </div>
 
         {/* Spec chips */}

@@ -114,9 +114,9 @@ export function ModuleForm({ module, onChange }: Props) {
       {/* ── Material principal ─────────────────────────────────────── */}
       {!isCounter && !isAppliance && (
         <div>
-          <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-zinc-500">Material y Acabado</p>
+          <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-zinc-500">Tablero interior</p>
           <div className="grid grid-cols-2 gap-3">
-            <FieldGroup label="Tablero principal">
+            <FieldGroup label="Tablero interior">
               <SelectInput
                 value={opt.boardMaterial}
                 onChange={(v) => updateOpt("boardMaterial", v)}
@@ -155,6 +155,62 @@ export function ModuleForm({ module, onChange }: Props) {
               />
             </FieldGroup>
           </div>
+
+          <p className="mb-3 mt-4 text-xs font-semibold uppercase tracking-widest text-zinc-500">Tablero exterior (puertas, cajones y remates visibles)</p>
+          <div className="grid grid-cols-2 gap-3">
+            <FieldGroup label="Tablero exterior">
+              <SelectInput
+                value={opt.exteriorMaterial}
+                onChange={(v) => updateOpt("exteriorMaterial", v)}
+                options={(Object.keys(BOARD_COSTS) as (keyof typeof BOARD_COSTS)[]).map((k) => ({ value: k, label: k }))}
+              />
+            </FieldGroup>
+            <FieldGroup label="Color exterior">
+              <div className="flex gap-2">
+                <input type="color" value={opt.exteriorColor} onChange={(e) => updateOpt("exteriorColor", e.target.value)}
+                  className="h-10 w-14 cursor-pointer rounded-xl border border-white/10 bg-transparent p-1" />
+                <Input value={opt.exteriorColor} onChange={(e) => updateOpt("exteriorColor", e.target.value)} className="font-mono text-sm" />
+              </div>
+            </FieldGroup>
+            <FieldGroup label="Acabado exterior">
+              <SelectInput
+                value={opt.exteriorFinish}
+                onChange={(v) => updateOpt("exteriorFinish", v)}
+                options={[
+                  { value: "Natural", label: "Natural" },
+                  { value: "Lacado brillante", label: "Lacado brillante" },
+                  { value: "Lacado mate", label: "Lacado mate" },
+                  { value: "Textured", label: "Texturizado" },
+                ]}
+              />
+            </FieldGroup>
+          </div>
+
+          <p className="mb-3 mt-4 text-xs font-semibold uppercase tracking-widest text-zinc-500">Paneles laterales</p>
+          <div className="grid grid-cols-2 gap-3">
+            <FieldGroup label="Costado izquierdo">
+              <SelectInput
+                value={opt.leftSidePanel}
+                onChange={(v) => updateOpt("leftSidePanel", v)}
+                options={[
+                  { value: "ninguno", label: "Ninguno (vecino de otro mueble)" },
+                  { value: "interior", label: "Interior" },
+                  { value: "exterior", label: "Exterior (mueble de punta)" },
+                ]}
+              />
+            </FieldGroup>
+            <FieldGroup label="Costado derecho">
+              <SelectInput
+                value={opt.rightSidePanel}
+                onChange={(v) => updateOpt("rightSidePanel", v)}
+                options={[
+                  { value: "ninguno", label: "Ninguno (vecino de otro mueble)" },
+                  { value: "interior", label: "Interior" },
+                  { value: "exterior", label: "Exterior (mueble de punta)" },
+                ]}
+              />
+            </FieldGroup>
+          </div>
         </div>
       )}
 
@@ -162,51 +218,38 @@ export function ModuleForm({ module, onChange }: Props) {
       {(isLower || isUpper || isTower) && (
         <div>
           <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-zinc-500">Puertas y Cajones</p>
+          <p className="mb-3 text-[10px] text-zinc-600">El número y la posición de puertas y cajones se agregan desde la pestaña &quot;Distribución&quot;.</p>
           <div className="grid grid-cols-2 gap-3">
-            {opt.doors !== undefined && (
-              <FieldGroup label="Núm. puertas">
-                <NumInput value={opt.doors} onChange={(v) => updateOpt("doors", v)} min={0} max={8} />
-              </FieldGroup>
-            )}
-            {opt.drawers !== undefined && (
-              <FieldGroup label="Núm. cajones">
-                <NumInput value={opt.drawers} onChange={(v) => updateOpt("drawers", v)} min={0} max={8} />
-              </FieldGroup>
-            )}
             {opt.shelves !== undefined && (
               <FieldGroup label="Núm. repisas">
                 <NumInput value={opt.shelves} onChange={(v) => updateOpt("shelves", v)} min={0} max={10} />
               </FieldGroup>
             )}
-            {opt.doors > 0 && (
-              <FieldGroup label="Estilo de puerta">
-                <SelectInput
-                  value={opt.doorStyle}
-                  onChange={(v) => updateOpt("doorStyle", v)}
-                  options={[
-                    { value: "Lisa", label: "Lisa" },
-                    { value: "Marco y panel", label: "Marco y panel" },
-                    { value: "Vidrio esmerilado", label: "Vidrio esmerilado" },
-                    { value: "Vidrio transparente", label: "Vidrio transparente" },
-                    { value: "Sin puerta", label: "Sin puerta (abierto)" },
-                  ]}
-                />
-              </FieldGroup>
-            )}
-            {opt.drawers > 0 && (
-              <FieldGroup label="Sistema de cajón">
-                <SelectInput
-                  value={opt.drawerSystem}
-                  onChange={(v) => updateOpt("drawerSystem", v)}
-                  options={[
-                    { value: "Simple", label: "Simple" },
-                    { value: "Extracción total", label: "Extracción total" },
-                    { value: "Soft-close", label: "Soft-close" },
-                    { value: "Con frente decorativo", label: "Con frente decorativo" },
-                  ]}
-                />
-              </FieldGroup>
-            )}
+            <FieldGroup label="Estilo de puerta">
+              <SelectInput
+                value={opt.doorStyle}
+                onChange={(v) => updateOpt("doorStyle", v)}
+                options={[
+                  { value: "Lisa", label: "Lisa" },
+                  { value: "Marco y panel", label: "Marco y panel" },
+                  { value: "Vidrio esmerilado", label: "Vidrio esmerilado" },
+                  { value: "Vidrio transparente", label: "Vidrio transparente" },
+                  { value: "Sin puerta", label: "Sin puerta (abierto)" },
+                ]}
+              />
+            </FieldGroup>
+            <FieldGroup label="Sistema de cajón">
+              <SelectInput
+                value={opt.drawerSystem}
+                onChange={(v) => updateOpt("drawerSystem", v)}
+                options={[
+                  { value: "Simple", label: "Simple" },
+                  { value: "Extracción total", label: "Extracción total" },
+                  { value: "Soft-close", label: "Soft-close" },
+                  { value: "Con frente decorativo", label: "Con frente decorativo" },
+                ]}
+              />
+            </FieldGroup>
             <FieldGroup label="Herrajes">
               <SelectInput
                 value={opt.hardwareFinish}
