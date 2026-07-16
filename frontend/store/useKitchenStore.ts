@@ -2,9 +2,9 @@
 
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import { buildNewModule, buildSampleKitchen, calculateKitchenMaterials } from "@/services/kitchenData";
+import { buildNewModule, buildSampleKitchen, calculateKitchenMaterials, getCountertopModel } from "@/services/kitchenData";
 import type {
-  BoardMaterial, CountertopMaterial, ExteriorTextureId, KitchenDraft, KitchenModule, KitchenModuleType,
+  BoardMaterial, ExteriorTextureId, HardwareFinish, KitchenDraft, KitchenModule, KitchenModuleType,
   ModuleCategory, OpeningType, WallOpening, WallSide,
 } from "@/types/kitchen";
 
@@ -46,6 +46,7 @@ interface MoveHistoryEntry {
   moduleId: string;
   x: number;
   z: number;
+  rotation: KitchenModule["rotation"];
 }
 const MOVE_HISTORY_LIMIT = 3;
 
@@ -67,7 +68,7 @@ interface KitchenStore {
   addModule: (type: KitchenModuleType) => void;
   removeModule: (id: string) => void;
   updateModule: (id: string, patch: Partial<Pick<KitchenModule, "label" | "dimensions" | "options" | "x" | "z" | "rotation">>) => void;
-  updateModulePosition: (id: string, x: number, z: number) => void;
+  updateModulePosition: (id: string, x: number, z: number, rotation?: KitchenModule["rotation"]) => void;
   rotateModule: (id: string) => void;
   duplicateModule: (id: string) => void;
   undoLastMove: () => void;
@@ -75,7 +76,8 @@ interface KitchenStore {
   // Bulk material actions — homogenize every relevant module in one click
   // instead of opening each one's inspector individually.
   applyExteriorToAll: (material: BoardMaterial, texture: ExteriorTextureId) => number;
-  applyCountertopToAll: (material: CountertopMaterial, color: string, texture: ExteriorTextureId | "ninguna") => number;
+  applyCountertopToAll: (modelId: string, color: string, texture: ExteriorTextureId | "ninguna") => number;
+  applyHardwareToAll: (finish: HardwareFinish) => number;
 
   // Opening actions (windows & doors)
   addOpening: (type: OpeningType, wall: WallSide) => void;
@@ -150,17 +152,20 @@ export const useKitchenStore = create<KitchenStore>()(
           },
         })),
 
-      updateModulePosition: (id, x, z) =>
+      updateModulePosition: (id, x, z, rotation) =>
         set((s) => {
           const current = s.draft.modules.find((m) => m.id === id);
           // Record where it was dragged FROM (not to) — undo restores this.
           // Only the most recent few are kept; older entries just fall off.
           const history = current && (current.x !== x || current.z !== z)
-            ? [...s.moveHistory, { moduleId: id, x: current.x, z: current.z }].slice(-MOVE_HISTORY_LIMIT)
+            ? [...s.moveHistory, { moduleId: id, x: current.x, z: current.z, rotation: current.rotation }].slice(-MOVE_HISTORY_LIMIT)
             : s.moveHistory;
           return {
             moveHistory: history,
-            draft: { ...s.draft, modules: s.draft.modules.map((m) => (m.id === id ? { ...m, x, z } : m)) },
+            draft: {
+              ...s.draft,
+              modules: s.draft.modules.map((m) => (m.id === id ? { ...m, x, z, rotation: rotation ?? m.rotation } : m)),
+            },
           };
         }),
 
@@ -173,7 +178,7 @@ export const useKitchenStore = create<KitchenStore>()(
             moveHistory: history,
             draft: {
               ...s.draft,
-              modules: s.draft.modules.map((m) => (m.id === last.moduleId ? { ...m, x: last.x, z: last.z } : m)),
+              modules: s.draft.modules.map((m) => (m.id === last.moduleId ? { ...m, x: last.x, z: last.z, rotation: last.rotation } : m)),
             },
           };
         }),
@@ -219,7 +224,22 @@ export const useKitchenStore = create<KitchenStore>()(
         return affected;
       },
 
-      applyCountertopToAll: (material, color, texture) => {
+      applyHardwareToAll: (finish) => {
+        const isCabinet = (m: KitchenModule) => m.category === "lower" || m.category === "upper" || m.category === "tower";
+        const affected = get().draft.modules.filter(isCabinet).length;
+        set((s) => ({
+          draft: {
+            ...s.draft,
+            modules: s.draft.modules.map((m) =>
+              isCabinet(m) ? { ...m, options: { ...m.options, hardwareFinish: finish } } : m
+            ),
+          },
+        }));
+        return affected;
+      },
+
+      applyCountertopToAll: (modelId, color, texture) => {
+        const model = getCountertopModel(modelId);
         const hasCountertop = (m: KitchenModule) => m.category === "countertop" || m.options.includesCountertop;
         const affected = get().draft.modules.filter(hasCountertop).length;
         set((s) => ({
@@ -227,7 +247,16 @@ export const useKitchenStore = create<KitchenStore>()(
             ...s.draft,
             modules: s.draft.modules.map((m) =>
               hasCountertop(m)
-                ? { ...m, options: { ...m.options, countertopMaterial: material, countertopColor: color, countertopTexture: texture } }
+                ? {
+                    ...m,
+                    options: {
+                      ...m.options,
+                      countertopModel: modelId,
+                      countertopMaterial: model?.material ?? m.options.countertopMaterial,
+                      countertopColor: color,
+                      countertopTexture: texture,
+                    },
+                  }
                 : m
             ),
           },

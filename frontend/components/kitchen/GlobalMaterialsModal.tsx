@@ -5,12 +5,35 @@ import { motion } from "framer-motion";
 import { X } from "lucide-react";
 import { useKitchenStore } from "@/store/useKitchenStore";
 import { Input } from "@/components/ui/input";
-import { BOARD_COSTS, COUNTERTOP_COSTS } from "@/services/kitchenData";
+import { BOARD_COSTS, COUNTERTOP_MODELS } from "@/services/kitchenData";
 import { WOOD_TEXTURES } from "@/components/3d/woodTextures";
-import type { BoardMaterial, CountertopMaterial, ExteriorTextureId } from "@/types/kitchen";
+import type { BoardMaterial, ExteriorTextureId, HardwareFinish } from "@/types/kitchen";
 
 const BOARD_OPTIONS = Object.keys(BOARD_COSTS) as BoardMaterial[];
-const COUNTERTOP_OPTIONS = Object.keys(COUNTERTOP_COSTS) as CountertopMaterial[];
+const HARDWARE_OPTIONS: HardwareFinish[] = ["Acero inoxidable", "Negro mate", "Dorado", "Bronce", "Cromo", "Sin jaladores"];
+
+function CountertopModelPicker({ value, onChange }: { value: string | undefined; onChange: (id: string) => void }) {
+  return (
+    <div className="grid grid-cols-2 gap-2">
+      {COUNTERTOP_MODELS.map((m) => (
+        <button
+          key={m.id}
+          type="button"
+          onClick={() => onChange(m.id)}
+          className={`flex items-center gap-2 rounded-lg border p-2 text-left transition-colors ${
+            value === m.id ? "border-indigo-500 bg-indigo-500/10" : "border-white/10 bg-white/3 hover:border-white/25"
+          }`}
+        >
+          <span className="h-7 w-7 shrink-0 rounded-md border border-black/20" style={{ backgroundColor: m.color }} />
+          <span className="min-w-0">
+            <span className="block truncate text-[11px] font-medium text-white">{m.label}</span>
+            <span className="block text-[10px] text-zinc-500">${m.pricePerM2.toLocaleString("es-MX")}/m²</span>
+          </span>
+        </button>
+      ))}
+    </div>
+  );
+}
 
 function SelectInput<T extends string>({ value, onChange, options }: {
   value: T; onChange: (v: T) => void; options: T[];
@@ -88,13 +111,15 @@ function ApplyButton({ onClick }: { onClick: () => number }) {
 // independent groups (exterior board, cubierta) so a shop can sync just one
 // of them without touching the other.
 export function GlobalMaterialsModal({ onClose }: { onClose: () => void }) {
-  const { applyExteriorToAll, applyCountertopToAll } = useKitchenStore();
+  const { applyExteriorToAll, applyCountertopToAll, applyHardwareToAll } = useKitchenStore();
 
   const [exteriorMaterial, setExteriorMaterial] = useState<BoardMaterial>("MDF 18mm");
   const [exteriorTexture, setExteriorTexture] = useState<ExteriorTextureId>("blanco_liso");
 
-  const [countertopMaterial, setCountertopMaterial] = useState<CountertopMaterial>("Postformado");
-  const [countertopColor, setCountertopColor] = useState("#c8b89a");
+  const [hardwareFinish, setHardwareFinish] = useState<HardwareFinish>("Acero inoxidable");
+
+  const [countertopModelId, setCountertopModelId] = useState(COUNTERTOP_MODELS[0].id);
+  const [countertopColor, setCountertopColor] = useState(COUNTERTOP_MODELS[0].color);
   const [countertopTexture, setCountertopTexture] = useState<ExteriorTextureId | "ninguna">("ninguna");
 
   return (
@@ -139,11 +164,18 @@ export function GlobalMaterialsModal({ onClose }: { onClose: () => void }) {
             <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500">Cubierta</p>
             <p className="text-[11px] text-zinc-600">Toda cubierta independiente y la integrada en muebles bajos con cubierta.</p>
             <div className="space-y-1">
-              <label className="block text-xs font-medium text-zinc-400 uppercase tracking-wider">Material</label>
-              <SelectInput value={countertopMaterial} onChange={setCountertopMaterial} options={COUNTERTOP_OPTIONS} />
+              <label className="block text-xs font-medium text-zinc-400 uppercase tracking-wider">Modelo</label>
+              <CountertopModelPicker
+                value={countertopModelId}
+                onChange={(id) => {
+                  setCountertopModelId(id);
+                  const model = COUNTERTOP_MODELS.find((m) => m.id === id);
+                  if (model) setCountertopColor(model.color);
+                }}
+              />
             </div>
             <div className="space-y-1">
-              <label className="block text-xs font-medium text-zinc-400 uppercase tracking-wider">Color</label>
+              <label className="block text-xs font-medium text-zinc-400 uppercase tracking-wider">Color (ajuste fino)</label>
               <div className="flex gap-2">
                 <input
                   type="color"
@@ -158,7 +190,20 @@ export function GlobalMaterialsModal({ onClose }: { onClose: () => void }) {
               <label className="block text-xs font-medium text-zinc-400 uppercase tracking-wider">Textura</label>
               <TexturePicker value={countertopTexture} onChange={setCountertopTexture} allowNone />
             </div>
-            <ApplyButton onClick={() => applyCountertopToAll(countertopMaterial, countertopColor, countertopTexture)} />
+            <ApplyButton onClick={() => applyCountertopToAll(countertopModelId, countertopColor, countertopTexture)} />
+          </div>
+
+          <div className="border-t border-white/8" />
+
+          {/* ── Hardware ────────────────────────────────────────────────── */}
+          <div className="space-y-3">
+            <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500">Herrajes</p>
+            <p className="text-[11px] text-zinc-600">Jaladores de puertas y cajones en todos los muebles bajos, altos y torres.</p>
+            <div className="space-y-1">
+              <label className="block text-xs font-medium text-zinc-400 uppercase tracking-wider">Acabado</label>
+              <SelectInput value={hardwareFinish} onChange={setHardwareFinish} options={HARDWARE_OPTIONS} />
+            </div>
+            <ApplyButton onClick={() => applyHardwareToAll(hardwareFinish)} />
           </div>
         </div>
       </motion.div>

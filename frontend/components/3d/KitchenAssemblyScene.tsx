@@ -1,11 +1,11 @@
 "use client";
 
 import { Canvas, useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
-import { Grid, Html, OrbitControls, Text } from "@react-three/drei";
+import { Grid, Html, OrbitControls } from "@react-three/drei";
 import { useEffect, useRef, useState, type RefObject, type ReactNode } from "react";
 import * as THREE from "three";
 import { Home, Eye, EyeOff, MoveHorizontal, ArrowUp, Box as BoxIcon, Tag, ChevronDown, ChevronUp, Settings2 } from "lucide-react";
-import { CabinetMesh } from "./ModulePreview3D";
+import { CabinetMesh, CountertopDropEdge, mapKey } from "./ModulePreview3D";
 import { Camera3DControls, type CameraAction } from "./Camera3DControls";
 import { getWoodTexture, getWoodRoughness } from "./woodTextures";
 import { useContextRecovery } from "./useContextRecovery";
@@ -54,7 +54,7 @@ function CameraRig({ target }: { target: [number, number, number] }) {
 }
 
 // ─── Box with edge lines ───────────────────────────────────────────────────────
-function Panel({ position, size, color, wireframe, opacity = 1, map = null, roughness }: {
+function Panel({ position, size, color, wireframe, opacity = 1, map = null, roughness, metalness }: {
   position: [number, number, number];
   size: [number, number, number];
   color: string;
@@ -62,14 +62,17 @@ function Panel({ position, size, color, wireframe, opacity = 1, map = null, roug
   opacity?: number;
   map?: THREE.Texture | null;
   roughness?: number;
+  metalness?: number;
 }) {
   return (
     <mesh position={position} castShadow receiveShadow>
       <boxGeometry args={size} />
       <meshStandardMaterial
+        key={mapKey(map)}
         color={map ? "#ffffff" : color}
         map={map ?? undefined}
         roughness={roughness}
+        metalness={metalness}
         wireframe={wireframe}
         transparent={opacity < 1}
         opacity={opacity}
@@ -137,24 +140,41 @@ function CountertopMesh({ mod, wireframe, drag }: { mod: KitchenModule; wirefram
     "Corian": "#efe8dc",
   };
   const ctColor = mod.options.countertopColor || ctColorMap[mod.options.countertopMaterial] || "#c8b89a";
-  const ctMap = mod.options.countertopTexture && mod.options.countertopTexture !== "ninguna"
-    ? getWoodTexture(mod.options.countertopTexture)
-    : null;
+  const ctTextureId = mod.options.countertopTexture !== "ninguna" ? mod.options.countertopTexture : undefined;
+  const ctMap = ctTextureId ? getWoodTexture(ctTextureId) : null;
+  // A wood texture needs matte, non-metallic shading — glossy stone-tuned
+  // values would blow it out to a washed-out near-white specular highlight.
+  const ctRoughness = ctTextureId ? getWoodRoughness(ctTextureId) : 0.35;
+  const ctMetalness = ctTextureId ? 0.04 : 0.08;
   const bodyColor = mod.options.exteriorColor || mod.options.color || "#d4c5b0";
   const bodyMap = getWoodTexture(mod.options.exteriorTexture);
   const bodyRoughness = getWoodRoughness(mod.options.exteriorTexture);
 
   const isIsland = mod.type === "isla_central" || mod.type === "peninsula" || mod.type === "barra_desayunadora";
   const bodyH = isIsland ? y - ctH : 0;
+  // Bullnose radius equals the slab thickness — its top half rounds over the
+  // countertop itself, its bottom half keeps curving past the underside to
+  // cover a bit of the cabinet face below.
+  const dropR = ctH;
+  const flatZ = isIsland ? d / 2 - dropR : d * 0.02 + (d + 0.04) / 2 - dropR;
+  const panelDepth = isIsland ? d - dropR : d + 0.04 - dropR;
+  const panelCenterZ = isIsland ? -dropR / 2 : d * 0.02 - dropR / 2;
 
   return (
     <ModulePlacement mod={mod} drag={drag}>
       {isIsland && bodyH > 0 && (
         <Panel position={[0, bodyH / 2, 0]} size={[w, bodyH, d]} color={bodyColor} map={bodyMap} roughness={bodyRoughness} wireframe={wireframe} />
       )}
-      <Panel position={[0, (isIsland ? bodyH : 0.87) + ctH / 2, isIsland ? 0 : d * 0.02]}
-        size={[w + (isIsland ? 0 : 0.02), ctH, d + (isIsland ? 0 : 0.04)]}
-        color={ctColor} map={ctMap} wireframe={wireframe} />
+      <Panel position={[0, (isIsland ? bodyH : 0.87) + ctH / 2, panelCenterZ]}
+        size={[w + (isIsland ? 0 : 0.02), ctH, panelDepth]}
+        color={ctColor} map={ctMap} roughness={ctRoughness} metalness={ctMetalness} wireframe={wireframe} />
+      <CountertopDropEdge
+        W={w + (isIsland ? 0 : 0.02)}
+        bottomY={(isIsland ? bodyH : 0.87) - dropR}
+        thickness={2 * dropR}
+        flatZ={flatZ}
+        color={ctColor} map={ctMap} roughness={ctRoughness} metalness={ctMetalness} wireframe={wireframe}
+      />
       {/* Backsplash */}
       {mod.options.hasBacksplash && (
         <Panel position={[0, (isIsland ? bodyH : 0.87) + 0.3, -(d / 2) + 0.01]}
@@ -188,9 +208,13 @@ function ApplianceMesh({ mod, wireframe, drag }: { mod: KitchenModule; wireframe
 }
 
 // ─── Accessory Mesh ───────────────────────────────────────────────────────────
-// Accessories aren't draggable (structural fillers) — they render wherever they
-// were auto-placed when added.
-function AccessoryMesh({ mod, wireframe }: { mod: KitchenModule; wireframe: boolean }) {
+// Most accessories are structural fillers (zócalos, trim/side panels) that stay
+// put wherever they were auto-placed relative to a cabinet. The freestanding
+// ones — sink, stove/grill, hood — are real objects a shop still needs to
+// reposition like anything else, so those accept the drag handle too.
+const DRAGGABLE_ACCESSORY_TYPES = new Set(["tarja", "estufa", "parrilla", "campana_extractora", "refrigerador", "microondas", "lavavajillas"]);
+
+function AccessoryMesh({ mod, wireframe, drag }: { mod: KitchenModule; wireframe: boolean; drag?: DragHandleProps }) {
   const w = mod.dimensions.width / 100;
   const color = mod.options.color || "#c0c0c0";
 
@@ -213,7 +237,7 @@ function AccessoryMesh({ mod, wireframe }: { mod: KitchenModule; wireframe: bool
   }
   if (mod.type === "tarja") {
     return (
-      <ModulePlacement mod={mod}>
+      <ModulePlacement mod={mod} drag={drag}>
         <group position={[0, 0.9, 0]}>
           <Panel position={[0, 0, 0]} size={[w, 0.03, 0.5]} color="#b0b0b0" wireframe={wireframe} />
           {!wireframe && (
@@ -226,17 +250,183 @@ function AccessoryMesh({ mod, wireframe }: { mod: KitchenModule; wireframe: bool
       </ModulePlacement>
     );
   }
-  if (mod.type === "estufa" || mod.type === "parrilla") {
+  if (mod.type === "estufa") {
+    // Freestanding range with its own oven body — the norm in Mexican
+    // kitchens is to leave a gap in the cabinet run and drop in a
+    // store-bought stove rather than build a cooktop into a cabinet, so
+    // this needs the full floor-to-counter body, not just a cooktop insert
+    // (that's what "parrilla" below still is — a built-in surface).
+    const h = mod.dimensions.height / 100;
+    const d = mod.dimensions.depth / 100;
+    const bodyColor = mod.options.color || "#e8e8e8";
+    const knobXs = [-w * 0.28, -w * 0.09, w * 0.09, w * 0.28];
+    const panelY = h - 0.05;
+    const doorH = h * 0.66;
+    const doorY = doorH / 2 + 0.04;
     return (
-      <ModulePlacement mod={mod}>
+      <ModulePlacement mod={mod} drag={drag}>
+        <Panel position={[0, h / 2, 0]} size={[w, h, d]} color={bodyColor} roughness={0.4} metalness={0.25} wireframe={wireframe} />
+        <Panel position={[0, h + 0.006, 0]} size={[w * 0.97, 0.012, d * 0.93]} color="#0d0d0d" roughness={0.15} metalness={0.1} wireframe={wireframe} />
+        {!wireframe && (
+          <>
+            {([[-w * 0.24, -d * 0.22], [w * 0.24, -d * 0.22], [-w * 0.24, d * 0.22], [w * 0.24, d * 0.22]] as [number, number][]).map(([bx, bz], i) => (
+              <group key={i} position={[bx, h + 0.013, bz]}>
+                <mesh rotation={[-Math.PI / 2, 0, 0]}>
+                  <ringGeometry args={[0.05, 0.075, 32]} />
+                  <meshStandardMaterial color="#3a3a3a" roughness={0.5} side={2} />
+                </mesh>
+                <mesh rotation={[-Math.PI / 2, 0, 0]}>
+                  <circleGeometry args={[0.05, 32]} />
+                  <meshStandardMaterial color="#1a1a1a" roughness={0.4} side={2} />
+                </mesh>
+              </group>
+            ))}
+            {/* Control panel strip, just under the cooktop */}
+            <mesh position={[0, panelY, d / 2 + 0.006]}>
+              <boxGeometry args={[w * 0.92, 0.07, 0.012]} />
+              <meshStandardMaterial color="#d5d5d5" metalness={0.3} roughness={0.4} />
+            </mesh>
+            {knobXs.map((bx, i) => (
+              <mesh key={`knob${i}`} position={[bx, panelY, d / 2 + 0.013]} rotation={[Math.PI / 2, 0, 0]}>
+                <cylinderGeometry args={[0.014, 0.014, 0.012, 16]} />
+                <meshStandardMaterial color="#ddd" metalness={0.6} roughness={0.3} />
+              </mesh>
+            ))}
+            {/* Oven door */}
+            <mesh position={[0, doorY, d / 2 + 0.008]}>
+              <boxGeometry args={[w * 0.92, doorH, 0.016]} />
+              <meshStandardMaterial color={bodyColor} metalness={0.3} roughness={0.35} />
+            </mesh>
+            {/* Oven window */}
+            <mesh position={[0, doorY + doorH * 0.08, d / 2 + 0.017]}>
+              <boxGeometry args={[w * 0.68, doorH * 0.55, 0.006]} />
+              <meshStandardMaterial color="#0d0d0d" metalness={0.5} roughness={0.2} />
+            </mesh>
+            {/* Handle */}
+            <mesh position={[0, doorY + doorH * 0.42, d / 2 + 0.03]}>
+              <boxGeometry args={[w * 0.78, 0.02, 0.02]} />
+              <meshStandardMaterial color="#999" metalness={0.7} roughness={0.25} />
+            </mesh>
+          </>
+        )}
+      </ModulePlacement>
+    );
+  }
+  if (mod.type === "parrilla") {
+    // Built-in cooktop insert (no body) — sits in a counter cutout, unlike
+    // the freestanding "estufa" above.
+    const knobXs = [-w * 0.32, -w * 0.11, w * 0.11, w * 0.32];
+    return (
+      <ModulePlacement mod={mod} drag={drag}>
         <group position={[0, 0.87, 0]}>
-          <Panel position={[0, 0.005, 0]} size={[w, 0.01, 0.6]} color="#202020" wireframe={wireframe} />
-          {!wireframe && [[-w * 0.25, 0.06, -0.15], [w * 0.25, 0.06, -0.15], [-w * 0.25, 0.06, 0.15], [w * 0.25, 0.06, 0.15]].map(([bx, by, bz], i) => (
-            <mesh key={i} position={[bx as number, by as number, bz as number]}>
-              <torusGeometry args={[0.07, 0.015, 8, 16]} />
-              <meshStandardMaterial color="#333" />
+          <Panel position={[0, 0.006, 0]} size={[w, 0.012, 0.56]} color="#0d0d0d" roughness={0.15} metalness={0.1} wireframe={wireframe} />
+          {!wireframe && [[-w * 0.24, -0.13], [w * 0.24, -0.13], [-w * 0.24, 0.13], [w * 0.24, 0.13]].map(([bx, bz], i) => (
+            <group key={i} position={[bx, 0.013, bz]}>
+              <mesh rotation={[-Math.PI / 2, 0, 0]}>
+                <ringGeometry args={[0.05, 0.075, 32]} />
+                <meshStandardMaterial color="#3a3a3a" roughness={0.5} side={2} />
+              </mesh>
+              <mesh rotation={[-Math.PI / 2, 0, 0]}>
+                <circleGeometry args={[0.05, 32]} />
+                <meshStandardMaterial color="#1a1a1a" roughness={0.4} side={2} />
+              </mesh>
+            </group>
+          ))}
+          {!wireframe && knobXs.map((bx, i) => (
+            <mesh key={`knob${i}`} position={[bx, 0.02, 0.24]} rotation={[Math.PI / 2, 0, 0]}>
+              <cylinderGeometry args={[0.014, 0.014, 0.012, 16]} />
+              <meshStandardMaterial color="#ddd" metalness={0.6} roughness={0.3} />
             </mesh>
           ))}
+        </group>
+      </ModulePlacement>
+    );
+  }
+  if (mod.type === "refrigerador") {
+    // Freestanding French-door fridge: a body box plus two slightly-proud
+    // door panels with a seam and vertical handles down the middle.
+    const h = mod.dimensions.height / 100;
+    const d = mod.dimensions.depth / 100;
+    const bodyColor = mod.options.color || "#c9cdd1";
+    const doorW = w / 2 - 0.01;
+    return (
+      <ModulePlacement mod={mod} drag={drag}>
+        <group position={[0, h / 2, 0]}>
+          <Panel position={[0, 0, 0]} size={[w, h, d]} color={bodyColor} roughness={0.35} metalness={0.5} wireframe={wireframe} />
+          {!wireframe && (
+            <>
+              <Panel position={[-w / 4 - 0.005, 0, d / 2 + 0.006]} size={[doorW, h * 0.97, 0.012]} color={bodyColor} roughness={0.3} metalness={0.55} />
+              <Panel position={[w / 4 + 0.005, 0, d / 2 + 0.006]} size={[doorW, h * 0.97, 0.012]} color={bodyColor} roughness={0.3} metalness={0.55} />
+              <mesh position={[-0.035, 0, d / 2 + 0.018]}>
+                <boxGeometry args={[0.018, h * 0.45, 0.025]} />
+                <meshStandardMaterial color="#888" metalness={0.7} roughness={0.25} />
+              </mesh>
+              <mesh position={[0.035, 0, d / 2 + 0.018]}>
+                <boxGeometry args={[0.018, h * 0.45, 0.025]} />
+                <meshStandardMaterial color="#888" metalness={0.7} roughness={0.25} />
+              </mesh>
+            </>
+          )}
+        </group>
+      </ModulePlacement>
+    );
+  }
+  if (mod.type === "microondas") {
+    // Countertop microwave: dark body, glass door window, side control
+    // strip with a small handle — sits on the counter like a real unit.
+    const h = mod.dimensions.height / 100;
+    const d = mod.dimensions.depth / 100;
+    const bodyColor = mod.options.color || "#2a2a2a";
+    return (
+      <ModulePlacement mod={mod} drag={drag}>
+        <group position={[0, 0.87 + h / 2, 0]}>
+          <Panel position={[0, 0, 0]} size={[w, h, d]} color={bodyColor} roughness={0.4} metalness={0.3} wireframe={wireframe} />
+          {!wireframe && (
+            <>
+              <mesh position={[-w * 0.08, 0, d / 2 + 0.003]}>
+                <boxGeometry args={[w * 0.62, h * 0.7, 0.008]} />
+                <meshStandardMaterial color="#111" metalness={0.6} roughness={0.15} />
+              </mesh>
+              <mesh position={[w * 0.36, 0, d / 2 + 0.003]}>
+                <boxGeometry args={[w * 0.2, h * 0.85, 0.006]} />
+                <meshStandardMaterial color="#151515" metalness={0.3} roughness={0.5} />
+              </mesh>
+              <mesh position={[w * 0.22, 0, d / 2 + 0.02]}>
+                <boxGeometry args={[0.012, h * 0.55, 0.02]} />
+                <meshStandardMaterial color="#999" metalness={0.7} roughness={0.25} />
+              </mesh>
+            </>
+          )}
+        </group>
+      </ModulePlacement>
+    );
+  }
+  if (mod.type === "lavavajillas") {
+    // Under-counter dishwasher: stainless front, a dark top control strip
+    // with a status light, and a handle bar just below it.
+    const h = mod.dimensions.height / 100;
+    const d = mod.dimensions.depth / 100;
+    const bodyColor = mod.options.color || "#c8c8c8";
+    return (
+      <ModulePlacement mod={mod} drag={drag}>
+        <group position={[0, h / 2, 0]}>
+          <Panel position={[0, 0, 0]} size={[w, h, d]} color={bodyColor} roughness={0.35} metalness={0.55} wireframe={wireframe} />
+          {!wireframe && (
+            <>
+              <mesh position={[0, h / 2 - 0.025, d / 2 + 0.004]}>
+                <boxGeometry args={[w * 0.94, 0.03, 0.01]} />
+                <meshStandardMaterial color="#111" metalness={0.4} roughness={0.4} />
+              </mesh>
+              <mesh position={[w * 0.4, h / 2 - 0.025, d / 2 + 0.011]}>
+                <boxGeometry args={[0.015, 0.01, 0.004]} />
+                <meshStandardMaterial color="#4ade80" emissive="#4ade80" emissiveIntensity={1.2} />
+              </mesh>
+              <mesh position={[0, h / 2 - 0.07, d / 2 + 0.015]}>
+                <boxGeometry args={[w * 0.85, 0.02, 0.02]} />
+                <meshStandardMaterial color="#999" metalness={0.7} roughness={0.25} />
+              </mesh>
+            </>
+          )}
         </group>
       </ModulePlacement>
     );
@@ -250,7 +440,7 @@ function AccessoryMesh({ mod, wireframe }: { mod: KitchenModule; wireframe: bool
     const bodyColor = "#161616";
     const chimneyH = 0.55;
     return (
-      <ModulePlacement mod={mod}>
+      <ModulePlacement mod={mod} drag={drag}>
         <group position={[0, mount, 0]}>
           <Panel position={[0, h / 2, 0]} size={[w, h, 0.42]} color={bodyColor} wireframe={wireframe} />
           <Panel position={[0, h + chimneyH / 2, -0.09]} size={[w * 0.38, chimneyH, 0.22]} color={bodyColor} wireframe={wireframe} />
@@ -276,8 +466,29 @@ function AccessoryMesh({ mod, wireframe }: { mod: KitchenModule; wireframe: bool
 }
 
 // Categories whose bodies can be grabbed and dragged around the room floor.
-// Accessories (zócalos, paneles, etc.) stay put — they're structural fillers.
+// Structural accessories (zócalos, trim panels) stay put — see
+// DRAGGABLE_ACCESSORY_TYPES for the freestanding ones that are the exception.
 const DRAGGABLE_CATEGORIES: KitchenModule["category"][] = ["lower", "upper", "tower", "countertop", "appliance"];
+
+function isDraggableModule(mod: KitchenModule): boolean {
+  if (mod.category === "accessory") return DRAGGABLE_ACCESSORY_TYPES.has(mod.type);
+  return DRAGGABLE_CATEGORIES.includes(mod.category);
+}
+
+// Rotation that turns a module's back (its local -Z side, where the carcass'
+// back panel sits) toward whichever of the room's four walls is closest to
+// (x, z) — dragging a module near a wall snaps its facing automatically,
+// the way it would end up placed by hand in a real kitchen.
+function nearestWallRotation(x: number, z: number, roomWidthM: number, roomDepthM: number): KitchenModule["rotation"] {
+  const distances: [KitchenModule["rotation"], number][] = [
+    [0, z],                  // north wall, z = 0
+    [180, roomDepthM - z],   // south wall, z = roomDepthM
+    [90, x],                 // west wall, x = 0
+    [270, roomWidthM - x],   // east wall, x = roomWidthM
+  ];
+  distances.sort((a, b) => a[1] - b[1]);
+  return distances[0][0];
+}
 
 // ─── Module renderer router ───────────────────────────────────────────────────
 function ModuleMesh({ mod, wireframe, drag, onSelect }: { mod: KitchenModule; wireframe: boolean; drag?: DragHandleProps; onSelect?: () => void }) {
@@ -287,28 +498,39 @@ function ModuleMesh({ mod, wireframe, drag, onSelect }: { mod: KitchenModule; wi
     case "tower":      return <CabinetWrapper mod={mod} wireframe={wireframe} drag={drag} onSelect={onSelect} />;
     case "countertop": return <CountertopMesh mod={mod} wireframe={wireframe} drag={drag} />;
     case "appliance":  return <ApplianceMesh  mod={mod} wireframe={wireframe} drag={drag} />;
-    case "accessory":  return <AccessoryMesh  mod={mod} wireframe={wireframe} />;
+    case "accessory":  return <AccessoryMesh  mod={mod} wireframe={wireframe} drag={drag} />;
     default: return null;
   }
 }
 
+// Y where a module's own top surface sits — floor-relative base (accounting
+// for wall-mounted pieces like uppers *and* the accessory-category campana
+// extractora, which also hangs on mountHeight) plus its own height and, for
+// lower cabinets, the countertop on top of it.
+function moduleTopY(mod: KitchenModule): number {
+  return baseY(mod) + mod.dimensions.height / 100 + (mod.options.includesCountertop ? (mod.options.countertopThickness || 3) / 100 : 0);
+}
+
 // ─── Label ─────────────────────────────────────────────────────────────────────
+// A DOM pill badge instead of in-scene 3D text — crisp at any distance/angle
+// and legible against both light walls and dark floors, unlike the old muted
+// gray Text mesh that all but disappeared against the room. pointer-events
+// none so it never steals a click from the module underneath (the gear
+// button already owns that interaction).
 function ModuleLabel({ mod }: { mod: KitchenModule }) {
-  const labelY = mod.category === "upper"
-    ? (mod.options.mountHeight || 144) / 100 + mod.dimensions.height / 100 + 0.12
-    : mod.dimensions.height / 100 + (mod.options.includesCountertop ? (mod.options.countertopThickness || 3) / 100 : 0) + 0.1;
+  const labelY = moduleTopY(mod) + 0.1;
   return (
-    <Text position={[mod.x / 100, labelY, mod.z / 100]} fontSize={0.06} color="#a1a1aa" anchorX="center" anchorY="middle" maxWidth={mod.dimensions.width / 100 - 0.04}>
-      {mod.label}
-    </Text>
+    <Html position={[mod.x / 100, labelY, mod.z / 100]} center distanceFactor={6} zIndexRange={[10, 0]} style={{ pointerEvents: "none" }}>
+      <span className="whitespace-nowrap rounded-full border border-white/25 bg-black/80 px-2.5 py-1 text-xs font-semibold text-white shadow-[0_2px_10px_rgba(0,0,0,0.6)] backdrop-blur-sm">
+        {mod.label}
+      </span>
+    </Html>
   );
 }
 
 // ─── Gear button (click a module → shows this → opens the inspector) ─────────
 function ModuleGearButton({ mod, onClick }: { mod: KitchenModule; onClick: () => void }) {
-  const labelY = mod.category === "upper"
-    ? (mod.options.mountHeight || 144) / 100 + mod.dimensions.height / 100 + 0.12
-    : mod.dimensions.height / 100 + (mod.options.includesCountertop ? (mod.options.countertopThickness || 3) / 100 : 0) + 0.1;
+  const labelY = moduleTopY(mod) + 0.12;
   return (
     <Html position={[mod.x / 100, labelY, mod.z / 100]} center distanceFactor={6} zIndexRange={[20, 0]}>
       <button
@@ -330,7 +552,9 @@ function ModuleGearButton({ mod, onClick }: { mod: KitchenModule; onClick: () =>
 function baseY(mod: KitchenModule): number {
   if (mod.category === "upper" || mod.type === "campana_extractora") return (mod.options.mountHeight || 144) / 100;
   if (mod.type === "tarja") return 0.82;
-  if (mod.type === "estufa" || mod.type === "parrilla") return 0.87;
+  // "estufa" is a floor-standing range now (its own height reaches the
+  // cooktop), unlike "parrilla"/"microondas" which still sit on a counter.
+  if (mod.type === "parrilla" || mod.type === "microondas") return 0.87;
   if (mod.category === "countertop" && !["isla_central", "peninsula", "barra_desayunadora"].includes(mod.type)) return 0.87;
   return 0;
 }
@@ -501,7 +725,7 @@ function AssemblyContent({
 }: {
   modules: KitchenModule[]; roomWidthM: number; roomDepthM: number; wireframe: boolean; showLabels: boolean;
   controlsRef: RefObject<OrbitControlsImpl | null>;
-  onModuleMove?: (id: string, x: number, z: number) => void;
+  onModuleMove?: (id: string, x: number, z: number, rotation?: KitchenModule["rotation"]) => void;
   onModuleActivate?: (id: string) => void;
   hiddenIds: Set<string>; isolatedId: string | null; hoveredId: string | null;
   selectedId: string | null; onSelectModule: (id: string | null) => void;
@@ -564,7 +788,7 @@ function AssemblyContent({
         const hit = getFloorHit(ev.clientX, ev.clientY);
         if (hit) {
           const { x, z } = clamp(state.startX + (hit.x - state.startPointerX), state.startZ + (hit.z - state.startPointerZ));
-          onModuleMove?.(state.id, x * 100, z * 100);
+          onModuleMove?.(state.id, x * 100, z * 100, nearestWallRotation(x, z, roomWidthM, roomDepthM));
         }
       }
       endDrag(handleMove, handleUp, pointerId);
@@ -586,7 +810,7 @@ function AssemblyContent({
       {modules.map((mod) => {
         const visible = isolatedId ? mod.id === isolatedId : !hiddenIds.has(mod.id);
         if (!visible) return null;
-        const draggable = DRAGGABLE_CATEGORIES.includes(mod.category) && !!onModuleMove;
+        const draggable = isDraggableModule(mod) && !!onModuleMove;
         const drag: DragHandleProps | undefined = draggable
           ? {
               onPointerDown: (e) => { e.stopPropagation(); handleDragStart(mod, e); },
@@ -604,7 +828,14 @@ function AssemblyContent({
         // deselect it out from under the gear button.
         const selectThis = () => onSelectModule(mod.id);
         return (
-          <group key={mod.id}>
+          <group
+            key={mod.id}
+            onDoubleClick={(e) => {
+              e.stopPropagation();
+              onSelectModule(mod.id);
+              onModuleActivate?.(mod.id);
+            }}
+          >
             <ModuleMesh mod={effective} wireframe={wireframe} drag={drag} onSelect={selectThis} />
             {showLabels && !(selectedId === mod.id) && <ModuleLabel mod={effective} />}
             {hoveredId === mod.id && <ModuleHighlight mod={effective} />}
@@ -625,7 +856,7 @@ interface KitchenAssemblySceneProps {
   roomDepth: number;
   ceilingHeight: number;
   openings?: WallOpening[];
-  onModuleMove?: (id: string, x: number, z: number) => void;
+  onModuleMove?: (id: string, x: number, z: number, rotation?: KitchenModule["rotation"]) => void;
   onModuleActivate?: (id: string) => void;
   onUndo?: () => void;
   undoCount?: number;
@@ -682,28 +913,6 @@ export function KitchenAssemblyScene({
     controls.update();
   };
 
-  // Slides the camera and its orbit target sideways/up-down together (a true
-  // pan, not a rotation) — the explicit D-pad equivalent of right-click-drag
-  // (mouse) or two-finger-drag (touch), which OrbitControls already supports
-  // but isn't something most people discover on their own. Scaled by the
-  // current distance to target so a click always feels like the same-size
-  // step regardless of zoom level.
-  const pan = (dx: number, dy: number) => {
-    const controls = controlsRef.current;
-    if (!controls) return;
-    const camera = controls.object;
-    const distance = camera.position.distanceTo(controls.target);
-    const step = distance * 0.15;
-    // Camera's world-space right/up axes are just columns 0/1 of its world
-    // matrix — the same source OrbitControls' own internal pan uses.
-    const right = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 0);
-    const up = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 1);
-    const delta = right.multiplyScalar(dx * step).add(up.multiplyScalar(dy * step));
-    camera.position.add(delta);
-    controls.target.add(delta);
-    controls.update();
-  };
-
   const presets: CameraAction[] = [
     { key: "reset", icon: Home, label: "Reset", onClick: () => setCameraTarget(resetTarget) },
     { key: "front", icon: Eye, label: "Frontal", onClick: () => setCameraTarget([centerX, 1.5, roomDepthM + 2]) },
@@ -720,7 +929,6 @@ export function KitchenAssemblyScene({
       <Camera3DControls
         presets={presets} toggles={toggles}
         onZoomIn={() => zoom(0.8)} onZoomOut={() => zoom(1.25)}
-        onPan={pan}
         onUndo={() => onUndo?.()} undoCount={undoCount}
       />
 

@@ -68,6 +68,7 @@ export const DEFAULT_OPTIONS: ModuleOptions = {
   drawers: 0,
   doors: 2,
   shelves: 1,
+  pullOutShelves: false,
   hasToeKick: true,
   toeKickHeight: 8,
   hasLegs: false,
@@ -139,6 +140,45 @@ export const COUNTERTOP_COSTS: Record<CountertopMaterial, number> = {
   "Cemento pulido": 800,
   "Corian": 1900,
 };
+
+// ─── Countertop models ─────────────────────────────────────────────────────────
+// A specific slab a shop actually stocks — name, color and price bundled as one
+// pick instead of three independent fields. Small hand-picked starter set for
+// now; a real catalog (with its own CRUD screen) would replace this array —
+// the rest of the app only depends on the shape, not on it being static.
+export interface CountertopModel {
+  id: string;
+  label: string;
+  material: CountertopMaterial;
+  color: string;
+  pricePerM2: number; // MXN
+}
+
+export const COUNTERTOP_MODELS: CountertopModel[] = [
+  { id: "postformado_blanco", label: "Postformado Blanco", material: "Postformado", color: "#e8e4dc", pricePerM2: 420 },
+  { id: "postformado_arena", label: "Postformado Arena", material: "Postformado", color: "#c8b89a", pricePerM2: 460 },
+  { id: "granito_negro_absoluto", label: "Granito Negro Absoluto", material: "Granito natural", color: "#1c1c1c", pricePerM2: 1900 },
+  { id: "granito_gris_mara", label: "Granito Gris Mara", material: "Granito natural", color: "#6b6b6b", pricePerM2: 1750 },
+  { id: "granito_blanco_dallas", label: "Granito Blanco Dallas", material: "Granito reconstituido", color: "#d8d2c4", pricePerM2: 1250 },
+  { id: "cuarzo_blanco_polar", label: "Cuarzo Blanco Polar", material: "Cuarzo engineered", color: "#f0ede6", pricePerM2: 2300 },
+  { id: "cuarzo_gris_urbano", label: "Cuarzo Gris Urbano", material: "Cuarzo engineered", color: "#9a9a94", pricePerM2: 2250 },
+  { id: "marmol_carrara", label: "Mármol Carrara", material: "Mármol", color: "#eeeae2", pricePerM2: 2600 },
+  { id: "acero_inoxidable_satin", label: "Acero Inoxidable Satinado", material: "Acero inoxidable", color: "#b8bcbe", pricePerM2: 1650 },
+  { id: "cemento_pulido_gris", label: "Cemento Pulido Gris", material: "Cemento pulido", color: "#918f8a", pricePerM2: 820 },
+  { id: "corian_blanco_hielo", label: "Corian Blanco Hielo", material: "Corian", color: "#f2ede2", pricePerM2: 1950 },
+];
+
+export function getCountertopModel(id: string | undefined): CountertopModel | undefined {
+  return COUNTERTOP_MODELS.find((m) => m.id === id);
+}
+
+// A specific model's price takes over from the generic per-material rate —
+// same idea as an exterior texture overriding a flat color, just for cost too.
+function resolveCountertopCost(o: ModuleOptions): { label: string; cost: number } {
+  const model = getCountertopModel(o.countertopModel);
+  if (model) return { label: model.label, cost: model.pricePerM2 };
+  return { label: o.countertopMaterial, cost: COUNTERTOP_COSTS[o.countertopMaterial] ?? 420 };
+}
 
 // Cost per unit for hardware
 export const HARDWARE_COSTS = {
@@ -275,7 +315,7 @@ export const MODULE_CATALOG: ModuleCatalogEntry[] = [
     description: "Base elevada y nichos laterales para refrigerador",
     icon: "🧊",
     defaultDimensions: { height: 20, width: 90, depth: 65 },
-    defaultOptions: { drawers: 0, doors: 0, shelves: 0 },
+    defaultOptions: { drawers: 0, doors: 0, shelves: 0, includesCountertop: false },
     configurableFields: ["height", "width", "depth", "boardMaterial", "color"],
   },
 
@@ -371,6 +411,16 @@ export const MODULE_CATALOG: ModuleCatalogEntry[] = [
     defaultDimensions: { height: 220, width: 45, depth: 60 },
     defaultOptions: { drawers: 0, doors: 4, shelves: 6, doorStyle: "Lisa" },
     configurableFields: ["height", "width", "depth", "shelves", "doors", "doorStyle", "drawerSystem", "boardMaterial", "color"],
+  },
+  {
+    type: "torre_despensa_jalable",
+    category: "tower",
+    label: "Torre despensa (puerta jalable)",
+    description: "Despensero de puerta única cuyos estantes se jalan junto con la puerta al abrir, para acceso total sin agacharse",
+    icon: "🚪",
+    defaultDimensions: { height: 220, width: 40, depth: 55 },
+    defaultOptions: { drawers: 0, doors: 1, shelves: 5, doorStyle: "Lisa", pullOutShelves: true },
+    configurableFields: ["height", "width", "depth", "shelves", "doorStyle", "boardMaterial", "color"],
   },
   {
     type: "torre_refrigerador",
@@ -542,11 +592,41 @@ export const MODULE_CATALOG: ModuleCatalogEntry[] = [
     type: "estufa",
     category: "accessory",
     label: "Estufa",
-    description: "Estufa empotrable de gas o inducción",
+    description: "Estufa de piso independiente con horno — se deja un hueco entre muebles y se coloca sola, como es costumbre en México",
     icon: "🔥",
-    defaultDimensions: { height: 10, width: 60, depth: 60 },
-    defaultOptions: { stoveType: "4 quemadores" },
-    configurableFields: ["width", "depth", "stoveType"],
+    defaultDimensions: { height: 85, width: 60, depth: 60 },
+    defaultOptions: { stoveType: "4 quemadores", color: "#e8e8e8" },
+    configurableFields: ["height", "width", "depth", "stoveType", "color"],
+  },
+  {
+    type: "refrigerador",
+    category: "accessory",
+    label: "Refrigerador",
+    description: "Refrigerador independiente de dos puertas",
+    icon: "🧊",
+    defaultDimensions: { height: 178, width: 90, depth: 70 },
+    defaultOptions: { color: "#c9cdd1" },
+    configurableFields: ["height", "width", "depth", "color"],
+  },
+  {
+    type: "microondas",
+    category: "accessory",
+    label: "Microondas",
+    description: "Horno de microondas de contra",
+    icon: "📡",
+    defaultDimensions: { height: 30, width: 50, depth: 40 },
+    defaultOptions: { color: "#2a2a2a" },
+    configurableFields: ["height", "width", "depth", "color"],
+  },
+  {
+    type: "lavavajillas",
+    category: "accessory",
+    label: "Lavavajillas",
+    description: "Lavavajillas empotrable bajo cubierta",
+    icon: "🍽️",
+    defaultDimensions: { height: 82, width: 60, depth: 60 },
+    defaultOptions: { color: "#c8c8c8" },
+    configurableFields: ["height", "width", "depth", "color"],
   },
   {
     type: "campana_extractora",
@@ -657,8 +737,8 @@ export function getModulesByCategory(category: ModuleCategory): ModuleCatalogEnt
 // an empty one.
 export function buildSampleKitchen(): KitchenDraft {
   const modules: KitchenModule[] = [];
-  const add = (type: KitchenModuleType, x: number, z: number, patch?: { dimensions?: Partial<ModuleDimensions>; options?: Partial<ModuleOptions> }) => {
-    const mod = buildNewModule(type, x, z, 0);
+  const add = (type: KitchenModuleType, x: number, z: number, patch?: { dimensions?: Partial<ModuleDimensions>; options?: Partial<ModuleOptions>; rotation?: KitchenModule["rotation"] }) => {
+    const mod = buildNewModule(type, x, z, patch?.rotation ?? 0);
     modules.push({
       ...mod,
       dimensions: patch?.dimensions ? { ...mod.dimensions, ...patch.dimensions } : mod.dimensions,
@@ -672,11 +752,16 @@ export function buildSampleKitchen(): KitchenDraft {
   // its own built-in countertop slab (options.includesCountertop, true by
   // default), so a continuous counter comes for free without stacking a
   // second overlapping slab on top.
-  add("torre_despensa", 22.5, 30);
+  // Leftmost unit is the pull-out larder tower — same footprint as the plain
+  // torre_despensa it replaces (width pinned to 45 so the run still sums to
+  // roomWidth) but its single door pulls the shelves out with it.
+  add("torre_despensa_jalable", 22.5, 30, { dimensions: { width: 45 } });
   add("gabinete_bajo_puertas", 75, 30);
   add("cajonera", 135, 30);
   add("bajo_tarja", 210, 30);
-  add("bajo_estufa", 285, 30, { options: { includesCountertop: true } });
+  // No "bajo_estufa" cabinet here — as is customary in Mexican kitchens, the
+  // run just leaves a 60cm gap and the freestanding "estufa" below (with its
+  // own floor-to-counter body) drops straight into it.
   add("gabinete_bajo_cajones", 345, 30);
   add("gabinete_bajo_puertas", 405, 30);
   add("despensero_bajo", 457.5, 27.5);
@@ -688,14 +773,24 @@ export function buildSampleKitchen(): KitchenDraft {
   add("gabinete_superior", 405, 17.5);
   add("despensero_alto", 457.5, 17.5);
 
-  // Sink, stovetop and a standalone factory-style extractor hood (no housing
+  // Sink and the freestanding stove/oven filling the gap left in the run
+  // above, plus a standalone factory-style extractor hood (no housing
   // cabinet — see the campana_extractora mesh for the hood's own look)
   add("tarja", 210, 31);
-  add("estufa", 285, 31);
+  add("estufa", 285, 30);
   add("campana_extractora", 285, 17.5, { options: { mountHeight: 150 } });
 
   // Freestanding island
   add("isla_central", 240, 190);
+
+  // West wall — turns the room into an L-shape: a small cabinet under the
+  // window with a countertop microwave on top, a dishwasher beside it, and
+  // a standalone fridge finishing the run. Rotation 90 backs each against
+  // the west wall (x = 0) instead of the north one.
+  add("gabinete_bajo_puertas", 30, 95, { rotation: 90, options: { leftSidePanel: "exterior", rightSidePanel: "exterior" } });
+  add("microondas", 30, 95, { rotation: 90 });
+  add("lavavajillas", 30, 175, { rotation: 90 });
+  add("refrigerador", 35, 260, { rotation: 90 });
 
   const openings: WallOpening[] = [
     { id: "sample_win_north", type: "window", wall: "north", offset: 202.5, width: 70, height: 100, sillHeight: 95 },
@@ -720,13 +815,19 @@ export function buildSampleKitchen(): KitchenDraft {
 
 export function buildNewModule(type: KitchenModuleType, x = 0, z = 0, rotation: KitchenModule["rotation"] = 0): KitchenModule {
   const entry = getCatalogEntry(type)!;
+  // A countertop only makes sense at counter height: wall-mounted (aéreo)
+  // pieces and floor-to-ceiling towers don't have a sensible "top" for one,
+  // so they default it off — while still letting a catalog entry's own
+  // explicit includesCountertop (spread after this) win either way.
+  const smartDefaults: Partial<ModuleOptions> =
+    entry.category === "upper" || entry.defaultDimensions.height > 120 ? { includesCountertop: false } : {};
   return {
     id: `${type}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
     category: entry.category,
     type,
     label: entry.label,
     dimensions: { ...entry.defaultDimensions },
-    options: { ...DEFAULT_OPTIONS, ...entry.defaultOptions },
+    options: { ...DEFAULT_OPTIONS, ...smartDefaults, ...entry.defaultOptions },
     x,
     z,
     rotation,
@@ -880,14 +981,15 @@ export function calculateKitchenMaterials(modules: KitchenModule[]): { lines: Ki
       const edgeMl = 2 * (d.width + d.height + d.depth) / 100 * 1.15;
       addLine(`[${mod.label}] Canto ${o.edgeProfile}`, edgeMl, "ml", 12, { category: "edge" });
 
-      // Countertop (lower only)
-      if (mod.category === "lower" && o.includesCountertop && mod.type !== "base_refrigerador") {
-        const ctCost = COUNTERTOP_COSTS[o.countertopMaterial] ?? 420;
-        addLine(`[${mod.label}] Cubierta ${o.countertopMaterial}`, w * (dp + o.countertopOverhang / 100), "m²", ctCost, { category: "countertop" });
+      // Countertop — lower cabinets have one on by default; upper/tower can
+      // still carry one if the user explicitly toggles it on in the inspector.
+      if (o.includesCountertop) {
+        const { label, cost } = resolveCountertopCost(o);
+        addLine(`[${mod.label}] Cubierta ${label}`, w * (dp + o.countertopOverhang / 100), "m²", cost, { category: "countertop" });
       }
     } else if (mod.category === "countertop") {
-      const ctCost = COUNTERTOP_COSTS[o.countertopMaterial] ?? 420;
-      addLine(`[${mod.label}] ${o.countertopMaterial}`, w * (dp + o.countertopOverhang / 100), "m²", ctCost, { category: "countertop" });
+      const { label, cost } = resolveCountertopCost(o);
+      addLine(`[${mod.label}] ${label}`, w * (dp + o.countertopOverhang / 100), "m²", cost, { category: "countertop" });
       if (o.hasBacksplash) addLine(`[${mod.label}] Salpicadero ${o.backsplashMaterial}`, w * (o.backsplashHeight / 100), "m²", 350, { category: "countertop" });
     }
   }

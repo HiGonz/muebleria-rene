@@ -1,7 +1,7 @@
 "use client";
 
 import type { LucideIcon } from "lucide-react";
-import { ZoomIn, ZoomOut, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Move, Undo2 } from "lucide-react";
+import { ZoomIn, ZoomOut, Undo2 } from "lucide-react";
 
 export interface CameraAction {
   key: string;
@@ -16,8 +16,6 @@ interface Camera3DControlsProps {
   toggles: CameraAction[];
   onZoomIn: () => void;
   onZoomOut: () => void;
-  /** dx/dy are screen-relative: dx>0 pans right, dy>0 pans up. */
-  onPan: (dx: number, dy: number) => void;
   /** Undo the last (up to 3) module drags — an escape hatch for grabbing a
    *  module by accident while trying to orbit the camera. Hidden when there's
    *  nothing to undo. */
@@ -29,7 +27,7 @@ interface Camera3DControlsProps {
 // ~44px touch-target minimum. Horizontal row top-left on desktop (matches the
 // old inline button rows this replaces); compact vertical stack bottom-right
 // on mobile, clear of notches/home-indicators via the safe-area utility.
-export function Camera3DControls({ presets, toggles, onZoomIn, onZoomOut, onPan, onUndo, undoCount }: Camera3DControlsProps) {
+export function Camera3DControls({ presets, toggles, onZoomIn, onZoomOut, onUndo, undoCount }: Camera3DControlsProps) {
   return (
     // pointer-events-none on the wrapper + pointer-events-auto on each visible
     // cluster: this wrapper has no explicit height, and `top`+`bottom` both
@@ -61,7 +59,6 @@ export function Camera3DControls({ presets, toggles, onZoomIn, onZoomOut, onPan,
           <CtrlButton key={p.key} action={p} />
         ))}
       </div>
-      <PanPad onPan={onPan} />
       <div className="pointer-events-auto flex flex-col gap-1.5 rounded-2xl p-1.5 lg:flex-row" style={{ background: "rgba(12,12,18,0.7)", backdropFilter: "blur(12px)" }}>
         <button
           onClick={onZoomIn}
@@ -85,29 +82,6 @@ export function Camera3DControls({ presets, toggles, onZoomIn, onZoomOut, onPan,
           ))}
         </div>
       )}
-    </div>
-  );
-}
-
-// Compact cross-shaped D-pad — the explicit, discoverable way to move the
-// camera sideways/up/down, since the mouse-drag equivalent (right-click-drag,
-// or two-finger-drag on touch) isn't something most people stumble onto.
-function PanPad({ onPan }: { onPan: (dx: number, dy: number) => void }) {
-  const btn = "flex h-9 w-9 items-center justify-center rounded-lg text-zinc-300 transition-colors hover:bg-white/10 hover:text-white active:scale-90";
-  return (
-    <div
-      className="pointer-events-auto grid grid-cols-3 grid-rows-3 gap-0.5 rounded-2xl p-1.5"
-      style={{ background: "rgba(12,12,18,0.7)", backdropFilter: "blur(12px)" }}
-    >
-      <div />
-      <button onClick={() => onPan(0, 1)} aria-label="Mover arriba" title="Mover arriba" className={btn}><ChevronUp size={16} /></button>
-      <div />
-      <button onClick={() => onPan(-1, 0)} aria-label="Mover izquierda" title="Mover izquierda" className={btn}><ChevronLeft size={16} /></button>
-      <div className="flex h-9 w-9 items-center justify-center text-zinc-600"><Move size={13} /></div>
-      <button onClick={() => onPan(1, 0)} aria-label="Mover derecha" title="Mover derecha" className={btn}><ChevronRight size={16} /></button>
-      <div />
-      <button onClick={() => onPan(0, -1)} aria-label="Mover abajo" title="Mover abajo" className={btn}><ChevronDown size={16} /></button>
-      <div />
     </div>
   );
 }

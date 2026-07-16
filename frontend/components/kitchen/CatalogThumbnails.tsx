@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Canvas, useThree } from "@react-three/fiber";
 import type { PerspectiveCamera } from "three";
 import { MODULE_CATALOG, buildNewModule } from "@/services/kitchenData";
-import { CabinetMesh } from "@/components/3d/ModulePreview3D";
+import { PreviewMesh } from "@/components/3d/ModulePreview3D";
 import type { KitchenModule } from "@/types/kitchen";
 
 const ALL_TYPES = MODULE_CATALOG.map((entry) => entry.type);
@@ -77,7 +77,11 @@ function SnapshotStage({ module, onCaptured }: { module: KitchenModule; onCaptur
     const H = module.dimensions.height / 100;
     const D = module.dimensions.depth / 100;
     const dist = Math.max(W, H, D) * 2.4 + 0.4;
-    camera.position.set(W * 0.55, H * 0.62, dist);
+    // Flat modules (countertops, sinks, cooktops, zócalos…) sit almost edge-on
+    // if the camera's height scales off their own tiny H — lift it instead.
+    const isFlatObject = H < Math.max(W, D) * 0.3;
+    const cameraY = isFlatObject ? Math.max(W, D) * 0.55 : H * 0.62;
+    camera.position.set(W * 0.55, cameraY, dist);
     camera.lookAt(0, H / 2, 0);
     (camera as PerspectiveCamera).updateProjectionMatrix?.();
     const timer = setTimeout(onCaptured, 200);
@@ -85,7 +89,7 @@ function SnapshotStage({ module, onCaptured }: { module: KitchenModule; onCaptur
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [module, camera]);
 
-  return <CabinetMesh module={module} />;
+  return <PreviewMesh module={module} />;
 }
 
 // Renders the whole catalog's thumbnails through a single shared Canvas/WebGL

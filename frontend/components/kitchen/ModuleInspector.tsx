@@ -4,9 +4,9 @@ import dynamic from "next/dynamic";
 import { Trash2, Copy, RotateCw } from "lucide-react";
 import { useKitchenStore } from "@/store/useKitchenStore";
 import { Input, Textarea } from "@/components/ui/input";
-import { BOARD_COSTS, COUNTERTOP_COSTS } from "@/services/kitchenData";
+import { BOARD_COSTS, COUNTERTOP_MODELS } from "@/services/kitchenData";
 import { WOOD_TEXTURES } from "@/components/3d/woodTextures";
-import type { BoardMaterial, CountertopMaterial, ExteriorTextureId, KitchenModule } from "@/types/kitchen";
+import type { BoardMaterial, ExteriorTextureId, KitchenModule } from "@/types/kitchen";
 
 const ModulePreview3D = dynamic(
   () => import("@/components/3d/ModulePreview3D").then((m) => ({ default: m.ModulePreview3D })),
@@ -90,8 +90,30 @@ function TexturePicker({ value, onChange }: { value: ExteriorTextureId; onChange
   );
 }
 
+function CountertopModelPicker({ value, onChange }: { value: string | undefined; onChange: (id: string) => void }) {
+  return (
+    <div className="grid grid-cols-2 gap-2">
+      {COUNTERTOP_MODELS.map((m) => (
+        <button
+          key={m.id}
+          type="button"
+          onClick={() => onChange(m.id)}
+          className={`flex items-center gap-2 rounded-lg border p-2 text-left transition-colors ${
+            value === m.id ? "border-indigo-500 bg-indigo-500/10" : "border-white/10 bg-white/3 hover:border-white/25"
+          }`}
+        >
+          <span className="h-7 w-7 shrink-0 rounded-md border border-black/20" style={{ backgroundColor: m.color }} />
+          <span className="min-w-0">
+            <span className="block truncate text-[11px] font-medium text-white">{m.label}</span>
+            <span className="block text-[10px] text-zinc-500">${m.pricePerM2.toLocaleString("es-MX")}/m²</span>
+          </span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
 const BOARD_OPTIONS = (Object.keys(BOARD_COSTS) as BoardMaterial[]).map((k) => ({ value: k, label: k }));
-const COUNTERTOP_OPTIONS = (Object.keys(COUNTERTOP_COSTS) as CountertopMaterial[]).map((k) => ({ value: k, label: k }));
 
 // ─── Main component ────────────────────────────────────────────────────────────
 // The simplified, per-type-aware replacement for the Constructor's Distribución
@@ -117,9 +139,15 @@ export function ModuleInspector() {
   const isTower = category === "tower";
   const isCountertop = category === "countertop";
   const isAppliance = category === "appliance";
+  const isAccessory = category === "accessory";
   const isCajonera = type === "cajonera";
   const showHeightField = !(isCountertop && type === "cubierta");
-  const showCountertopAppearance = isCountertop || opt.includesCountertop;
+  // Cabinets can optionally carry their own built-in countertop; standalone
+  // countertop modules (cubierta, isla, etc.) always are one, so there's
+  // nothing to toggle — and it's meaningless for an appliance/accessory.
+  const canToggleCountertop = isLower || isUpper || isTower;
+  const showCountertopSection = isCountertop || canToggleCountertop;
+  const showCountertopAppearance = isCountertop || (opt.includesCountertop && canToggleCountertop);
 
   return (
     <div className="flex h-full flex-col">
@@ -173,7 +201,7 @@ export function ModuleInspector() {
         </Section>
 
         {/* ── Boards ────────────────────────────────────────────────────── */}
-        {!isCountertop && !isAppliance && (
+        {!isCountertop && !isAppliance && !isAccessory && (
           <>
             <div className="rounded-xl border border-white/8 bg-white/3 px-3 py-2.5">
               <p className="text-[10px] font-semibold uppercase tracking-widest text-zinc-500">Tablero interior</p>
@@ -236,6 +264,18 @@ export function ModuleInspector() {
               {!isCajonera && (
                 <FieldGroup label="Repisas">
                   <NumInput value={opt.shelves} onChange={(v) => updateOpt("shelves", v)} min={0} max={10} />
+                </FieldGroup>
+              )}
+              {!isCajonera && opt.doors === 1 && opt.shelves > 0 && (
+                <FieldGroup label="Repisas jalables">
+                  <SelectInput
+                    value={opt.pullOutShelves ? "si" : "no"}
+                    onChange={(v) => updateOpt("pullOutShelves", v === "si")}
+                    options={[
+                      { value: "no", label: "Fijas en el mueble" },
+                      { value: "si", label: "Se jalan con la puerta" },
+                    ]}
+                  />
                 </FieldGroup>
               )}
               {!isCajonera && (
@@ -328,13 +368,37 @@ export function ModuleInspector() {
         )}
 
         {/* ── Countertop appearance ─────────────────────────────────────── */}
-        {showCountertopAppearance && (
+        {showCountertopSection && (
           <Section label="Cubierta">
             <div className="space-y-3">
-              <FieldGroup label="Material">
-                <SelectInput value={opt.countertopMaterial} onChange={(v) => updateOpt("countertopMaterial", v)} options={COUNTERTOP_OPTIONS} />
+              {canToggleCountertop && (
+                <FieldGroup label="¿Incluye cubierta?">
+                  <SelectInput
+                    value={opt.includesCountertop ? "si" : "no"}
+                    onChange={(v) => updateOpt("includesCountertop", v === "si")}
+                    options={[
+                      { value: "si", label: "Con cubierta" },
+                      { value: "no", label: "Sin cubierta" },
+                    ]}
+                  />
+                </FieldGroup>
+              )}
+              {showCountertopAppearance && (
+              <>
+              <FieldGroup label="Modelo">
+                <CountertopModelPicker
+                  value={opt.countertopModel}
+                  onChange={(id) => {
+                    const model = COUNTERTOP_MODELS.find((m) => m.id === id);
+                    if (!model) return;
+                    updateModule(module.id, {
+                      options: { ...opt, countertopModel: model.id, countertopMaterial: model.material, countertopColor: model.color },
+                    });
+                  }}
+                />
+                <p className="mt-1 text-[10px] text-zinc-600">Catálogo inicial — más adelante se administrará desde un panel dedicado.</p>
               </FieldGroup>
-              <FieldGroup label="Color">
+              <FieldGroup label="Color (ajuste fino)">
                 <div className="flex gap-2">
                   <input
                     type="color"
@@ -379,6 +443,8 @@ export function ModuleInspector() {
                   ))}
                 </div>
               </FieldGroup>
+              </>
+              )}
             </div>
           </Section>
         )}

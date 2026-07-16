@@ -258,7 +258,7 @@ export function KitchenBuilder() {
                 roomDepth={draft.roomDepth}
                 ceilingHeight={draft.ceilingHeight}
                 openings={draft.openings}
-                onModuleMove={(id, x, z) => updateModulePosition(id, x, z)}
+                onModuleMove={(id, x, z, rotation) => updateModulePosition(id, x, z, rotation)}
                 onModuleActivate={(id) => setEditingModule(id)}
                 onUndo={undoLastMove}
                 undoCount={moveHistory.length}

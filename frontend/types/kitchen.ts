@@ -34,6 +34,7 @@ export type UpperModuleType =
 export type TowerModuleType =
   | "torre_horno_microondas"
   | "torre_despensa"
+  | "torre_despensa_jalable"
   | "torre_refrigerador"
   | "torre_almacenamiento";
 
@@ -57,6 +58,9 @@ export type AccessoryModuleType =
   | "tarja"
   | "parrilla"
   | "estufa"
+  | "refrigerador"
+  | "microondas"
+  | "lavavajillas"
   | "campana_extractora"
   | "herrajes"
   | "zoclo"
@@ -155,6 +159,10 @@ export interface ModuleOptions {
   drawers: number;
   doors: number;
   shelves: number;
+  // When true (and the module has exactly one door), the shelves mount to
+  // the inside of that door and swing out with it instead of sitting fixed
+  // in the carcass — a "puerta con estantes jalables" pull-out larder door.
+  pullOutShelves?: boolean;
   // Lower cabinet specifics
   hasToeKick: boolean;
   toeKickHeight: number;        // cm (default 8)
@@ -224,6 +232,11 @@ export interface ModuleOptions {
   // can fine-tune a specific slab without inventing a whole new material.
   countertopColor?: string;
   countertopTexture?: ExteriorTextureId | "ninguna";
+  // References a CountertopModel id (services/kitchenData.ts) — a specific
+  // stocked slab bundling name/color/price in one pick. Picking one also sets
+  // countertopMaterial + countertopColor; left unset for legacy modules that
+  // only ever had the plain material dropdown.
+  countertopModel?: string;
 }
 
 // ─── Kitchen Module ────────────────────────────────────────────────────────────
