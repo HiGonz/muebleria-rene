@@ -93,7 +93,16 @@ class KitchenProjectShareTest extends TestCase
             ->assertJsonMissingPath('client_phone')
             ->assertJsonMissingPath('notes')
             ->assertJsonMissingPath('user_id')
-            ->assertJsonMissingPath('status');
+            ->assertJsonMissingPath('status')
+            ->assertJsonMissingPath('modules.0.id')
+            ->assertJsonMissingPath('modules.0.kitchen_project_id')
+            ->assertJsonMissingPath('modules.0.created_at')
+            ->assertJsonMissingPath('modules.0.updated_at');
+
+        $this->assertSame(
+            ['module_type', 'category', 'label', 'height', 'width', 'depth', 'x', 'z', 'rotation', 'options'],
+            array_keys($response->json('modules.0'))
+        );
         $this->assertSame(1, $share->fresh()->view_count);
     }
 

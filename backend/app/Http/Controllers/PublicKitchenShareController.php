@@ -25,7 +25,18 @@ class PublicKitchenShareController extends Controller
             'roomDepth' => $project->room_depth,
             'ceilingHeight' => $project->ceiling_height,
             'openings' => $project->openings,
-            'modules' => $project->modules,
+            'modules' => $project->modules->map(fn ($module) => [
+                'module_type' => $module->module_type,
+                'category' => $module->category,
+                'label' => $module->label,
+                'height' => $module->height,
+                'width' => $module->width,
+                'depth' => $module->depth,
+                'x' => $module->x,
+                'z' => $module->z,
+                'rotation' => $module->rotation,
+                'options' => $module->options,
+            ]),
         ]);
     }
 }
