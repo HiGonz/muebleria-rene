@@ -231,7 +231,8 @@ export const HARDWARE_COSTS = {
 export const ZOCALO_ALUMINIO_PRICE_PER_PIECE = 165; // MXN per 3m strip
 export const ZOCALO_ALUMINIO_PIECE_LENGTH_M = 3;
 
-// Lambrín — decorative chrome wire-lattice panel material (desayunador's
+// Lambrín — solid decorative wood/MDF-look covering panel, a cosmetic finish
+// (not a wire mesh) with a subtle vertical slat relief (desayunador's
 // exposed back, or any side panel set to "lambrin"), sold as a fixed
 // 3m × 15cm strip per piece. Cost is per piece, not per m², since the shop
 // can't split a strip narrower than 15cm.
@@ -1295,7 +1296,7 @@ export function calculateKitchenMaterials(modules: KitchenModule[]): { lines: Ki
     edgeAgg.set(profile, cur);
   };
 
-  // Lambrín — decorative wire-lattice panels (a desayunador's exposed back,
+  // Lambrín — solid decorative covering panels (a desayunador's exposed back,
   // or any side panel set to "lambrin") pooled project-wide by total area
   // needed, then covered with 3m×15cm stock pieces (see the emission below,
   // same "how many whole pieces, what's left over" idea as edge/countertop).

@@ -260,13 +260,56 @@ function TopFiller({ W, D, yCenter, marginH, color, map, roughness, wireframe = 
   const z = D / 2 + FILLER_PROUD - fillerDepth / 2;
   return <Box pos={[0, yCenter, z]} size={[W, marginH, fillerDepth]} color={color} map={map} roughness={roughness} wireframe={wireframe} />;
 }
-// ─── Lambrín (decorative chrome wire-lattice panel) ───────────────────────────
-// A grid of thin metallic bars filling a rectangular face — used for a
-// desayunador's exposed back and as a side-panel material option, instead of
-// a solid board. `horizontal` picks which two axes the face spans: true = the
-// XY plane (width × height, thin along Z — a back panel); false = the ZY
-// plane (depth × height, thin along X — a side panel).
-function LambrinPanel({ pos, faceW, faceH, horizontal, wireframe = false }: {
+// ─── Lambrín (decorative wood/MDF slat-look wall panel) ───────────────────────
+// A solid, continuous panel finished in the same board material as the rest
+// of the exterior — not a mesh or lattice — with a row of shallow vertical
+// grooves overlaid to read as narrow jointed tablillas (slats), the way a
+// real lambrín covering looks. Purely a cosmetic surface finish, no
+// perforations or open gaps. `horizontal` picks which two axes the face
+// spans: true = the XY plane (width × height, thin along Z — a back panel);
+// false = the ZY plane (depth × height, thin along X — a side panel).
+const LAMBRIN_PANEL_THICKNESS_M = 0.012;
+const LAMBRIN_SLAT_WIDTH_M = 0.1;
+function LambrinPanel({ pos, faceW, faceH, horizontal, color = "#d4c5b0", map = null, roughness = 0.72, wireframe = false }: {
+  pos: [number, number, number]; faceW: number; faceH: number; horizontal: boolean;
+  color?: string; map?: Texture | null; roughness?: number; wireframe?: boolean;
+}) {
+  const grooveColor = shiftColor(color, -0.12);
+  const grooveW = 0.004;
+  const slats = Math.max(Math.round(faceW / LAMBRIN_SLAT_WIDTH_M), 1);
+  const grooves: ReactNode[] = [];
+  for (let i = 1; i < slats; i++) {
+    const offset = -faceW / 2 + (faceW * i) / slats;
+    const p: [number, number, number] = horizontal
+      ? [pos[0] + offset, pos[1], pos[2] + LAMBRIN_PANEL_THICKNESS_M / 2 + FILLER_PROUD]
+      : [pos[0] + LAMBRIN_PANEL_THICKNESS_M / 2 + FILLER_PROUD, pos[1], pos[2] + offset];
+    grooves.push(
+      <Box
+        key={i}
+        pos={p}
+        size={horizontal ? [grooveW, faceH, 0.002] : [0.002, faceH, grooveW]}
+        color={grooveColor} roughness={0.85} wireframe={wireframe}
+      />
+    );
+  }
+  return (
+    <group>
+      <Box
+        pos={pos}
+        size={horizontal ? [faceW, faceH, LAMBRIN_PANEL_THICKNESS_M] : [LAMBRIN_PANEL_THICKNESS_M, faceH, faceW]}
+        color={color} map={map} roughness={roughness} wireframe={wireframe}
+      />
+      {grooves}
+    </group>
+  );
+}
+
+// ─── Chrome wire-lattice grid ──────────────────────────────────────────────────
+// The actual wire-mesh look — used for the chrome spice-rack basket accessory
+// (a genuinely wire product), not for lambrín. A grid of thin metallic bars
+// filling a rectangular face. `horizontal` picks which two axes the face
+// spans, same convention as LambrinPanel above.
+function WireLatticePanel({ pos, faceW, faceH, horizontal, wireframe = false }: {
   pos: [number, number, number]; faceW: number; faceH: number; horizontal: boolean; wireframe?: boolean;
 }) {
   const barColor = "#c7ccd1";
@@ -309,7 +352,7 @@ function PullOutAccessoryMesh({ type, W, H, D, wireframe = false }: {
       <group>
         {Array.from({ length: tiers }, (_, i) => {
           const y = -H / 2 + (H * (i + 0.5)) / tiers;
-          return <LambrinPanel key={i} pos={[0, y, 0]} faceW={W} faceH={D} horizontal wireframe={wireframe} />;
+          return <WireLatticePanel key={i} pos={[0, y, 0]} faceW={W} faceH={D} horizontal wireframe={wireframe} />;
         })}
         <Box pos={[0, 0, D / 2 - 0.01]} size={[0.012, H, 0.012]} color="#aab0b4" metalness={0.85} roughness={0.2} wireframe={wireframe} />
       </group>
@@ -1016,10 +1059,10 @@ function AereoHuecoInferiorMesh({ module, wireframe = false, onSelect }: {
       {/* Divider splitting the open zone into two cubbies */}
       <Box pos={[0, cubbyMidY, 0]} size={[W - T * 2, T, D]} color={dividerColor} wireframe={wireframe} />
       {module.options.leftSidePanel === "lambrin" && (
-        <LambrinPanel pos={[-W / 2 + T / 2, H / 2, 0]} faceW={D} faceH={H} horizontal={false} wireframe={wireframe} />
+        <LambrinPanel pos={[-W / 2 + T / 2, H / 2, 0]} faceW={D} faceH={H} horizontal={false} color={exteriorColor} map={exteriorMap} roughness={exteriorRoughness} wireframe={wireframe} />
       )}
       {module.options.rightSidePanel === "lambrin" && (
-        <LambrinPanel pos={[W / 2 - T / 2, H / 2, 0]} faceW={D} faceH={H} horizontal={false} wireframe={wireframe} />
+        <LambrinPanel pos={[W / 2 - T / 2, H / 2, 0]} faceW={D} faceH={H} horizontal={false} color={exteriorColor} map={exteriorMap} roughness={exteriorRoughness} wireframe={wireframe} />
       )}
       {module.options.leftSidePanel !== "exterior" && (
         <SideFiller side="left" W={W} H={H} D={D} color={exteriorColor} map={exteriorMap} roughness={exteriorRoughness} wireframe={wireframe} />
@@ -1464,7 +1507,7 @@ export function CabinetMesh({ module, wireframe = false, onSelect }: {
         : <Carcass W={W} H={H} D={D} color={color} leftColor={leftColor} rightColor={rightColor} leftMap={leftMap} rightMap={rightMap} hasTop={ctThick === 0} hasBack={module.type !== "bajo_tarja" && !hasCustomBack} wireframe={wireframe} />}
       {hasCustomBack && (
         backMode === "lambrin" ? (
-          <LambrinPanel pos={[0, H / 2, -D / 2 + T / 2]} faceW={W - T * 2} faceH={H - T * 2} horizontal wireframe={wireframe} />
+          <LambrinPanel pos={[0, H / 2, -D / 2 + T / 2]} faceW={W - T * 2} faceH={H - T * 2} horizontal color={exteriorColor} map={exteriorMap} roughness={exteriorRoughness} wireframe={wireframe} />
         ) : backMode === "espejo" ? (
           <Box pos={[0, H / 2, -D / 2 + T / 2]} size={[W - T * 2, H - T * 2, T]} color="#dfe8ec" metalness={0.9} roughness={0.05} wireframe={wireframe} />
         ) : (
@@ -1472,10 +1515,10 @@ export function CabinetMesh({ module, wireframe = false, onSelect }: {
         )
       )}
       {module.options.leftSidePanel === "lambrin" && (
-        <LambrinPanel pos={[-W / 2 + T / 2, H / 2, 0]} faceW={D} faceH={H} horizontal={false} wireframe={wireframe} />
+        <LambrinPanel pos={[-W / 2 + T / 2, H / 2, 0]} faceW={D} faceH={H} horizontal={false} color={exteriorColor} map={exteriorMap} roughness={exteriorRoughness} wireframe={wireframe} />
       )}
       {module.options.rightSidePanel === "lambrin" && (
-        <LambrinPanel pos={[W / 2 - T / 2, H / 2, 0]} faceW={D} faceH={H} horizontal={false} wireframe={wireframe} />
+        <LambrinPanel pos={[W / 2 - T / 2, H / 2, 0]} faceW={D} faceH={H} horizontal={false} color={exteriorColor} map={exteriorMap} roughness={exteriorRoughness} wireframe={wireframe} />
       )}
       {module.options.leftSidePanel !== "exterior" && (
         <SideFiller side="left" W={W} H={H} D={D} color={exteriorColor} map={exteriorMap} roughness={exteriorRoughness} wireframe={wireframe} />
