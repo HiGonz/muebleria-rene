@@ -669,13 +669,23 @@ function Countertop({
             <boxGeometry args={[W * 0.64, 0.004, D * 0.59]} />
             <meshStandardMaterial color="#b5b5b5" metalness={0.8} roughness={0.25} />
           </mesh>
-          {/* Grill grates — a couple of cast-iron bars sitting in the opening */}
-          {[-D * 0.14, 0, D * 0.14].map((gz, i) => (
-            <mesh key={i} position={[0, basinTopY - basinH * 0.3, ctOverhang / 2 + gz]}>
-              <boxGeometry args={[W * 0.52, 0.014, 0.03]} />
-              <meshStandardMaterial color="#1a1a1a" metalness={0.4} roughness={0.7} />
-            </mesh>
-          ))}
+          {/* Grill burners — a row of circular gas-ring burners across the
+              opening, same torus-ring look as the standalone estufa/parrilla
+              accessory mesh below, instead of the old plain bar grates.
+              Proud of the recessed box's own top face (basinTopY), not
+              buried inside its volume like the old bar grates were — that
+              box is a solid mesh, so anything positioned lower than its own
+              top face sits behind it from every angle above and never
+              actually renders. */}
+          {[-W * 0.18, 0, W * 0.18].map((bx, i) => {
+            const burnerR = Math.min(W, D) * 0.09;
+            return (
+              <mesh key={i} position={[bx, basinTopY + 0.003, ctOverhang / 2]} rotation={[Math.PI / 2, 0, 0]}>
+                <torusGeometry args={[burnerR, burnerR * 0.22, 8, 16]} />
+                <meshStandardMaterial color="#1a1a1a" metalness={0.4} roughness={0.7} />
+              </mesh>
+            );
+          })}
         </>
       )}
     </group>
@@ -1334,11 +1344,19 @@ function CornerBlindCabinetMesh({ module, wireframe = false, onSelect }: {
   const facesTop = toeKick + Math.max(H - toeKick - ctThick - topMarginH, 0);
   // Shifts the doors' own W-wide local frame so it lands flush with the
   // RIGHT edge of the wider Wt carcass — the blind D-wide extension sits
-  // untouched to its left.
+  // untouched to its left. Every option this cabinet uses (leftSidePanel,
+  // rightSidePanel, leftFrontSidePanel) is already documented as meaning
+  // "the extension's own outer edge" / "the cabinet's true outer edge"
+  // rather than a fixed physical side, so mirroring the whole group on X
+  // when cornerBlindSide is "derecha" flips which physical side the blind
+  // extension sits on without changing what any option means. Three.js
+  // flips face winding automatically for a negative-determinant transform,
+  // so lighting/culling stay correct with no per-face changes needed.
   const doorGroupX = D / 2;
+  const mirrored = module.options.cornerBlindSide === "derecha";
 
   return (
-    <group>
+    <group scale={mirrored ? [-1, 1, 1] : [1, 1, 1]}>
       <Carcass W={Wt} H={H} D={D} color={color} leftColor={leftColor} rightColor={rightColor} leftMap={leftMap} rightMap={rightMap} hasTop={ctThick === 0} wireframe={wireframe} />
       {module.options.leftSidePanel !== "exterior" && (
         <SideFiller side="left" W={Wt} H={H} D={D} color={exteriorColor} map={exteriorMap} roughness={exteriorRoughness} wireframe={wireframe} />

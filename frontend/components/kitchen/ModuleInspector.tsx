@@ -325,6 +325,36 @@ export function ModuleInspector() {
               </div>
             </Section>
 
+            {category === "corner" && (
+              <Section label="Orientación del esquinero">
+                <FieldGroup label="Lado de la extensión ciega">
+                  <div className="flex gap-1.5">
+                    {([
+                      { value: "izquierda", label: "Izquierda" },
+                      { value: "derecha", label: "Derecha" },
+                    ] as const).map((o) => (
+                      <button
+                        key={o.value}
+                        type="button"
+                        onClick={() => updateOpt("cornerBlindSide", o.value)}
+                        aria-pressed={(opt.cornerBlindSide ?? "izquierda") === o.value}
+                        className={`flex h-9 flex-1 items-center justify-center rounded-lg border text-xs font-semibold transition-colors ${
+                          (opt.cornerBlindSide ?? "izquierda") === o.value
+                            ? "border-brass bg-brass/15 text-brass-soft"
+                            : "border-ivory/10 bg-ivory/3 text-ivory/70 hover:border-ivory/25"
+                        }`}
+                      >
+                        {o.label}
+                      </button>
+                    ))}
+                  </div>
+                </FieldGroup>
+                <p className="mt-2 text-[10px] text-warmgray/70">
+                  Invierte todo el mueble para que la esquina ciega quede del lado contrario — útil cuando la pared corre hacia el otro lado.
+                </p>
+              </Section>
+            )}
+
             <Section label="Paneles laterales">
               <div className="grid grid-cols-2 gap-3">
                 {category === "corner" ? (

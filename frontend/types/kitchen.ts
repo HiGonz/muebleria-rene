@@ -284,6 +284,14 @@ export interface ModuleOptions {
   // plain interior-board filler. There is no internal divider between the
   // original cabinet and the extension — they always share one open cavity.
   leftFrontSidePanel: "ninguno" | "interior";
+  // Corner cabinets only: which physical side the blind D×D extension sits
+  // on. "izquierda" (default, matches every existing saved corner cabinet)
+  // is the original always-left layout; "derecha" mirrors the whole
+  // cabinet on X — see CornerBlindCabinetMesh, which treats every other
+  // corner-specific option as meaning "the extension's own edge" rather
+  // than a fixed physical side, so this is the only thing that needs to
+  // flip.
+  cornerBlindSide?: "izquierda" | "derecha";
   // Per-door hinge side override (index-aligned with the auto-generated door
   // order, left to right). Undefined/missing entries fall back to the
   // default alternating pattern (even index = hinges left, odd = hinges
