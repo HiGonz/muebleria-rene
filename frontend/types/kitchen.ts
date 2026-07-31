@@ -137,14 +137,14 @@ export type HardwareFinish = "Acero inoxidable" | "Negro mate" | "Dorado" | "Bro
 
 // ─── Side panels ───────────────────────────────────────────────────────────────
 /** Whether a module's left/right side needs a panel, and which material pool it draws from.
- *  "alambrin" is a decorative chrome wire-lattice panel (sold as 3m×15cm strips)
+ *  "lambrin" is a decorative chrome wire-lattice panel (sold as 3m×15cm strips)
  *  instead of a solid board — e.g. a desayunador's bar-facing side. */
-export type SidePanelMode = "ninguno" | "interior" | "exterior" | "alambrin";
+export type SidePanelMode = "ninguno" | "interior" | "exterior" | "lambrin";
 /** Same idea as SidePanelMode, for a module's BACK panel — normally hidden against
  *  a wall (plain interior board), but a desayunador/peninsula's back is exposed
- *  toward the seating side, so it can be finished in exterior board or alambrín
+ *  toward the seating side, so it can be finished in exterior board or lambrín
  *  instead, and a librero giratorio's back carries a mirror ("espejo"). */
-export type BackPanelMode = "interior" | "exterior" | "alambrin" | "espejo";
+export type BackPanelMode = "interior" | "exterior" | "lambrin" | "espejo";
 /** Toe-kick (zócalo) trim material — MDF cut to size, or aluminum strip stock sold in 3m pieces. */
 export type ZocaloMaterial = "MDF" | "Aluminio";
 

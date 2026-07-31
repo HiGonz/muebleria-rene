@@ -231,13 +231,13 @@ export const HARDWARE_COSTS = {
 export const ZOCALO_ALUMINIO_PRICE_PER_PIECE = 165; // MXN per 3m strip
 export const ZOCALO_ALUMINIO_PIECE_LENGTH_M = 3;
 
-// Alambrín — decorative chrome wire-lattice panel material (desayunador's
-// exposed back, or any side panel set to "alambrin"), sold as a fixed
+// Lambrín — decorative chrome wire-lattice panel material (desayunador's
+// exposed back, or any side panel set to "lambrin"), sold as a fixed
 // 3m × 15cm strip per piece. Cost is per piece, not per m², since the shop
 // can't split a strip narrower than 15cm.
-export const ALAMBRIN_PRICE_PER_PIECE = 210; // MXN per 3m×15cm strip
-export const ALAMBRIN_PIECE_LENGTH_M = 3;
-export const ALAMBRIN_STRIP_WIDTH_M = 0.15;
+export const LAMBRIN_PRICE_PER_PIECE = 210; // MXN per 3m×15cm strip
+export const LAMBRIN_PIECE_LENGTH_M = 3;
+export const LAMBRIN_STRIP_WIDTH_M = 0.15;
 
 // Espejo (mirror) back panel — librero giratorio con espejo.
 export const MIRROR_PRICE_PER_M2 = 950;
@@ -351,16 +351,16 @@ export const MODULE_CATALOG: ModuleCatalogEntry[] = [
     // as unsupported countertop overhang for bar-stool knee room, so the
     // total counter depth still reads as a full 60cm from the front. The
     // back (exposed toward the seating side, not hidden against a wall like
-    // a normal cabinet's) defaults to alambrín instead of plain board.
+    // a normal cabinet's) defaults to lambrín instead of plain board.
     type: "desayunador",
     category: "lower",
     label: "Desayunador",
-    description: "Mueble bajo de 30cm de fondo con cubierta que vuela 30cm extra hacia el lado del banquillo — el respaldo expuesto lleva alambrín",
+    description: "Mueble bajo de 30cm de fondo con cubierta que vuela 30cm extra hacia el lado del banquillo — el respaldo expuesto lleva lambrín",
     icon: "🍳",
     defaultDimensions: { height: 90, width: 90, depth: 30 },
     defaultOptions: {
       drawers: 0, doors: 2, shelves: 1, doorStyle: "Lisa",
-      includesCountertop: true, barOverhangCm: 30, backPanelMaterial: "alambrin",
+      includesCountertop: true, barOverhangCm: 30, backPanelMaterial: "lambrin",
     },
     configurableFields: [
       "height", "width", "depth", "drawers", "doors", "shelves", "doorStyle", "drawerSystem",
@@ -1295,14 +1295,14 @@ export function calculateKitchenMaterials(modules: KitchenModule[]): { lines: Ki
     edgeAgg.set(profile, cur);
   };
 
-  // Alambrín — decorative wire-lattice panels (a desayunador's exposed back,
-  // or any side panel set to "alambrin") pooled project-wide by total area
+  // Lambrín — decorative wire-lattice panels (a desayunador's exposed back,
+  // or any side panel set to "lambrin") pooled project-wide by total area
   // needed, then covered with 3m×15cm stock pieces (see the emission below,
   // same "how many whole pieces, what's left over" idea as edge/countertop).
-  let alambrinAreaM2 = 0;
-  const addAlambrin = (widthM: number, heightM: number) => {
+  let lambrinAreaM2 = 0;
+  const addLambrin = (widthM: number, heightM: number) => {
     if (widthM <= 0 || heightM <= 0) return;
-    alambrinAreaM2 += widthM * heightM;
+    lambrinAreaM2 += widthM * heightM;
   };
 
   // Espejo (mirror) back panels — priced by area, pooled project-wide.
@@ -1468,11 +1468,11 @@ export function calculateKitchenMaterials(modules: KitchenModule[]): { lines: Ki
         // drain trap need to pass through to the wall, same as the 3D mesh
         // (Carcass's hasBack prop). Everyone else's back panel follows
         // backPanelMaterial — plain interior board by default, but a
-        // desayunador's exposed back goes to alambrín and a librero
+        // desayunador's exposed back goes to lambrín and a librero
         // giratorio's goes to a mirror instead of the normal board pool.
         if (mod.type !== "bajo_tarja") {
           const backMode = o.backPanelMaterial ?? "interior";
-          if (backMode === "alambrin") addAlambrin(panelWidth / 100, d.height / 100);
+          if (backMode === "lambrin") addLambrin(panelWidth / 100, d.height / 100);
           else if (backMode === "espejo") addEspejo(panelWidth / 100, d.height / 100);
           else if (backMode === "exterior") addPiece("Exterior", o.exteriorMaterial, panelWidth, d.height, "Respaldo (acabado)");
           else addPiece("Interior", o.boardMaterial, panelWidth, d.height, "Respaldo");
@@ -1481,14 +1481,14 @@ export function calculateKitchenMaterials(modules: KitchenModule[]): { lines: Ki
       for (let i = 0; i < o.shelves; i++) addPiece("Interior", o.boardMaterial, panelWidth, d.depth, "Repisas");
 
       // Side panels — manual per-module choice: skip, route to interior/exterior
-      // pool, or (alambrín) skip the board pools and pool linear stock instead.
-      if (o.leftSidePanel === "alambrin") addAlambrin(d.depth / 100, d.height / 100);
+      // pool, or (lambrín) skip the board pools and pool linear stock instead.
+      if (o.leftSidePanel === "lambrin") addLambrin(d.depth / 100, d.height / 100);
       else if (o.leftSidePanel !== "ninguno") {
         const poolLabel = o.leftSidePanel === "exterior" ? "Exterior" : "Interior";
         const material = o.leftSidePanel === "exterior" ? o.exteriorMaterial : o.boardMaterial;
         addPiece(poolLabel, material, d.depth, d.height, poolLabel === "Exterior" ? "Costados (acabado)" : "Costados");
       }
-      if (o.rightSidePanel === "alambrin") addAlambrin(d.depth / 100, d.height / 100);
+      if (o.rightSidePanel === "lambrin") addLambrin(d.depth / 100, d.height / 100);
       else if (o.rightSidePanel !== "ninguno") {
         const poolLabel = o.rightSidePanel === "exterior" ? "Exterior" : "Interior";
         const material = o.rightSidePanel === "exterior" ? o.exteriorMaterial : o.boardMaterial;
@@ -1554,7 +1554,7 @@ export function calculateKitchenMaterials(modules: KitchenModule[]): { lines: Ki
       // renders its own trim strip (ToeKick in ModulePreview3D.tsx); this was
       // previously never costed at all. MDF becomes a real cut piece (same
       // exterior finish the mesh actually uses); aluminum pools into 3m
-      // stock pieces (see the emission below, alongside alambrín/espejo).
+      // stock pieces (see the emission below, alongside lambrín/espejo).
       // Upper cabinets carry hasToeKick:true in their options by default
       // (DEFAULT_OPTIONS) even though they never render one — same guard the
       // 3D mesh uses to suppress it there.
@@ -1626,16 +1626,16 @@ export function calculateKitchenMaterials(modules: KitchenModule[]): { lines: Ki
     });
   }
 
-  // ── Alambrín, espejo and zócalo de aluminio — each sold as a fixed-size
-  // stock piece (3m strips for alambrín/zócalo), so the pooled area/length
+  // ── Lambrín, espejo and zócalo de aluminio — each sold as a fixed-size
+  // stock piece (3m strips for lambrín/zócalo), so the pooled area/length
   // is covered with whole pieces the same way as edge banding, reporting
   // what's bought and what's left over rather than a raw quantity.
-  if (alambrinAreaM2 > 0) {
-    const stripsNeeded = Math.ceil(alambrinAreaM2 / (ALAMBRIN_PIECE_LENGTH_M * ALAMBRIN_STRIP_WIDTH_M) - 1e-9);
-    const coveredM2 = stripsNeeded * ALAMBRIN_PIECE_LENGTH_M * ALAMBRIN_STRIP_WIDTH_M;
+  if (lambrinAreaM2 > 0) {
+    const stripsNeeded = Math.ceil(lambrinAreaM2 / (LAMBRIN_PIECE_LENGTH_M * LAMBRIN_STRIP_WIDTH_M) - 1e-9);
+    const coveredM2 = stripsNeeded * LAMBRIN_PIECE_LENGTH_M * LAMBRIN_STRIP_WIDTH_M;
     addLine(
-      `Alambrín (3m×15cm) — ${stripsNeeded} ${stripsNeeded === 1 ? "pieza" : "piezas"} (sobran ${(coveredM2 - alambrinAreaM2).toFixed(2)} m²)`,
-      stripsNeeded, "pza", ALAMBRIN_PRICE_PER_PIECE, { category: "edge" },
+      `Lambrín (3m×15cm) — ${stripsNeeded} ${stripsNeeded === 1 ? "pieza" : "piezas"} (sobran ${(coveredM2 - lambrinAreaM2).toFixed(2)} m²)`,
+      stripsNeeded, "pza", LAMBRIN_PRICE_PER_PIECE, { category: "edge" },
     );
   }
   if (espejoAreaM2 > 0) {

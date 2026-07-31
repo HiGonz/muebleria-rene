@@ -26,13 +26,13 @@ const SIDE_PANEL_OPTIONS: { value: SidePanelMode; label: string }[] = [
   { value: "ninguno", label: "Ninguno (vecino)" },
   { value: "interior", label: "Interior" },
   { value: "exterior", label: "Exterior (de punta)" },
-  { value: "alambrin", label: "Alambrín" },
+  { value: "lambrin", label: "Lambrín" },
 ];
 
 const BACK_PANEL_OPTIONS: { value: NonNullable<ModOptions["backPanelMaterial"]>; label: string }[] = [
   { value: "interior", label: "Interior (oculto contra el muro)" },
   { value: "exterior", label: "Exterior (acabado)" },
-  { value: "alambrin", label: "Alambrín" },
+  { value: "lambrin", label: "Lambrín" },
   { value: "espejo", label: "Espejo" },
 ];
 

@@ -260,13 +260,13 @@ function TopFiller({ W, D, yCenter, marginH, color, map, roughness, wireframe = 
   const z = D / 2 + FILLER_PROUD - fillerDepth / 2;
   return <Box pos={[0, yCenter, z]} size={[W, marginH, fillerDepth]} color={color} map={map} roughness={roughness} wireframe={wireframe} />;
 }
-// ─── Alambrín (decorative chrome wire-lattice panel) ──────────────────────────
+// ─── Lambrín (decorative chrome wire-lattice panel) ───────────────────────────
 // A grid of thin metallic bars filling a rectangular face — used for a
 // desayunador's exposed back and as a side-panel material option, instead of
 // a solid board. `horizontal` picks which two axes the face spans: true = the
 // XY plane (width × height, thin along Z — a back panel); false = the ZY
 // plane (depth × height, thin along X — a side panel).
-function AlambrinPanel({ pos, faceW, faceH, horizontal, wireframe = false }: {
+function LambrinPanel({ pos, faceW, faceH, horizontal, wireframe = false }: {
   pos: [number, number, number]; faceW: number; faceH: number; horizontal: boolean; wireframe?: boolean;
 }) {
   const barColor = "#c7ccd1";
@@ -309,7 +309,7 @@ function PullOutAccessoryMesh({ type, W, H, D, wireframe = false }: {
       <group>
         {Array.from({ length: tiers }, (_, i) => {
           const y = -H / 2 + (H * (i + 0.5)) / tiers;
-          return <AlambrinPanel key={i} pos={[0, y, 0]} faceW={W} faceH={D} horizontal wireframe={wireframe} />;
+          return <LambrinPanel key={i} pos={[0, y, 0]} faceW={W} faceH={D} horizontal wireframe={wireframe} />;
         })}
         <Box pos={[0, 0, D / 2 - 0.01]} size={[0.012, H, 0.012]} color="#aab0b4" metalness={0.85} roughness={0.2} wireframe={wireframe} />
       </group>
@@ -993,8 +993,8 @@ function AereoHuecoInferiorMesh({ module, wireframe = false, onSelect }: {
   const exteriorColor = module.options.exteriorColor || color;
   const exteriorMap = getWoodTexture(module.options.exteriorTexture);
   const exteriorRoughness = getWoodRoughness(module.options.exteriorTexture);
-  const leftColor = module.options.leftSidePanel === "ninguno" || module.options.leftSidePanel === "alambrin" ? null : module.options.leftSidePanel === "exterior" ? exteriorColor : color;
-  const rightColor = module.options.rightSidePanel === "ninguno" || module.options.rightSidePanel === "alambrin" ? null : module.options.rightSidePanel === "exterior" ? exteriorColor : color;
+  const leftColor = module.options.leftSidePanel === "ninguno" || module.options.leftSidePanel === "lambrin" ? null : module.options.leftSidePanel === "exterior" ? exteriorColor : color;
+  const rightColor = module.options.rightSidePanel === "ninguno" || module.options.rightSidePanel === "lambrin" ? null : module.options.rightSidePanel === "exterior" ? exteriorColor : color;
   const leftMap = module.options.leftSidePanel === "exterior" ? exteriorMap : null;
   const rightMap = module.options.rightSidePanel === "exterior" ? exteriorMap : null;
 
@@ -1015,11 +1015,11 @@ function AereoHuecoInferiorMesh({ module, wireframe = false, onSelect }: {
       <Box pos={[0, openZoneH, 0]} size={[W - T * 2, T, D]} color={dividerColor} wireframe={wireframe} />
       {/* Divider splitting the open zone into two cubbies */}
       <Box pos={[0, cubbyMidY, 0]} size={[W - T * 2, T, D]} color={dividerColor} wireframe={wireframe} />
-      {module.options.leftSidePanel === "alambrin" && (
-        <AlambrinPanel pos={[-W / 2 + T / 2, H / 2, 0]} faceW={D} faceH={H} horizontal={false} wireframe={wireframe} />
+      {module.options.leftSidePanel === "lambrin" && (
+        <LambrinPanel pos={[-W / 2 + T / 2, H / 2, 0]} faceW={D} faceH={H} horizontal={false} wireframe={wireframe} />
       )}
-      {module.options.rightSidePanel === "alambrin" && (
-        <AlambrinPanel pos={[W / 2 - T / 2, H / 2, 0]} faceW={D} faceH={H} horizontal={false} wireframe={wireframe} />
+      {module.options.rightSidePanel === "lambrin" && (
+        <LambrinPanel pos={[W / 2 - T / 2, H / 2, 0]} faceW={D} faceH={H} horizontal={false} wireframe={wireframe} />
       )}
       {module.options.leftSidePanel !== "exterior" && (
         <SideFiller side="left" W={W} H={H} D={D} color={exteriorColor} map={exteriorMap} roughness={exteriorRoughness} wireframe={wireframe} />
@@ -1372,8 +1372,8 @@ export function CabinetMesh({ module, wireframe = false, onSelect }: {
   const exteriorColor = module.options.exteriorColor || color;
   const exteriorMap = getWoodTexture(module.options.exteriorTexture);
   const exteriorRoughness = getWoodRoughness(module.options.exteriorTexture);
-  const leftColor = module.options.leftSidePanel === "ninguno" || module.options.leftSidePanel === "alambrin" ? null : module.options.leftSidePanel === "exterior" ? exteriorColor : color;
-  const rightColor = module.options.rightSidePanel === "ninguno" || module.options.rightSidePanel === "alambrin" ? null : module.options.rightSidePanel === "exterior" ? exteriorColor : color;
+  const leftColor = module.options.leftSidePanel === "ninguno" || module.options.leftSidePanel === "lambrin" ? null : module.options.leftSidePanel === "exterior" ? exteriorColor : color;
+  const rightColor = module.options.rightSidePanel === "ninguno" || module.options.rightSidePanel === "lambrin" ? null : module.options.rightSidePanel === "exterior" ? exteriorColor : color;
   const leftMap = module.options.leftSidePanel === "exterior" ? exteriorMap : null;
   const rightMap = module.options.rightSidePanel === "exterior" ? exteriorMap : null;
   // Back panel — plain interior board by default, but a desayunador's back
@@ -1463,19 +1463,19 @@ export function CabinetMesh({ module, wireframe = false, onSelect }: {
         ? <StoveCarcass W={W} H={H} D={D} color={color} leftColor={leftColor} rightColor={rightColor} leftMap={leftMap} rightMap={rightMap} wireframe={wireframe} />
         : <Carcass W={W} H={H} D={D} color={color} leftColor={leftColor} rightColor={rightColor} leftMap={leftMap} rightMap={rightMap} hasTop={ctThick === 0} hasBack={module.type !== "bajo_tarja" && !hasCustomBack} wireframe={wireframe} />}
       {hasCustomBack && (
-        backMode === "alambrin" ? (
-          <AlambrinPanel pos={[0, H / 2, -D / 2 + T / 2]} faceW={W - T * 2} faceH={H - T * 2} horizontal wireframe={wireframe} />
+        backMode === "lambrin" ? (
+          <LambrinPanel pos={[0, H / 2, -D / 2 + T / 2]} faceW={W - T * 2} faceH={H - T * 2} horizontal wireframe={wireframe} />
         ) : backMode === "espejo" ? (
           <Box pos={[0, H / 2, -D / 2 + T / 2]} size={[W - T * 2, H - T * 2, T]} color="#dfe8ec" metalness={0.9} roughness={0.05} wireframe={wireframe} />
         ) : (
           <Box pos={[0, H / 2, -D / 2 + T / 2]} size={[W - T * 2, H - T * 2, T]} color={exteriorColor} map={exteriorMap} roughness={exteriorRoughness} wireframe={wireframe} />
         )
       )}
-      {module.options.leftSidePanel === "alambrin" && (
-        <AlambrinPanel pos={[-W / 2 + T / 2, H / 2, 0]} faceW={D} faceH={H} horizontal={false} wireframe={wireframe} />
+      {module.options.leftSidePanel === "lambrin" && (
+        <LambrinPanel pos={[-W / 2 + T / 2, H / 2, 0]} faceW={D} faceH={H} horizontal={false} wireframe={wireframe} />
       )}
-      {module.options.rightSidePanel === "alambrin" && (
-        <AlambrinPanel pos={[W / 2 - T / 2, H / 2, 0]} faceW={D} faceH={H} horizontal={false} wireframe={wireframe} />
+      {module.options.rightSidePanel === "lambrin" && (
+        <LambrinPanel pos={[W / 2 - T / 2, H / 2, 0]} faceW={D} faceH={H} horizontal={false} wireframe={wireframe} />
       )}
       {module.options.leftSidePanel !== "exterior" && (
         <SideFiller side="left" W={W} H={H} D={D} color={exteriorColor} map={exteriorMap} roughness={exteriorRoughness} wireframe={wireframe} />
