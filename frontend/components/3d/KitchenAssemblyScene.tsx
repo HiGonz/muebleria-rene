@@ -833,10 +833,15 @@ function ModuleLabel({ mod }: { mod: KitchenModule }) {
 // run of cabinets against a wall — without opening each one's inspector.
 function ModuleDimensionsLabel({ mod }: { mod: KitchenModule }) {
   const labelY = moduleTopY(mod) + 0.02;
+  // Blind-corner cabinets' real footprint is width + depth (the blind
+  // extension) — see blindCornerFootprintWidth, the same figure the
+  // collision/placement math already uses. Showing the bare
+  // dimensions.width here would silently drop the extension's width.
+  const footprintWidth = blindCornerFootprintWidth(mod);
   return (
     <Html position={[mod.x / 100, labelY, mod.z / 100]} center distanceFactor={6} zIndexRange={[9, 0]} style={{ pointerEvents: "none" }}>
       <span className="whitespace-nowrap rounded-full border border-sage/40 bg-black/80 px-2.5 py-1 text-[11px] font-semibold tabular-nums text-sage shadow-[0_2px_10px_rgba(0,0,0,0.6)] backdrop-blur-sm">
-        {mod.dimensions.width} cm
+        {footprintWidth} cm
       </span>
     </Html>
   );
@@ -913,7 +918,7 @@ interface WallOpeningM {
 // just flat, thicknessless rectangles (like a module) sitting on its inner
 // face, so they ride along in the same animated group and drop/rise with the
 // wall instead of being left floating in place.
-function SimsWall({ center, normal, length, thickness, wallHeight, openings, controlsRef, onOpeningMove }: {
+function SimsWall({ center, normal, length, thickness, wallHeight, openings, controlsRef, onOpeningMove, showDimensions }: {
   center: [number, number]; // room-space (x, z) of the wall's midpoint
   normal: [number, number]; // outward-facing unit normal (x, z)
   length: number;
@@ -922,6 +927,7 @@ function SimsWall({ center, normal, length, thickness, wallHeight, openings, con
   openings: WallOpeningM[];
   controlsRef?: RefObject<OrbitControlsImpl | null>;
   onOpeningMove?: (id: string, offsetCm: number) => void;
+  showDimensions?: boolean;
 }) {
   const { camera, gl, raycaster } = useThree();
   const groupRef = useRef<THREE.Group>(null);
@@ -1006,6 +1012,24 @@ function SimsWall({ center, normal, length, thickness, wallHeight, openings, con
         <boxGeometry args={size} />
         <meshStandardMaterial color="#c9c7d4" />
       </mesh>
+      {/* Wall width × ceiling height — pulled inward off the wall's inner
+          face by the same "proud" offset the opening markers use, so it
+          never z-fights with the wall and stays readable from inside the
+          room. Sits inside this group so it folds down with the wall
+          (same Sims-style behavior as the opening markers). */}
+      {showDimensions && (
+        <Html
+          position={[center[0] - normal[0] * proud, tallH - 0.3, center[1] - normal[1] * proud]}
+          center
+          distanceFactor={8}
+          zIndexRange={[8, 0]}
+          style={{ pointerEvents: "none" }}
+        >
+          <span className="whitespace-nowrap rounded-full border border-ivory/40 bg-black/80 px-2.5 py-1 text-[11px] font-semibold tabular-nums text-ivory shadow-[0_2px_10px_rgba(0,0,0,0.6)] backdrop-blur-sm">
+            {Math.round(length * 100)} × {Math.round(tallH * 100)} cm
+          </span>
+        </Html>
+      )}
       {openings.map((o) => {
         const effectiveOffset = dragPreview?.id === o.id ? dragPreview.offset : o.offset;
         const [wx, wz] = toWorld(effectiveOffset - length / 2);
@@ -1039,11 +1063,12 @@ function SimsWall({ center, normal, length, thickness, wallHeight, openings, con
 
 // ─── Room boundary (floor + 4 perimeter walls that drop down "Sims style"
 // when they'd block the camera's view of the room) ──────────────────────────
-function RoomBoundary({ roomWidthM, roomDepthM, ceilingHeightM, openings, controlsRef, onOpeningMove, hiddenIds, isolatedId }: {
+function RoomBoundary({ roomWidthM, roomDepthM, ceilingHeightM, openings, controlsRef, onOpeningMove, hiddenIds, isolatedId, showDimensions }: {
   roomWidthM: number; roomDepthM: number; ceilingHeightM: number; openings: WallOpening[];
   controlsRef?: RefObject<OrbitControlsImpl | null>;
   onOpeningMove?: (id: string, offsetCm: number) => void;
   hiddenIds?: Set<string>; isolatedId?: string | null;
+  showDimensions?: boolean;
 }) {
   const t = WALL_THICKNESS_M;
   const centerX = roomWidthM / 2;
@@ -1061,13 +1086,13 @@ function RoomBoundary({ roomWidthM, roomDepthM, ceilingHeightM, openings, contro
       </mesh>
       <Grid position={[roomWidthM / 2, -0.001, roomDepthM / 2]} args={[roomWidthM, roomDepthM]} cellColor="#9a9488" sectionColor="#7a7468" fadeDistance={30} fadeStrength={1.5} />
       {/* North wall (z=0) */}
-      <SimsWall center={[centerX, 0]} normal={[0, -1]} length={roomWidthM} thickness={t} wallHeight={ceilingHeightM} openings={forWall("north")} controlsRef={controlsRef} onOpeningMove={onOpeningMove} />
+      <SimsWall center={[centerX, 0]} normal={[0, -1]} length={roomWidthM} thickness={t} wallHeight={ceilingHeightM} openings={forWall("north")} controlsRef={controlsRef} onOpeningMove={onOpeningMove} showDimensions={showDimensions} />
       {/* South wall */}
-      <SimsWall center={[centerX, roomDepthM]} normal={[0, 1]} length={roomWidthM} thickness={t} wallHeight={ceilingHeightM} openings={forWall("south")} controlsRef={controlsRef} onOpeningMove={onOpeningMove} />
+      <SimsWall center={[centerX, roomDepthM]} normal={[0, 1]} length={roomWidthM} thickness={t} wallHeight={ceilingHeightM} openings={forWall("south")} controlsRef={controlsRef} onOpeningMove={onOpeningMove} showDimensions={showDimensions} />
       {/* West wall */}
-      <SimsWall center={[0, centerZ]} normal={[-1, 0]} length={roomDepthM} thickness={t} wallHeight={ceilingHeightM} openings={forWall("west")} controlsRef={controlsRef} onOpeningMove={onOpeningMove} />
+      <SimsWall center={[0, centerZ]} normal={[-1, 0]} length={roomDepthM} thickness={t} wallHeight={ceilingHeightM} openings={forWall("west")} controlsRef={controlsRef} onOpeningMove={onOpeningMove} showDimensions={showDimensions} />
       {/* East wall */}
-      <SimsWall center={[roomWidthM, centerZ]} normal={[1, 0]} length={roomDepthM} thickness={t} wallHeight={ceilingHeightM} openings={forWall("east")} controlsRef={controlsRef} onOpeningMove={onOpeningMove} />
+      <SimsWall center={[roomWidthM, centerZ]} normal={[1, 0]} length={roomDepthM} thickness={t} wallHeight={ceilingHeightM} openings={forWall("east")} controlsRef={controlsRef} onOpeningMove={onOpeningMove} showDimensions={showDimensions} />
     </>
   );
 }
@@ -1394,11 +1419,17 @@ export function KitchenAssemblyScene({
 
   return (
     <div className="relative h-full overflow-hidden bg-surface">
-      <Camera3DControls
-        presets={presets} toggles={toggles}
-        onZoomIn={() => zoom(0.8)} onZoomOut={() => zoom(1.25)}
-        onUndo={() => onUndo?.()} undoCount={undoCount}
-      />
+      {/* Camera presets, wireframe/labels/dimensions toggles, zoom, undo —
+          all editing/inspection chrome, not part of the plain "view it,
+          orbit it, open a door" experience the public read-only viewer
+          gives a client. */}
+      {!readOnly && (
+        <Camera3DControls
+          presets={presets} toggles={toggles}
+          onZoomIn={() => zoom(0.8)} onZoomOut={() => zoom(1.25)}
+          onUndo={() => onUndo?.()} undoCount={undoCount}
+        />
+      )}
 
       {/* Fixed to the viewport, not the module — see SelectionToolbar and
           ModulePlacement's DragActiveContext for why this replaced the old
@@ -1580,7 +1611,7 @@ export function KitchenAssemblyScene({
         <RoomBoundary
           roomWidthM={roomWidthM} roomDepthM={roomDepthM} ceilingHeightM={ceilingHeight / 100} openings={openings}
           controlsRef={controlsRef} onOpeningMove={onOpeningMove}
-          hiddenIds={hiddenIds} isolatedId={isolatedId}
+          hiddenIds={hiddenIds} isolatedId={isolatedId} showDimensions={showDimensions}
         />
 
         <AssemblyContent
