@@ -12,20 +12,23 @@ class KitchenModule extends Model
         'module_type',
         'category',
         'label',
-        'wall',
-        'position',
         'height',
         'width',
         'depth',
+        'x',
+        'z',
+        'rotation',
         'options',
     ];
 
     protected $casts = [
-        'options' => 'array',
-        'height'  => 'integer',
-        'width'   => 'integer',
-        'depth'   => 'integer',
-        'position' => 'integer',
+        'options'  => 'array',
+        'height'   => 'integer',
+        'width'    => 'integer',
+        'depth'    => 'integer',
+        'x'        => 'integer',
+        'z'        => 'integer',
+        'rotation' => 'integer',
     ];
 
     public function kitchenProject(): BelongsTo

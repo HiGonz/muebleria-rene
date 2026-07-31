@@ -19,14 +19,13 @@ return new class extends Migration
             $table->string('project_name');
             $table->text('notes')->nullable();
 
-            // Kitchen layout
-            $table->enum('kitchen_style', [
-                'Lineal', 'En L', 'En U', 'En G', 'Isla central', 'Dos paredes',
-            ])->default('Lineal');
-            $table->unsignedSmallInteger('wall_a_length')->default(300); // cm
-            $table->unsignedSmallInteger('wall_b_length')->default(200); // cm
-            $table->unsignedSmallInteger('wall_c_length')->default(200); // cm
+            // Kitchen layout — free rectangular room, modules placed freely inside it
+            $table->unsignedSmallInteger('room_width')->default(400); // cm
+            $table->unsignedSmallInteger('room_depth')->default(300); // cm
             $table->unsignedSmallInteger('ceiling_height')->default(240); // cm
+
+            // Windows & doors on the perimeter walls
+            $table->json('openings')->nullable();
 
             // Status
             $table->enum('status', [
@@ -45,16 +44,19 @@ return new class extends Migration
             // Identity
             $table->string('module_type');    // e.g. 'cajonera', 'bajo_tarja'
             $table->enum('category', [
-                'lower', 'upper', 'tower', 'countertop', 'appliance', 'accessory',
+                'lower', 'upper', 'tower', 'corner', 'countertop', 'appliance', 'accessory',
             ]);
             $table->string('label');          // human-readable name
-            $table->enum('wall', ['A', 'B', 'C', 'isla'])->default('A');
-            $table->unsignedTinyInteger('position')->default(0); // order within wall
 
             // Dimensions (cm)
             $table->unsignedSmallInteger('height')->default(82);
             $table->unsignedSmallInteger('width')->default(60);
             $table->unsignedSmallInteger('depth')->default(60);
+
+            // Free placement in room space (cm) + rotation around Y (degrees)
+            $table->integer('x')->default(0);
+            $table->integer('z')->default(0);
+            $table->unsignedSmallInteger('rotation')->default(0);
 
             // Options stored as JSON for flexibility
             $table->json('options');

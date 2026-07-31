@@ -19,19 +19,18 @@ class KitchenProject extends Model
         'client_phone',
         'project_name',
         'notes',
-        'kitchen_style',
-        'wall_a_length',
-        'wall_b_length',
-        'wall_c_length',
+        'room_width',
+        'room_depth',
         'ceiling_height',
+        'openings',
         'status',
     ];
 
     protected $casts = [
-        'wall_a_length' => 'integer',
-        'wall_b_length' => 'integer',
-        'wall_c_length' => 'integer',
+        'room_width' => 'integer',
+        'room_depth' => 'integer',
         'ceiling_height' => 'integer',
+        'openings' => 'array',
     ];
 
     public function user(): BelongsTo
@@ -41,7 +40,7 @@ class KitchenProject extends Model
 
     public function modules(): HasMany
     {
-        return $this->hasMany(KitchenModule::class)->orderBy('wall')->orderBy('position');
+        return $this->hasMany(KitchenModule::class);
     }
 
     public function quote(): HasOne
