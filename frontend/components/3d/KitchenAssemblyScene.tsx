@@ -1413,13 +1413,6 @@ export function KitchenAssemblyScene({
         />
       )}
 
-      {/* Controls legend — stacked above the (collapsed-by-default) module
-          list on every breakpoint now that both live bottom-left. */}
-      <div className="absolute bottom-20 left-3 z-10 max-w-[13rem] rounded-xl border border-ivory/8 bg-black/60 px-3 py-2 text-[10px] leading-relaxed text-warmgray backdrop-blur-sm lg:max-w-none">
-        <p className="lg:hidden">👆 1 dedo: rotar · 2 dedos: mover y zoom</p>
-        <p className="hidden lg:block">🖱️ Click: rotar · Click derecho: mover · Rueda: zoom</p>
-      </div>
-
       {/* Module list — always bottom-left. Used to move to bottom-right on
           desktop, which is exactly where the module inspector/selector panel
           (right-anchored) slides in from and blocked it while configuring a
