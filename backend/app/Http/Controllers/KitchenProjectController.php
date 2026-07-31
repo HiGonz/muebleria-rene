@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\KitchenProject;
 use App\Models\KitchenModule;
+use App\Models\KitchenProjectShare;
 use App\Models\KitchenQuote;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -201,6 +202,41 @@ class KitchenProjectController extends Controller
         $kitchenProject->update(['status' => 'Cotizado']);
 
         return response()->json($quote);
+    }
+
+    // ── Share ─────────────────────────────────────────────────────────────────
+    public function createShare(Request $request, KitchenProject $kitchenProject): JsonResponse
+    {
+        $this->authorizeProject($request, $kitchenProject);
+
+        $share = $kitchenProject->activeShare()->first();
+
+        if (!$share) {
+            $share = $kitchenProject->shares()->create([
+                'token' => Str::random(40),
+            ]);
+        }
+
+        $origin = rtrim(config('cors.allowed_origins')[0] ?? 'http://localhost:3000', '/');
+
+        return response()->json([
+            'token' => $share->token,
+            'url' => "{$origin}/viewer/{$share->token}",
+            'viewCount' => $share->view_count,
+            'createdAt' => $share->created_at,
+        ]);
+    }
+
+    public function revokeShare(Request $request, KitchenProject $kitchenProject): JsonResponse
+    {
+        $this->authorizeProject($request, $kitchenProject);
+
+        $share = $kitchenProject->activeShare()->first();
+        abort_if(!$share, 404, 'Este proyecto no tiene un enlace activo.');
+
+        $share->update(['revoked_at' => now()]);
+
+        return response()->json(['message' => 'Enlace de compartir revocado.']);
     }
 
     // ─────────────────────────────────────────────────────────────────────────

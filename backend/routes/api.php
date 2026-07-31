@@ -5,10 +5,16 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\KitchenProjectController;
 use App\Http\Controllers\MaterialController;
 use App\Http\Controllers\ProjectController;
+use App\Http\Controllers\PublicKitchenShareController;
 use App\Http\Controllers\QuoteController;
 use Illuminate\Support\Facades\Route;
 
 Route::post('/login', [AuthController::class, 'login']);
+
+// Public — no auth:sanctum, serves the read-only client viewer. Kept in its
+// own controller (never inside the group below) so it can never accidentally
+// end up behind auth:sanctum.
+Route::get('/public/kitchen-shares/{token}', [PublicKitchenShareController::class, 'show']);
 
 Route::middleware('auth:sanctum')->group(function (): void {
     Route::post('/logout', [AuthController::class, 'logout']);
@@ -30,4 +36,6 @@ Route::middleware('auth:sanctum')->group(function (): void {
     Route::apiResource('kitchen-projects', KitchenProjectController::class);
     Route::post('/kitchen-projects/{kitchenProject}/modules/sync', [KitchenProjectController::class, 'syncModules']);
     Route::post('/kitchen-projects/{kitchenProject}/quote', [KitchenProjectController::class, 'quote']);
+    Route::post('/kitchen-projects/{kitchenProject}/share', [KitchenProjectController::class, 'createShare']);
+    Route::delete('/kitchen-projects/{kitchenProject}/share', [KitchenProjectController::class, 'revokeShare']);
 });
