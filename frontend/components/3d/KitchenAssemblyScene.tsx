@@ -4,7 +4,7 @@ import { Canvas, useFrame, useThree, type ThreeEvent } from "@react-three/fiber"
 import { Grid, Html, OrbitControls } from "@react-three/drei";
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type RefObject, type ReactNode } from "react";
 import * as THREE from "three";
-import { Home, Eye, EyeOff, MoveHorizontal, ArrowUp, Box as BoxIcon, Tag, Ruler, ChevronDown, ChevronUp, Settings2, Trash2 } from "lucide-react";
+import { Home, Eye, EyeOff, MoveHorizontal, ArrowUp, Box as BoxIcon, Tag, Ruler, ChevronDown, ChevronUp, Settings2, Trash2, Lock, Unlock } from "lucide-react";
 import { toast } from "sonner";
 import { CabinetMesh, CountertopDropEdge, mapKey } from "./ModulePreview3D";
 import { Camera3DControls, type CameraAction } from "./Camera3DControls";
@@ -820,7 +820,7 @@ function ModuleLabel({ mod }: { mod: KitchenModule }) {
   return (
     <Html position={[mod.x / 100, labelY, mod.z / 100]} center distanceFactor={6} zIndexRange={[10, 0]} style={{ pointerEvents: "none" }}>
       <span className="whitespace-nowrap rounded-full border border-ivory/25 bg-black/80 px-2.5 py-1 text-xs font-semibold text-ivory shadow-[0_2px_10px_rgba(0,0,0,0.6)] backdrop-blur-sm">
-        {mod.label}
+        {mod.options.locked && "🔒 "}{mod.label}
       </span>
     </Html>
   );
@@ -1282,7 +1282,7 @@ function AssemblyContent({
       {modules.map((mod) => {
         const visible = isolatedId ? mod.id === isolatedId : !hiddenIds.has(mod.id);
         if (!visible) return null;
-        const draggable = isDraggableModule(mod) && !!onModuleMove;
+        const draggable = isDraggableModule(mod) && !!onModuleMove && !mod.options.locked;
         const drag: DragHandleProps | undefined = draggable
           ? {
               onPointerDown: (e) => { e.stopPropagation(); handleDragStart(mod, e); },
@@ -1338,6 +1338,7 @@ interface KitchenAssemblySceneProps {
   // AccessoryMesh, see its fallback case), since there's nothing there to
   // click and select in Vista 3D in the first place.
   onModuleRemove?: (id: string) => void;
+  onModuleToggleLock?: (id: string) => void;
   onOpeningMove?: (id: string, offset: number) => void;
   onUndo?: () => void;
   undoCount?: number;
@@ -1350,7 +1351,7 @@ interface KitchenAssemblySceneProps {
 }
 
 export function KitchenAssemblyScene({
-  modules, roomWidth, roomDepth, ceilingHeight, openings = [], onModuleMove, onModuleActivate, onModuleNudge, onModuleRemove, onOpeningMove, onUndo, undoCount = 0, readOnly = false,
+  modules, roomWidth, roomDepth, ceilingHeight, openings = [], onModuleMove, onModuleActivate, onModuleNudge, onModuleRemove, onModuleToggleLock, onOpeningMove, onUndo, undoCount = 0, readOnly = false,
 }: KitchenAssemblySceneProps) {
   const [wireframe, setWireframe] = useState(false);
   const [showLabels, setShowLabels] = useState(false);
@@ -1435,7 +1436,7 @@ export function KitchenAssemblyScene({
           ModulePlacement's DragActiveContext for why this replaced the old
           in-scene floating D-pad (it used to overlap the gear button and
           could land on top of the model depending on camera angle). */}
-      {selectedModule && onModuleNudge && (
+      {selectedModule && onModuleNudge && !selectedModule.options.locked && (
         <SelectionToolbar
           module={selectedModule}
           stepCm={stepCm}
@@ -1507,15 +1508,27 @@ export function KitchenAssemblyScene({
                       >
                         <EyeOff size={12} />
                       </button>
+                      {onModuleToggleLock && (
+                        <button
+                          onClick={() => onModuleToggleLock(mod.id)}
+                          aria-label={mod.options.locked ? "Desbloquear mueble" : "Bloquear mueble"}
+                          title={mod.options.locked ? "Desbloquear mueble" : "Bloquear mueble"}
+                          className={`flex h-6 w-6 items-center justify-center rounded-md transition-colors ${mod.options.locked ? "bg-brass/70 text-ink" : "text-warmgray hover:bg-ivory/10 hover:text-ivory"}`}
+                        >
+                          {mod.options.locked ? <Lock size={12} /> : <Unlock size={12} />}
+                        </button>
+                      )}
                       {onModuleRemove && (
                         <button
                           onClick={() => {
+                            if (mod.options.locked) return;
                             if (selectedId === mod.id) setSelectedId(null);
                             onModuleRemove(mod.id);
                           }}
                           aria-label="Eliminar mueble"
-                          title="Eliminar mueble"
-                          className="flex h-6 w-6 items-center justify-center rounded-md text-warmgray transition-colors hover:bg-terracotta/70 hover:text-ivory"
+                          title={mod.options.locked ? "Desbloquea el mueble para eliminarlo" : "Eliminar mueble"}
+                          disabled={mod.options.locked}
+                          className={`flex h-6 w-6 items-center justify-center rounded-md transition-colors ${mod.options.locked ? "cursor-not-allowed text-warmgray/30" : "text-warmgray hover:bg-terracotta/70 hover:text-ivory"}`}
                         >
                           <Trash2 size={12} />
                         </button>

@@ -99,6 +99,7 @@ interface KitchenStore {
   nudgeModule: (id: string, dx: number, dz: number, dMountHeight: number) => void;
   rotateModule: (id: string) => void;
   duplicateModule: (id: string) => void;
+  toggleModuleLock: (id: string) => void;
   undoLastMove: () => void;
 
   // Bulk material actions — homogenize every relevant module in one click
@@ -208,21 +209,26 @@ export const useKitchenStore = create<KitchenStore>()(
         }),
 
       removeModule: (id) =>
-        set((s) => ({
-          moveHistory: s.moveHistory.filter((h) => h.moduleId !== id),
-          draft: {
-            ...s.draft,
-            modules: s.draft.modules.filter((m) => m.id !== id),
-            editingModuleId: s.draft.editingModuleId === id ? null : s.draft.editingModuleId,
-          },
-        })),
+        set((s) => {
+          if (s.draft.modules.find((m) => m.id === id)?.options.locked) return {};
+          return {
+            moveHistory: s.moveHistory.filter((h) => h.moduleId !== id),
+            draft: {
+              ...s.draft,
+              modules: s.draft.modules.filter((m) => m.id !== id),
+              editingModuleId: s.draft.editingModuleId === id ? null : s.draft.editingModuleId,
+            },
+          };
+        }),
 
       updateModule: (id, patch) =>
         set((s) => ({
           draft: {
             ...s.draft,
             modules: s.draft.modules.map((m) =>
-              m.id === id ? { ...m, ...patch, dimensions: patch.dimensions ? { ...m.dimensions, ...patch.dimensions } : m.dimensions, options: patch.options ? { ...m.options, ...patch.options } : m.options } : m
+              m.id === id && !m.options.locked
+                ? { ...m, ...patch, dimensions: patch.dimensions ? { ...m.dimensions, ...patch.dimensions } : m.dimensions, options: patch.options ? { ...m.options, ...patch.options } : m.options }
+                : m
             ),
           },
         })),
@@ -230,6 +236,7 @@ export const useKitchenStore = create<KitchenStore>()(
       updateModulePosition: (id, x, z, rotation) =>
         set((s) => {
           const current = s.draft.modules.find((m) => m.id === id);
+          if (current?.options.locked) return {};
           // Record where it was dragged FROM (not to) — undo restores this.
           // Only the most recent few are kept; older entries just fall off.
           const history = current && (current.x !== x || current.z !== z)
@@ -257,7 +264,7 @@ export const useKitchenStore = create<KitchenStore>()(
       nudgeModule: (id, dx, dz, dMountHeight) =>
         set((s) => {
           const mod = s.draft.modules.find((m) => m.id === id);
-          if (!mod) return {};
+          if (!mod || mod.options.locked) return {};
           const x = Math.min(Math.max(mod.x + dx, 0), s.draft.roomWidth);
           const z = Math.min(Math.max(mod.z + dz, 0), s.draft.roomDepth);
           const mountHeight = dMountHeight
@@ -282,7 +289,7 @@ export const useKitchenStore = create<KitchenStore>()(
             moveHistory: history,
             draft: {
               ...s.draft,
-              modules: s.draft.modules.map((m) => (m.id === last.moduleId ? { ...m, x: last.x, z: last.z, rotation: last.rotation } : m)),
+              modules: s.draft.modules.map((m) => (m.id === last.moduleId && !m.options.locked ? { ...m, x: last.x, z: last.z, rotation: last.rotation } : m)),
             },
           };
         }),
@@ -292,7 +299,7 @@ export const useKitchenStore = create<KitchenStore>()(
           draft: {
             ...s.draft,
             modules: s.draft.modules.map((m) =>
-              m.id === id ? { ...m, rotation: ((m.rotation + 90) % 360) as KitchenModule["rotation"] } : m
+              m.id === id && !m.options.locked ? { ...m, rotation: ((m.rotation + 90) % 360) as KitchenModule["rotation"] } : m
             ),
           },
         })),
@@ -307,11 +314,22 @@ export const useKitchenStore = create<KitchenStore>()(
             id: `${original.type}_${Date.now()}_copy`,
             label: `${original.label} (copia)`,
             x, z,
+            // A copy is a fresh, independent module — never inherits the
+            // original's lock, or you couldn't touch what you just made.
+            options: { ...original.options, locked: false },
           };
           const idx = s.draft.modules.findIndex((m) => m.id === id);
           const updated = [...s.draft.modules.slice(0, idx + 1), copy, ...s.draft.modules.slice(idx + 1)];
           return { draft: { ...s.draft, modules: updated, editingModuleId: copy.id } };
         }),
+
+      toggleModuleLock: (id) =>
+        set((s) => ({
+          draft: {
+            ...s.draft,
+            modules: s.draft.modules.map((m) => (m.id === id ? { ...m, options: { ...m.options, locked: !m.options.locked } } : m)),
+          },
+        })),
 
       // ── Bulk material actions ──────────────────────────────────────────────
       applyExteriorToAll: (material, texture) => {

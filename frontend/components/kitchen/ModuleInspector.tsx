@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { Trash2, Copy, RotateCw } from "lucide-react";
+import { Trash2, Copy, RotateCw, Lock, Unlock } from "lucide-react";
 import { useKitchenStore } from "@/store/useKitchenStore";
 import { Input, Textarea } from "@/components/ui/input";
 import { BOARD_COSTS, COUNTERTOP_MODELS, PULL_OUT_ACCESSORY_LABELS, NICHE_ACCESSORY_MATCH, getCatalogEntry } from "@/services/kitchenData";
@@ -215,7 +215,7 @@ const BOARD_OPTIONS = (Object.keys(BOARD_COSTS) as BoardMaterial[]).map((k) => (
 // migrated too.
 export function ModuleInspector() {
   const {
-    getEditingModule, updateModule, setEditingModule, removeModule, duplicateModule, rotateModule,
+    getEditingModule, updateModule, setEditingModule, removeModule, duplicateModule, rotateModule, toggleModuleLock,
     applyExteriorToAll, applyHardwareToAll, applyCountertopToAll, placeAccessoryInNiche,
   } = useKitchenStore();
   const module = getEditingModule();
@@ -257,18 +257,31 @@ export function ModuleInspector() {
     <div className="flex h-full flex-col">
       {/* ── Header ──────────────────────────────────────────────────────── */}
       <div className="flex shrink-0 items-center justify-between border-b border-ivory/8 px-5 py-4">
-        <p className="truncate font-display text-sm font-semibold text-ivory">{module.label}</p>
+        <p className="truncate font-display text-sm font-semibold text-ivory">{opt.locked && "🔒 "}{module.label}</p>
         <div className="flex shrink-0 items-center gap-1">
-          <button onClick={() => rotateModule(module.id)} title="Rotar 90°" className="rounded-lg p-1.5 text-warmgray hover:bg-ivory/8 hover:text-ivory transition-colors">
+          <button
+            onClick={() => rotateModule(module.id)}
+            title={opt.locked ? "Desbloquea el mueble para rotarlo" : "Rotar 90°"}
+            disabled={opt.locked}
+            className="rounded-lg p-1.5 text-warmgray transition-colors hover:bg-ivory/8 hover:text-ivory disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent"
+          >
             <RotateCw size={15} />
           </button>
           <button onClick={() => duplicateModule(module.id)} title="Duplicar" className="rounded-lg p-1.5 text-warmgray hover:bg-ivory/8 hover:text-ivory transition-colors">
             <Copy size={15} />
           </button>
           <button
+            onClick={() => toggleModuleLock(module.id)}
+            title={opt.locked ? "Desbloquear mueble" : "Bloquear mueble"}
+            className={`rounded-lg p-1.5 transition-colors ${opt.locked ? "text-brass-soft hover:bg-brass/15 hover:text-brass" : "text-warmgray hover:bg-ivory/8 hover:text-ivory"}`}
+          >
+            {opt.locked ? <Lock size={15} /> : <Unlock size={15} />}
+          </button>
+          <button
             onClick={() => { removeModule(module.id); }}
-            title="Eliminar"
-            className="rounded-lg p-1.5 text-warmgray hover:bg-terracotta/15 hover:text-terracotta transition-colors"
+            title={opt.locked ? "Desbloquea el mueble para eliminarlo" : "Eliminar"}
+            disabled={opt.locked}
+            className="rounded-lg p-1.5 text-warmgray transition-colors hover:bg-terracotta/15 hover:text-terracotta disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent"
           >
             <Trash2 size={15} />
           </button>
@@ -276,12 +289,22 @@ export function ModuleInspector() {
         </div>
       </div>
 
+      {opt.locked && (
+        <div className="flex shrink-0 items-center gap-2 border-b border-ivory/8 bg-brass/10 px-4 py-2 text-xs text-brass-soft">
+          <Lock size={13} className="shrink-0" />
+          <span className="flex-1">Mueble bloqueado — desbloquéalo para editarlo, moverlo o eliminarlo.</span>
+          <button onClick={() => toggleModuleLock(module.id)} className="shrink-0 font-semibold underline hover:text-brass">
+            Desbloquear
+          </button>
+        </div>
+      )}
+
       {/* ── 3D Preview ──────────────────────────────────────────────────── */}
       <div className="shrink-0 px-4 pt-4">
         <ModulePreview3D module={module} />
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4 space-y-5">
+      <div className={`flex-1 overflow-y-auto p-4 space-y-5 ${opt.locked ? "pointer-events-none opacity-50" : ""}`}>
         {/* ── Name ──────────────────────────────────────────────────────── */}
         <FieldGroup label="Nombre del mueble">
           <Input value={module.label} onChange={(e) => updateModule(module.id, { label: e.target.value })} />

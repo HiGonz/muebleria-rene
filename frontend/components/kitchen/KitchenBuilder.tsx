@@ -43,7 +43,7 @@ const SAMPLE_KITCHENS: { variant: SampleKitchenVariant; label: string; hint: str
 export function KitchenBuilder() {
   const {
     draft, projectId, activeTab, showSelector, setActiveTab, resetDraft, loadSampleKitchen, loadProject, updateModulePosition, nudgeModule,
-    openSelector, setEditingModule, moveHistory, undoLastMove, updateOpening, removeModule,
+    openSelector, setEditingModule, moveHistory, undoLastMove, updateOpening, removeModule, toggleModuleLock,
   } = useKitchenStore();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -264,6 +264,7 @@ export function KitchenBuilder() {
               onModuleActivate={(id) => setEditingModule(id)}
               onModuleNudge={(id, dx, dz, dMountHeight) => nudgeModule(id, dx, dz, dMountHeight)}
               onModuleRemove={removeModule}
+              onModuleToggleLock={toggleModuleLock}
               onOpeningMove={(id, offset) => updateOpening(id, { offset })}
               onUndo={undoLastMove}
               undoCount={moveHistory.length}

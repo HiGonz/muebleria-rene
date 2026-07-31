@@ -202,6 +202,10 @@ export interface DoorDef {
 
 // ─── Module Options ────────────────────────────────────────────────────────────
 export interface ModuleOptions {
+  // Protected from move/rotate/edit/delete until unlocked — lives in options
+  // (not a top-level KitchenModule field) purely so it rides the existing
+  // free-form JSON persistence with no backend migration needed.
+  locked?: boolean;
   // Structural
   drawers: number;
   doors: number;
