@@ -55,6 +55,6 @@ class KitchenProject extends Model
 
     public function activeShare(): HasOne
     {
-        return $this->hasOne(KitchenProjectShare::class)->whereNull('revoked_at')->latestOfMany();
+        return $this->hasOne(KitchenProjectShare::class)->active()->latestOfMany();
     }
 }

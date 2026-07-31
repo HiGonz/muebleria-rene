@@ -15,9 +15,13 @@ class PublicKitchenShareController extends Controller
             abort(404);
         }
 
-        $share->increment('view_count');
+        $project = $share->kitchenProject()->with('modules')->first();
 
-        $project = $share->kitchenProject()->with('modules')->firstOrFail();
+        if (!$project) {
+            abort(404);
+        }
+
+        $share->increment('view_count');
 
         return response()->json([
             'projectName' => $project->project_name,

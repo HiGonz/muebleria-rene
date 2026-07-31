@@ -57,4 +57,14 @@ class KitchenProjectShareModelTest extends TestCase
 
         $this->assertSame($active->id, $project->fresh()->activeShare->id);
     }
+
+    public function test_active_share_ignores_expired_shares(): void
+    {
+        $user = User::factory()->create();
+        $project = $this->createProject($user);
+        $project->shares()->create(['token' => 'expired-one', 'expires_at' => now()->subHour()]);
+        $active = $project->shares()->create(['token' => 'still-active']);
+
+        $this->assertSame($active->id, $project->fresh()->activeShare->id);
+    }
 }

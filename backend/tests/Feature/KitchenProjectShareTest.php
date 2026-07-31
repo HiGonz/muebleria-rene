@@ -140,4 +140,69 @@ class KitchenProjectShareTest extends TestCase
 
         $this->deleteJson("/api/kitchen-projects/{$project->id}/share")->assertStatus(404);
     }
+
+    public function test_dead_link_responses_are_identical_regardless_of_reason(): void
+    {
+        // Byte-identity only holds with debug output off, as it is in production
+        // (APP_DEBUG=false). Under debug mode, Laravel embeds file/line/trace
+        // data that naturally differs by abort() call site.
+        config(['app.debug' => false]);
+
+        $user = User::factory()->create();
+        $project = $this->createProject($user);
+        $project->shares()->create(['token' => 'revoked-for-parity', 'revoked_at' => now()]);
+
+        $missing = $this->getJson('/api/public/kitchen-shares/does-not-exist-parity');
+        $revoked = $this->getJson('/api/public/kitchen-shares/revoked-for-parity');
+
+        $missing->assertStatus(404);
+        $revoked->assertStatus(404);
+        $this->assertSame($missing->getContent(), $revoked->getContent());
+    }
+
+    public function test_public_viewer_endpoint_404s_when_the_project_was_deleted(): void
+    {
+        // See note above: byte-identity is only meaningful with debug output off.
+        config(['app.debug' => false]);
+
+        $user = User::factory()->create();
+        $project = $this->createProject($user);
+        $share = $project->shares()->create(['token' => 'deleted-project-token']);
+        $project->delete();
+
+        $response = $this->getJson('/api/public/kitchen-shares/deleted-project-token');
+
+        $response->assertStatus(404);
+        $baseline = $this->getJson('/api/public/kitchen-shares/does-not-exist-parity-2');
+        $this->assertSame($baseline->getContent(), $response->getContent());
+    }
+
+    public function test_revoking_kills_every_active_share_not_just_the_latest(): void
+    {
+        $user = User::factory()->create();
+        Sanctum::actingAs($user);
+        $project = $this->createProject($user);
+
+        // Simulate the race: two active shares exist for the same project.
+        $project->shares()->create(['token' => 'race-token-1']);
+        $project->shares()->create(['token' => 'race-token-2']);
+
+        $this->deleteJson("/api/kitchen-projects/{$project->id}/share")->assertStatus(200);
+
+        $this->assertSame(0, KitchenProjectShare::where('kitchen_project_id', $project->id)->whereNull('revoked_at')->count());
+        $this->getJson('/api/public/kitchen-shares/race-token-1')->assertStatus(404);
+        $this->getJson('/api/public/kitchen-shares/race-token-2')->assertStatus(404);
+    }
+
+    public function test_a_user_cannot_revoke_another_users_kitchen_project_share(): void
+    {
+        $owner = User::factory()->create();
+        $intruder = User::factory()->create();
+        $project = $this->createProject($owner);
+        $project->shares()->create(['token' => 'someone-elses-token']);
+
+        Sanctum::actingAs($intruder);
+
+        $this->deleteJson("/api/kitchen-projects/{$project->id}/share")->assertStatus(403);
+    }
 }

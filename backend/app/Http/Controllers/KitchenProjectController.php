@@ -217,7 +217,7 @@ class KitchenProjectController extends Controller
             ]);
         }
 
-        $origin = rtrim(config('cors.allowed_origins')[0] ?? 'http://localhost:3000', '/');
+        $origin = rtrim(explode(',', config('app.frontend_url'))[0], '/');
 
         return response()->json([
             'token' => $share->token,
@@ -231,10 +231,8 @@ class KitchenProjectController extends Controller
     {
         $this->authorizeProject($request, $kitchenProject);
 
-        $share = $kitchenProject->activeShare()->first();
-        abort_if(!$share, 404, 'Este proyecto no tiene un enlace activo.');
-
-        $share->update(['revoked_at' => now()]);
+        $revoked = $kitchenProject->shares()->whereNull('revoked_at')->update(['revoked_at' => now()]);
+        abort_if($revoked === 0, 404, 'Este proyecto no tiene un enlace activo.');
 
         return response()->json(['message' => 'Enlace de compartir revocado.']);
     }

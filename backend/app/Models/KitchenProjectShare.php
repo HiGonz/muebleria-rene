@@ -32,4 +32,12 @@ class KitchenProjectShare extends Model
         return $this->revoked_at === null
             && ($this->expires_at === null || $this->expires_at->isFuture());
     }
+
+    public function scopeActive($query)
+    {
+        return $query->whereNull('revoked_at')
+            ->where(function ($q) {
+                $q->whereNull('expires_at')->orWhere('expires_at', '>', now());
+            });
+    }
 }

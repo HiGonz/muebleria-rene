@@ -14,7 +14,7 @@ Route::post('/login', [AuthController::class, 'login']);
 // Public — no auth:sanctum, serves the read-only client viewer. Kept in its
 // own controller (never inside the group below) so it can never accidentally
 // end up behind auth:sanctum.
-Route::get('/public/kitchen-shares/{token}', [PublicKitchenShareController::class, 'show']);
+Route::get('/public/kitchen-shares/{token}', [PublicKitchenShareController::class, 'show'])->middleware('throttle:60,1');
 
 Route::middleware('auth:sanctum')->group(function (): void {
     Route::post('/logout', [AuthController::class, 'logout']);
