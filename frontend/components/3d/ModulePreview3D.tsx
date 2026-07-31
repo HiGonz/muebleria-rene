@@ -268,21 +268,28 @@ function TopFiller({ W, D, yCenter, marginH, color, map, roughness, wireframe = 
 // perforations or open gaps. `horizontal` picks which two axes the face
 // spans: true = the XY plane (width × height, thin along Z — a back panel);
 // false = the ZY plane (depth × height, thin along X — a side panel).
+// `outward` is which way along that thin axis actually faces away from the
+// cabinet's interior — the grooves are drawn proud on that side so they read
+// on the visible exterior face instead of sitting inside the carcass, hidden
+// behind shelves/drawers. The caller knows this from the panel's own
+// position (e.g. the left side panel's outward direction is -X, the right
+// side panel's is +X — see the call sites).
 const LAMBRIN_PANEL_THICKNESS_M = 0.012;
 const LAMBRIN_SLAT_WIDTH_M = 0.1;
-function LambrinPanel({ pos, faceW, faceH, horizontal, color = "#d4c5b0", map = null, roughness = 0.72, wireframe = false }: {
-  pos: [number, number, number]; faceW: number; faceH: number; horizontal: boolean;
+function LambrinPanel({ pos, faceW, faceH, horizontal, outward = 1, color = "#d4c5b0", map = null, roughness = 0.72, wireframe = false }: {
+  pos: [number, number, number]; faceW: number; faceH: number; horizontal: boolean; outward?: 1 | -1;
   color?: string; map?: Texture | null; roughness?: number; wireframe?: boolean;
 }) {
   const grooveColor = shiftColor(color, -0.12);
   const grooveW = 0.004;
+  const proud = (LAMBRIN_PANEL_THICKNESS_M / 2 + FILLER_PROUD) * outward;
   const slats = Math.max(Math.round(faceW / LAMBRIN_SLAT_WIDTH_M), 1);
   const grooves: ReactNode[] = [];
   for (let i = 1; i < slats; i++) {
     const offset = -faceW / 2 + (faceW * i) / slats;
     const p: [number, number, number] = horizontal
-      ? [pos[0] + offset, pos[1], pos[2] + LAMBRIN_PANEL_THICKNESS_M / 2 + FILLER_PROUD]
-      : [pos[0] + LAMBRIN_PANEL_THICKNESS_M / 2 + FILLER_PROUD, pos[1], pos[2] + offset];
+      ? [pos[0] + offset, pos[1], pos[2] + proud]
+      : [pos[0] + proud, pos[1], pos[2] + offset];
     grooves.push(
       <Box
         key={i}
@@ -1059,10 +1066,10 @@ function AereoHuecoInferiorMesh({ module, wireframe = false, onSelect }: {
       {/* Divider splitting the open zone into two cubbies */}
       <Box pos={[0, cubbyMidY, 0]} size={[W - T * 2, T, D]} color={dividerColor} wireframe={wireframe} />
       {module.options.leftSidePanel === "lambrin" && (
-        <LambrinPanel pos={[-W / 2 + T / 2, H / 2, 0]} faceW={D} faceH={H} horizontal={false} color={exteriorColor} map={exteriorMap} roughness={exteriorRoughness} wireframe={wireframe} />
+        <LambrinPanel pos={[-W / 2 + T / 2, H / 2, 0]} faceW={D} faceH={H} horizontal={false} outward={-1} color={exteriorColor} map={exteriorMap} roughness={exteriorRoughness} wireframe={wireframe} />
       )}
       {module.options.rightSidePanel === "lambrin" && (
-        <LambrinPanel pos={[W / 2 - T / 2, H / 2, 0]} faceW={D} faceH={H} horizontal={false} color={exteriorColor} map={exteriorMap} roughness={exteriorRoughness} wireframe={wireframe} />
+        <LambrinPanel pos={[W / 2 - T / 2, H / 2, 0]} faceW={D} faceH={H} horizontal={false} outward={1} color={exteriorColor} map={exteriorMap} roughness={exteriorRoughness} wireframe={wireframe} />
       )}
       {module.options.leftSidePanel !== "exterior" && (
         <SideFiller side="left" W={W} H={H} D={D} color={exteriorColor} map={exteriorMap} roughness={exteriorRoughness} wireframe={wireframe} />
@@ -1507,7 +1514,7 @@ export function CabinetMesh({ module, wireframe = false, onSelect }: {
         : <Carcass W={W} H={H} D={D} color={color} leftColor={leftColor} rightColor={rightColor} leftMap={leftMap} rightMap={rightMap} hasTop={ctThick === 0} hasBack={module.type !== "bajo_tarja" && !hasCustomBack} wireframe={wireframe} />}
       {hasCustomBack && (
         backMode === "lambrin" ? (
-          <LambrinPanel pos={[0, H / 2, -D / 2 + T / 2]} faceW={W - T * 2} faceH={H - T * 2} horizontal color={exteriorColor} map={exteriorMap} roughness={exteriorRoughness} wireframe={wireframe} />
+          <LambrinPanel pos={[0, H / 2, -D / 2 + T / 2]} faceW={W - T * 2} faceH={H - T * 2} horizontal outward={-1} color={exteriorColor} map={exteriorMap} roughness={exteriorRoughness} wireframe={wireframe} />
         ) : backMode === "espejo" ? (
           <Box pos={[0, H / 2, -D / 2 + T / 2]} size={[W - T * 2, H - T * 2, T]} color="#dfe8ec" metalness={0.9} roughness={0.05} wireframe={wireframe} />
         ) : (
@@ -1515,10 +1522,10 @@ export function CabinetMesh({ module, wireframe = false, onSelect }: {
         )
       )}
       {module.options.leftSidePanel === "lambrin" && (
-        <LambrinPanel pos={[-W / 2 + T / 2, H / 2, 0]} faceW={D} faceH={H} horizontal={false} color={exteriorColor} map={exteriorMap} roughness={exteriorRoughness} wireframe={wireframe} />
+        <LambrinPanel pos={[-W / 2 + T / 2, H / 2, 0]} faceW={D} faceH={H} horizontal={false} outward={-1} color={exteriorColor} map={exteriorMap} roughness={exteriorRoughness} wireframe={wireframe} />
       )}
       {module.options.rightSidePanel === "lambrin" && (
-        <LambrinPanel pos={[W / 2 - T / 2, H / 2, 0]} faceW={D} faceH={H} horizontal={false} color={exteriorColor} map={exteriorMap} roughness={exteriorRoughness} wireframe={wireframe} />
+        <LambrinPanel pos={[W / 2 - T / 2, H / 2, 0]} faceW={D} faceH={H} horizontal={false} outward={1} color={exteriorColor} map={exteriorMap} roughness={exteriorRoughness} wireframe={wireframe} />
       )}
       {module.options.leftSidePanel !== "exterior" && (
         <SideFiller side="left" W={W} H={H} D={D} color={exteriorColor} map={exteriorMap} roughness={exteriorRoughness} wireframe={wireframe} />
