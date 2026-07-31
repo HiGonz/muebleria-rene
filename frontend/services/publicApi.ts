@@ -1,7 +1,6 @@
 import type { KitchenModule, ModuleCategory, KitchenModuleType, WallOpening } from "@/types/kitchen";
 
 interface PublicKitchenModule {
-  id: number;
   module_type: string;
   category: ModuleCategory;
   label: string;
@@ -49,8 +48,8 @@ export async function getPublicKitchenShare(token: string): Promise<PublicKitche
     roomDepth: json.roomDepth,
     ceilingHeight: json.ceilingHeight,
     openings: json.openings ?? [],
-    modules: json.modules.map((m) => ({
-      id: String(m.id),
+    modules: json.modules.map((m, i) => ({
+      id: String(i),
       category: m.category,
       type: m.module_type as KitchenModuleType,
       label: m.label,
