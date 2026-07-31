@@ -314,3 +314,18 @@ export async function saveKitchenProject(draft: KitchenDraft, projectId: number 
   await http.post(`/kitchen-projects/${projectId}/modules/sync`, { modules });
   return projectId;
 }
+
+export interface KitchenShare {
+  token: string;
+  url: string;
+  viewCount: number;
+  createdAt: string;
+}
+
+export async function createKitchenShare(id: number): Promise<KitchenShare> {
+  return http.post<KitchenShare>(`/kitchen-projects/${id}/share`);
+}
+
+export async function revokeKitchenShare(id: number): Promise<void> {
+  await http.delete(`/kitchen-projects/${id}/share`);
+}
