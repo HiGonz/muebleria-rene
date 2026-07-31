@@ -1293,10 +1293,16 @@ interface KitchenAssemblySceneProps {
   onOpeningMove?: (id: string, offset: number) => void;
   onUndo?: () => void;
   undoCount?: number;
+  // The public "share with client" viewer passes this and nothing else —
+  // every editing prop above is already optional and simply omitted there,
+  // so this is the only new capability flag needed: it hides the module
+  // list (isolate/hide/delete controls), which has no editing callback of
+  // its own to gate on.
+  readOnly?: boolean;
 }
 
 export function KitchenAssemblyScene({
-  modules, roomWidth, roomDepth, ceilingHeight, openings = [], onModuleMove, onModuleActivate, onModuleNudge, onModuleRemove, onOpeningMove, onUndo, undoCount = 0,
+  modules, roomWidth, roomDepth, ceilingHeight, openings = [], onModuleMove, onModuleActivate, onModuleNudge, onModuleRemove, onOpeningMove, onUndo, undoCount = 0, readOnly = false,
 }: KitchenAssemblySceneProps) {
   const [wireframe, setWireframe] = useState(false);
   const [showLabels, setShowLabels] = useState(false);
@@ -1394,7 +1400,10 @@ export function KitchenAssemblyScene({
       {/* Module list — always bottom-left. Used to move to bottom-right on
           desktop, which is exactly where the module inspector/selector panel
           (right-anchored) slides in from and blocked it while configuring a
-          module — pinned left on every breakpoint now instead. */}
+          module — pinned left on every breakpoint now instead. Not rendered
+          at all in the read-only public viewer — there's no editing
+          callback to gate isolate/hide/delete on in there. */}
+      {!readOnly && (
       <div className={`absolute bottom-3 left-3 z-10 flex flex-col rounded-xl border border-ivory/8 bg-black/60 backdrop-blur-sm text-xs text-warmgray ${listCollapsed ? "" : "w-60"}`}>
         <div className="flex items-center justify-between gap-2 px-3 py-2">
           <button
@@ -1512,6 +1521,7 @@ export function KitchenAssemblyScene({
           </>
         )}
       </div>
+      )}
 
       <Canvas
         key={instanceKey}
