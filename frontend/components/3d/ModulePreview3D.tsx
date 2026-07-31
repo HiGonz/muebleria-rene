@@ -24,6 +24,21 @@ function setGrabCursor(hover: boolean) {
 // split between doors and drawers. Mirrors the same constant in services/kitchenData.ts.
 const TOP_FACE_MARGIN_CM = 6;
 
+// A stacked drawer bank's fronts are a fixed, roughly-real-world height each
+// (~16cm) — not a percentage of the cabinet's total height, which is what
+// made drawers on a tall cabinet render far too tall. The door below keeps
+// at least MIN_DOOR_ZONE_CM regardless. Mirrors the same constants and
+// resolveDrawerZoneHeight in services/kitchenData.ts.
+const AUTO_DRAWER_HEIGHT_CM = 16;
+const MIN_DOOR_ZONE_CM = 40;
+function resolveDrawerZoneHeight(usableH: number, doorCount: number, drawerCount: number, override: number | undefined): number {
+  if (drawerCount === 0) return 0;
+  if (doorCount === 0) return usableH;
+  const maxDrawerZone = Math.max(usableH - MIN_DOOR_ZONE_CM, 0);
+  if (override != null) return Math.min(Math.max(override, 1), maxDrawerZone);
+  return Math.min(drawerCount * AUTO_DRAWER_HEIGHT_CM, maxDrawerZone);
+}
+
 // ─── Auto-generate layout from simple counts ─────────────────────────────────
 export function getEffectiveDrawers(mod: KitchenModule): DrawerDef[] {
   if (mod.options.useDetailedLayout && mod.options.drawerDefs?.length) {
@@ -39,8 +54,8 @@ export function getEffectiveDrawers(mod: KitchenModule): DrawerDef[] {
   const topMargin = isUpper ? 0 : TOP_FACE_MARGIN_CM;
   const usableH = Math.max(mod.dimensions.height - toeKick - ctThick - topMargin, 0);
   const doorCount = mod.options.doors || 0;
-  const doorZoneH = doorCount > 0 ? Math.max(usableH * 0.55, 40) : 0;
-  const drawerZoneH = Math.max(usableH - doorZoneH, 0);
+  const drawerZoneH = resolveDrawerZoneHeight(usableH, doorCount, count, mod.options.drawerZoneHeight);
+  const doorZoneH = usableH - drawerZoneH;
   const drawerH = drawerZoneH / count;
   const isSink = mod.type === "bajo_tarja";
 
@@ -70,7 +85,7 @@ export function getEffectiveDoors(mod: KitchenModule): DoorDef[] {
   const topMargin = isUpper ? 0 : TOP_FACE_MARGIN_CM;
   const usableH = Math.max(mod.dimensions.height - toeKick - ctThick - topMargin, 0);
   const drawerCount = mod.options.drawers || 0;
-  const drawerZoneH = drawerCount > 0 ? Math.max(usableH - Math.max(usableH * 0.55, 40), 0) : 0;
+  const drawerZoneH = resolveDrawerZoneHeight(usableH, count, drawerCount, mod.options.drawerZoneHeight);
   const doorZoneH = usableH - drawerZoneH;
   const doorW = 100 / count;
 

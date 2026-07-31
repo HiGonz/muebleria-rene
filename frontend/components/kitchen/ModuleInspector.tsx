@@ -94,6 +94,23 @@ function FieldGroup({ label, children }: { label: string; children: React.ReactN
   );
 }
 
+// Default (no manual override) drawer-zone height shown in the field below —
+// mirrors resolveDrawerZoneHeight's auto branch in ModulePreview3D.tsx /
+// kitchenData.ts (~16cm per drawer, capped so the door zone underneath
+// keeps at least 40cm), just for the number this input starts at.
+const AUTO_DRAWER_HEIGHT_CM = 16;
+const MIN_DOOR_ZONE_CM = 40;
+function defaultDrawerZoneHeight(module: KitchenModule): number {
+  const { dimensions: d, options: o, category, type } = module;
+  const isUpper = category === "upper" || type === "gabinete_superior_esquinero_puertas";
+  const toeKick = !isUpper && o.hasToeKick ? o.toeKickHeight : 0;
+  const ctThick = o.includesCountertop ? o.countertopThickness : 0;
+  const topMargin = isUpper ? 0 : 6;
+  const usableH = Math.max(d.height - toeKick - ctThick - topMargin, 0);
+  const maxDrawerZone = Math.max(usableH - MIN_DOOR_ZONE_CM, 0);
+  return Math.round(Math.min(o.drawers * AUTO_DRAWER_HEIGHT_CM, maxDrawerZone));
+}
+
 function NumInput({ value, onChange, min = 0, max = 9999, unit }: {
   value: number; onChange: (v: number) => void; min?: number; max?: number; unit?: string;
 }) {
@@ -437,6 +454,17 @@ export function ModuleInspector() {
               <FieldGroup label="Núm. cajones">
                 <NumInput value={opt.drawers} onChange={(v) => updateOpt("drawers", v)} min={0} max={8} />
               </FieldGroup>
+              {!isCajonera && opt.doors > 0 && opt.drawers > 0 && (
+                <FieldGroup label="Altura de cajones">
+                  <NumInput
+                    value={opt.drawerZoneHeight ?? defaultDrawerZoneHeight(module)}
+                    onChange={(v) => updateOpt("drawerZoneHeight", v)}
+                    min={5}
+                    max={Math.max(dim.height - 40, 5)}
+                    unit="cm"
+                  />
+                </FieldGroup>
+              )}
               {!isCajonera && (
                 <FieldGroup label="Repisas">
                   <NumInput value={opt.shelves} onChange={(v) => updateOpt("shelves", v)} min={0} max={10} />
@@ -484,7 +512,11 @@ export function ModuleInspector() {
                 />
               </FieldGroup>
             </div>
-            <p className="mt-2 text-[10px] text-warmgray/70">Los cajones se distribuyen automáticamente en el área disponible. Los herrajes se aplican a toda la cocina.</p>
+            <p className="mt-2 text-[10px] text-warmgray/70">
+              {opt.doors > 0 && opt.drawers > 0
+                ? "Los cajones se reparten en partes iguales dentro de la altura fijada arriba, justo encima de la(s) puerta(s). Los herrajes se aplican a toda la cocina."
+                : "Los cajones se distribuyen automáticamente en el área disponible. Los herrajes se aplican a toda la cocina."}
+            </p>
           </Section>
         )}
 

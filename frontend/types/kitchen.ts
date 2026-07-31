@@ -206,6 +206,12 @@ export interface ModuleOptions {
   drawers: number;
   doors: number;
   shelves: number;
+  // When a module has both drawers and doors (drawers stacked above a door
+  // below), this is the height of the whole drawer stack — cm, undefined
+  // falls back to the auto default (see AUTO_DRAWER_ZONE_HEIGHT_CM in
+  // ModulePreview3D.tsx / kitchenData.ts). Ignored when doors or drawers is 0
+  // (nothing to split — the one that exists just fills the usable height).
+  drawerZoneHeight?: number;
   // Lower cabinet specifics
   hasToeKick: boolean;
   toeKickHeight: number;        // cm (default 8)

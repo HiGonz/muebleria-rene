@@ -40,6 +40,21 @@ const AEREO_HUECO_DOOR_ZONE_PCT = 0.55;
 const LIBRERO_ROWS = 10;
 const LIBRERO_CLEARANCE_CM = 8;
 
+// A stacked drawer bank's fronts are a fixed, roughly-real-world height each
+// (~16cm) — not a percentage of the cabinet's total height, which is what
+// made drawers on a tall cabinet cost/cut far too tall a front. The door
+// below keeps at least MIN_DOOR_ZONE_CM regardless. Mirrors the same
+// constants and resolveDrawerZoneHeight in components/3d/ModulePreview3D.tsx.
+const AUTO_DRAWER_HEIGHT_CM = 16;
+const MIN_DOOR_ZONE_CM = 40;
+function resolveDrawerZoneHeight(usableH: number, doorCount: number, drawerCount: number, override: number | undefined): number {
+  if (drawerCount === 0) return 0;
+  if (doorCount === 0) return usableH;
+  const maxDrawerZone = Math.max(usableH - MIN_DOOR_ZONE_CM, 0);
+  if (override != null) return Math.min(Math.max(override, 1), maxDrawerZone);
+  return Math.min(drawerCount * AUTO_DRAWER_HEIGHT_CM, maxDrawerZone);
+}
+
 // ─── Resolve effective doors/drawers (mirrors FaceEditor logic) ────────────────
 function resolveDoors(mod: KitchenModule): DoorDef[] {
   const { options: o, dimensions: d } = mod;
@@ -50,7 +65,7 @@ function resolveDoors(mod: KitchenModule): DoorDef[] {
   const ctThick = o.includesCountertop ? o.countertopThickness : 0;
   const usableH = Math.max(d.height - toeKick - ctThick - TOP_FACE_MARGIN_CM, 0);
   const drawerCount = o.drawers || 0;
-  const drawerZoneH = drawerCount > 0 ? Math.max(usableH - Math.max(usableH * 0.55, 40), 0) : 0;
+  const drawerZoneH = resolveDrawerZoneHeight(usableH, count, drawerCount, o.drawerZoneHeight);
   const doorZoneH = usableH - drawerZoneH;
   const doorW = 100 / count;
   return Array.from({ length: count }, (_, i) => {
@@ -77,8 +92,8 @@ function resolveDrawers(mod: KitchenModule): DrawerDef[] {
   const ctThick = o.includesCountertop ? o.countertopThickness : 0;
   const usableH = Math.max(d.height - toeKick - ctThick - TOP_FACE_MARGIN_CM, 0);
   const doorCount = o.doors || 0;
-  const doorZoneH = doorCount > 0 ? Math.max(usableH * 0.55, 40) : 0;
-  const drawerZoneH = Math.max(usableH - doorZoneH, 0);
+  const drawerZoneH = resolveDrawerZoneHeight(usableH, doorCount, count, o.drawerZoneHeight);
+  const doorZoneH = usableH - drawerZoneH;
   const drawerH = drawerZoneH / count;
   return Array.from({ length: count }, (_, i) => ({
     id: `auto-d${i}`, label: `Cajón ${i + 1}`,
