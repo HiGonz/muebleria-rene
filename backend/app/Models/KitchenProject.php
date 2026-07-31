@@ -47,4 +47,14 @@ class KitchenProject extends Model
     {
         return $this->hasOne(KitchenQuote::class);
     }
+
+    public function shares(): HasMany
+    {
+        return $this->hasMany(KitchenProjectShare::class);
+    }
+
+    public function activeShare(): HasOne
+    {
+        return $this->hasOne(KitchenProjectShare::class)->whereNull('revoked_at')->latestOfMany();
+    }
 }
