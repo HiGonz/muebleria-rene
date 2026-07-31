@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { AnimatePresence, motion } from "framer-motion";
-import { Settings, Sparkles, Palette, Ruler, ChevronDown } from "lucide-react";
+import { Settings, Sparkles, Palette, Ruler, ChevronDown, Share2 } from "lucide-react";
 import { toast } from "sonner";
 import type { SampleKitchenVariant } from "@/services/kitchenData";
 import { getKitchenProject, saveKitchenProject } from "@/services/api";
@@ -16,6 +16,7 @@ import { BuilderFab } from "./BuilderFab";
 import { GlobalMaterialsModal } from "./GlobalMaterialsModal";
 import { GlobalHeightsModal } from "./GlobalHeightsModal";
 import { RoomSettingsModal } from "./RoomSettingsModal";
+import { ShareModal } from "./ShareModal";
 import { Button } from "@/components/ui/button";
 import { useRouter, useSearchParams } from "next/navigation";
 
@@ -49,6 +50,7 @@ export function KitchenBuilder() {
   const [showRoomSettings, setShowRoomSettings] = useState(false);
   const [showGlobalMaterials, setShowGlobalMaterials] = useState(false);
   const [showGlobalHeights, setShowGlobalHeights] = useState(false);
+  const [showShareModal, setShowShareModal] = useState(false);
   const [showSampleMenu, setShowSampleMenu] = useState(false);
   const [saving, setSaving] = useState(false);
   const sampleMenuRef = useRef<HTMLDivElement>(null);
@@ -197,6 +199,18 @@ export function KitchenBuilder() {
             )}
           </div>
           <Button variant="secondary" className="h-8 px-3 text-xs" onClick={resetDraft}>Nuevo</Button>
+          {projectId !== null && (
+            <Button
+              variant="ghost"
+              className="h-8 w-8 px-0 text-xs sm:w-auto sm:px-3"
+              onClick={() => setShowShareModal(true)}
+              title="Compartir con cliente"
+              aria-label="Compartir con cliente"
+            >
+              <Share2 size={14} />
+              <span className="hidden sm:inline sm:ml-1.5">Compartir</span>
+            </Button>
+          )}
           <Button
             variant="primary"
             className="h-8 px-3 text-xs"
@@ -306,6 +320,9 @@ export function KitchenBuilder() {
       {showRoomSettings && <RoomSettingsModal onClose={() => setShowRoomSettings(false)} />}
       {showGlobalMaterials && <GlobalMaterialsModal onClose={() => setShowGlobalMaterials(false)} />}
       {showGlobalHeights && <GlobalHeightsModal onClose={() => setShowGlobalHeights(false)} />}
+      {showShareModal && projectId !== null && (
+        <ShareModal kitchenProjectId={projectId} onClose={() => setShowShareModal(false)} />
+      )}
     </div>
   );
 }
