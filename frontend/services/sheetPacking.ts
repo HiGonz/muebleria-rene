@@ -11,7 +11,9 @@
 export interface CutPiece {
   width: number;  // cm
   height: number; // cm
-  label?: string; // optional part name, carried through to the placement for cut-diagram labeling
+  label?: string;       // optional part name, carried through to the placement for cut-diagram labeling
+  moduleId?: string;    // which KitchenModule this piece belongs to, for the "show me just this module's cuts" filter
+  moduleLabel?: string; // that module's display name, carried along so the UI doesn't need a separate lookup
 }
 
 export interface FreeRect {
@@ -29,6 +31,8 @@ export interface CutPlacement {
   height: number;  // cm
   rotated: boolean;
   label?: string;
+  moduleId?: string;
+  moduleLabel?: string;
 }
 
 // ─── Debug types (only populated when packSheets(..., debug=true)) ───────────
@@ -265,6 +269,8 @@ function runSinglePass(
       height: best.rotated ? piece.width : piece.height,
       rotated: best.rotated,
       label: piece.label,
+      moduleId: piece.moduleId,
+      moduleLabel: piece.moduleLabel,
     });
 
     rects.push(...computeGuillotineSplit(chosenRect, placedW, placedH));

@@ -28,8 +28,8 @@ const C = {
   line400: "#a1a1aa",
   subtleBg: "#fafafa",
   white: "#ffffff",
-  indigo600: "#4f46e5",
-  indigo200: "#c7d2fe",
+  brass600: "#a3743c",
+  brass200: "#ecd9bc",
   emerald600: "#059669",
 };
 
@@ -122,7 +122,7 @@ function BrandMark() {
     <div className="flex items-center gap-3">
       <div
         className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-lg font-bold"
-        style={{ backgroundColor: C.indigo600, color: C.white }}
+        style={{ backgroundColor: C.brass600, color: C.white }}
       >
         MR
       </div>
@@ -136,7 +136,7 @@ function BrandMark() {
 
 function ReportHeader({ title, today }: { title: string; today: string }) {
   return (
-    <div className="mb-6 flex items-start justify-between border-b-2 pb-4" style={{ borderColor: C.indigo600 }}>
+    <div className="mb-6 flex items-start justify-between border-b-2 pb-4" style={{ borderColor: C.brass600 }}>
       <BrandMark />
       <div className="text-right text-xs" style={{ color: C.ink500 }}>
         <p className="text-sm font-semibold" style={{ color: C.ink800 }}>{title}</p>
@@ -222,10 +222,10 @@ function CoverPage({
         <Stat label="Utilidad" value={`${summary.profitPct}%`} />
       </div>
 
-      <div className="mt-8 rounded-2xl p-6" style={{ backgroundColor: C.indigo600, color: C.white }}>
-        <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: C.indigo200 }}>Total estimado del proyecto</p>
+      <div className="mt-8 rounded-2xl p-6" style={{ backgroundColor: C.brass600, color: C.white }}>
+        <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: C.brass200 }}>Total estimado del proyecto</p>
         <p className="mt-1 text-4xl font-bold">{fmt(summary.total)}</p>
-        <p className="mt-1 text-xs" style={{ color: C.indigo200 }}>Incluye materiales, mano de obra y utilidad</p>
+        <p className="mt-1 text-xs" style={{ color: C.brass200 }}>Incluye materiales, mano de obra y utilidad</p>
       </div>
 
       {draft.notes && (
@@ -471,7 +471,7 @@ function TotalsPage({
                   </span>
                 </div>
                 <div className="h-1.5 w-full overflow-hidden rounded-full" style={{ backgroundColor: C.line100 }}>
-                  <div className="h-full rounded-full" style={{ width: `${c.pct}%`, backgroundColor: C.indigo600 }} />
+                  <div className="h-full rounded-full" style={{ width: `${c.pct}%`, backgroundColor: C.brass600 }} />
                 </div>
               </div>
             ))}

@@ -1,7 +1,8 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -9,6 +10,7 @@ import { Step1 } from "./Step1";
 import { Step2 } from "./Step2";
 import { Step3 } from "./Step3";
 import { useProjectStore } from "@/store/useProjectStore";
+import { createProject } from "@/services/api";
 
 const SceneCanvas = dynamic(() => import("@/components/3d/SceneCanvas").then((mod) => mod.SceneCanvas), { ssr: false });
 
@@ -20,6 +22,8 @@ const steps = [
 
 export function ProjectWizard() {
   const { draft, step, setStep, updateDraft, resetDraft } = useProjectStore();
+  const router = useRouter();
+  const [saving, setSaving] = useState(false);
 
   const stepContent = useMemo(() => {
     if (step === 1) return <Step1 draft={draft} updateDraft={updateDraft} />;
@@ -50,12 +54,22 @@ export function ProjectWizard() {
               <Button onClick={() => setStep(step + 1)}>Continuar</Button>
             ) : (
               <Button
-                onClick={() => {
-                  toast.success("Proyecto guardado en modo demo.");
-                  resetDraft();
+                disabled={saving}
+                onClick={async () => {
+                  setSaving(true);
+                  try {
+                    const project = await createProject(draft);
+                    toast.success("Proyecto guardado.");
+                    resetDraft();
+                    router.push(`/projects/${project.id}`);
+                  } catch (error) {
+                    toast.error(error instanceof Error ? error.message : "No fue posible guardar el proyecto.");
+                  } finally {
+                    setSaving(false);
+                  }
                 }}
               >
-                Guardar proyecto
+                {saving ? "Guardando..." : "Guardar proyecto"}
               </Button>
             )}
           </div>

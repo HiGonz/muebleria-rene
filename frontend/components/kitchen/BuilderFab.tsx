@@ -13,7 +13,7 @@ export function BuilderFab({ onClick, className = "right-5" }: { onClick: () => 
       transition={{ type: "spring", stiffness: 400, damping: 22 }}
       whileTap={{ scale: 0.92 }}
       aria-label="Agregar mueble"
-      className={`safe-bottom-inset fixed z-30 flex h-14 w-14 items-center justify-center rounded-full bg-indigo-500 text-white shadow-[0_8px_24px_rgba(99,102,241,0.5)] ${className}`}
+      className={`safe-bottom-inset fixed z-30 flex h-14 w-14 items-center justify-center rounded-full bg-brass text-ink shadow-[0_8px_24px_rgba(193,144,79,0.45)] ${className}`}
     >
       <Plus size={26} />
     </motion.button>

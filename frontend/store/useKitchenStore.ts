@@ -2,16 +2,35 @@
 
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import { buildNewModule, buildSampleKitchen, calculateKitchenMaterials, getCountertopModel } from "@/services/kitchenData";
+import { buildNewModule, buildSampleKitchen, calculateKitchenMaterials, getCountertopModel, findFreeSpotNear } from "@/services/kitchenData";
+import type { SampleKitchenVariant } from "@/services/kitchenData";
 import type {
   BoardMaterial, ExteriorTextureId, HardwareFinish, KitchenDraft, KitchenModule, KitchenModuleType,
-  ModuleCategory, OpeningType, WallOpening, WallSide,
+  ModuleCategory, ModuleOptions, OpeningType, WallOpening, WallSide,
 } from "@/types/kitchen";
+
+// The fields that make up the room's shared finish — kept in sync across
+// every module (see applyExteriorToAll/applyHardwareToAll/applyCountertopToAll
+// below, wired up from ModuleInspector so any per-module edit fans out to the
+// whole kitchen). A brand-new module picks these up from whatever's already
+// in the room instead of falling back to the catalog's own hardcoded
+// defaults, so it never shows up mismatched.
+const GLOBAL_MATERIAL_FIELDS = [
+  "exteriorMaterial", "exteriorTexture", "hardwareFinish",
+  "countertopModel", "countertopMaterial", "countertopColor", "countertopTexture",
+] as const satisfies readonly (keyof ModuleOptions)[];
+
+function pickGlobalMaterial(source: ModuleOptions): Partial<ModuleOptions> {
+  const picked: Partial<ModuleOptions> = {};
+  for (const key of GLOBAL_MATERIAL_FIELDS) (picked as Record<string, unknown>)[key] = source[key];
+  return picked;
+}
 
 // Categories whose visible faces (doors, drawer fronts, exterior side panels,
 // a zócalo's front) are built from the exterior board — the set the global
-// materials tool homogenizes in one shot.
-const EXTERIOR_CATEGORIES: ModuleCategory[] = ["lower", "upper", "tower", "accessory"];
+// materials tool homogenizes in one shot. corona_luz's front/underside are
+// exterior board too (category "upper"), so it's included like everything else.
+const EXTERIOR_CATEGORIES: ModuleCategory[] = ["lower", "upper", "tower", "corner", "accessory"];
 
 // ─── Initial State ─────────────────────────────────────────────────────────────
 const initialDraft: KitchenDraft = {
@@ -53,6 +72,9 @@ const MOVE_HISTORY_LIMIT = 3;
 // ─── Store Interface ───────────────────────────────────────────────────────────
 interface KitchenStore {
   draft: KitchenDraft;
+  // Backend id of the saved kitchen project this draft came from/was saved to
+  // — null means "not saved yet" (Guardar will POST/create instead of PUT/update).
+  projectId: number | null;
   // Panel UI state (not persisted in draft)
   showSelector: boolean;
   selectorCategory: ModuleCategory | null;
@@ -62,13 +84,19 @@ interface KitchenStore {
   // Project actions
   updateProject: (payload: Partial<Pick<KitchenDraft, "clientName" | "clientPhone" | "projectName" | "notes" | "roomWidth" | "roomDepth" | "ceilingHeight">>) => void;
   resetDraft: () => void;
-  loadSampleKitchen: () => void;
+  loadSampleKitchen: (variant?: SampleKitchenVariant) => void;
+  loadProject: (projectId: number, draft: KitchenDraft) => void;
 
   // Module actions
   addModule: (type: KitchenModuleType) => void;
+  // Drops a niche's matching accessory (see NICHE_ACCESSORY_MATCH) right
+  // into it — same x/z/rotation, sized to the niche's own applianceWidth/
+  // applianceHeight instead of the accessory's generic catalog default.
+  placeAccessoryInNiche: (nicheId: string, accessoryType: KitchenModuleType) => void;
   removeModule: (id: string) => void;
   updateModule: (id: string, patch: Partial<Pick<KitchenModule, "label" | "dimensions" | "options" | "x" | "z" | "rotation">>) => void;
   updateModulePosition: (id: string, x: number, z: number, rotation?: KitchenModule["rotation"]) => void;
+  nudgeModule: (id: string, dx: number, dz: number, dMountHeight: number) => void;
   rotateModule: (id: string) => void;
   duplicateModule: (id: string) => void;
   undoLastMove: () => void;
@@ -78,6 +106,14 @@ interface KitchenStore {
   applyExteriorToAll: (material: BoardMaterial, texture: ExteriorTextureId) => number;
   applyCountertopToAll: (modelId: string, color: string, texture: ExteriorTextureId | "ninguna") => number;
   applyHardwareToAll: (finish: HardwareFinish) => number;
+  // Dimensions — floor cabinets get a uniform box height; wall cabinets get a
+  // uniform mount height (distance from the floor) *and* a uniform box height,
+  // so both their bottom and top edges line up across the run. Towers are
+  // never touched by any of these — they're floor-to-ceiling and sized on
+  // their own.
+  applyLowerHeightToAll: (heightCm: number) => number;
+  applyUpperMountHeightToAll: (mountHeightCm: number) => number;
+  applyUpperHeightToAll: (heightCm: number) => number;
 
   // Opening actions (windows & doors)
   addOpening: (type: OpeningType, wall: WallSide) => void;
@@ -105,6 +141,7 @@ export const useKitchenStore = create<KitchenStore>()(
   persist(
     (set, get) => ({
       draft: initialDraft,
+      projectId: null,
       showSelector: false,
       selectorCategory: null,
       activeTab: "3d",
@@ -115,21 +152,59 @@ export const useKitchenStore = create<KitchenStore>()(
         set((s) => ({ draft: { ...s.draft, ...payload } })),
 
       resetDraft: () =>
-        set({ draft: { ...initialDraft }, showSelector: false, selectorCategory: null, activeTab: "3d", moveHistory: [] }),
+        set({ draft: { ...initialDraft }, projectId: null, showSelector: false, selectorCategory: null, activeTab: "3d", moveHistory: [] }),
 
-      loadSampleKitchen: () =>
-        set({ draft: buildSampleKitchen(), showSelector: false, selectorCategory: null, activeTab: "3d", moveHistory: [] }),
+      loadSampleKitchen: (variant = 1) =>
+        set({ draft: buildSampleKitchen(variant), projectId: null, showSelector: false, selectorCategory: null, activeTab: "3d", moveHistory: [] }),
+
+      loadProject: (projectId, draft) =>
+        set({ draft, projectId, showSelector: false, selectorCategory: null, activeTab: "3d", moveHistory: [] }),
 
       // ── Module actions ────────────────────────────────────────────────────
       addModule: (type) =>
         set((s) => {
-          const entry = buildNewModule(type); // used only to read default dimensions for placement
-          const { x, z } = computeDefaultPlacement(s.draft.modules, entry.dimensions.width, entry.dimensions.depth, s.draft.roomWidth);
-          const newModule = { ...entry, x, z };
+          const entry = buildNewModule(type);
+          // Every module's material/hardware options are kept in sync (see
+          // applyExteriorToAll etc.), so any existing module is a
+          // representative sample of the room's current finish — a new one
+          // picks that up instead of the catalog's own hardcoded defaults.
+          // First module in an empty room has nothing to match, so it just
+          // keeps its catalog defaults and becomes the new baseline.
+          const globalMaterial = s.draft.modules[0] ? pickGlobalMaterial(s.draft.modules[0].options) : {};
+          // Drops straight into the middle of the room instead of opening its
+          // inspector — drag it into place, or double-click / hit the gear
+          // button when you actually want to configure it.
+          const newModule = {
+            ...entry,
+            options: { ...entry.options, ...globalMaterial },
+            x: s.draft.roomWidth / 2,
+            z: s.draft.roomDepth / 2,
+          };
           return {
-            draft: { ...s.draft, modules: [...s.draft.modules, newModule], editingModuleId: newModule.id },
+            draft: { ...s.draft, modules: [...s.draft.modules, newModule] },
             showSelector: false,
           };
+        }),
+
+      placeAccessoryInNiche: (nicheId, accessoryType) =>
+        set((s) => {
+          const niche = s.draft.modules.find((m) => m.id === nicheId);
+          if (!niche) return {};
+          const entry = buildNewModule(accessoryType, niche.x, niche.z, niche.rotation);
+          const globalMaterial = s.draft.modules[0] ? pickGlobalMaterial(s.draft.modules[0].options) : {};
+          const newModule = {
+            ...entry,
+            options: { ...entry.options, ...globalMaterial },
+            // Fills the niche's own opening — that's usually a touch smaller
+            // than the niche's outer dimensions (ventilation clearance, a
+            // toe-kick gap), not the accessory's generic catalog size.
+            dimensions: {
+              width: niche.options.applianceWidth || niche.dimensions.width,
+              height: niche.options.applianceHeight || niche.dimensions.height,
+              depth: niche.dimensions.depth,
+            },
+          };
+          return { draft: { ...s.draft, modules: [...s.draft.modules, newModule] } };
         }),
 
       removeModule: (id) =>
@@ -169,6 +244,35 @@ export const useKitchenStore = create<KitchenStore>()(
           };
         }),
 
+      // Nudges a module by a fixed step via the SelectionToolbar (or arrow
+      // keys) — most useful for modules sitting away from any wall/neighbor
+      // to snap against, where free-hand dragging in a perspective 3D view
+      // is hard to land precisely. dx/dz in cm (room plane); dMountHeight in
+      // cm, only meaningful for wall-mounted modules (ignored — mountHeight
+      // stays put — when 0). The caller (nudgeSelected in
+      // KitchenAssemblyScene.tsx) already runs the precise footprint/wall-
+      // inset-aware clamp — same one the drag handler uses — before computing
+      // dx/dz, so this plain center-point room-bounds clamp is just a
+      // defensive backstop, not the primary guard.
+      nudgeModule: (id, dx, dz, dMountHeight) =>
+        set((s) => {
+          const mod = s.draft.modules.find((m) => m.id === id);
+          if (!mod) return {};
+          const x = Math.min(Math.max(mod.x + dx, 0), s.draft.roomWidth);
+          const z = Math.min(Math.max(mod.z + dz, 0), s.draft.roomDepth);
+          const mountHeight = dMountHeight
+            ? Math.min(Math.max((mod.options.mountHeight || 144) + dMountHeight, 60), 280)
+            : mod.options.mountHeight;
+          return {
+            draft: {
+              ...s.draft,
+              modules: s.draft.modules.map((m) =>
+                m.id === id ? { ...m, x, z, options: { ...m.options, mountHeight } } : m
+              ),
+            },
+          };
+        }),
+
       undoLastMove: () =>
         set((s) => {
           const history = [...s.moveHistory];
@@ -197,11 +301,12 @@ export const useKitchenStore = create<KitchenStore>()(
         set((s) => {
           const original = s.draft.modules.find((m) => m.id === id);
           if (!original) return {};
+          const { x, z } = findFreeSpotNear(original, s.draft.modules, s.draft.roomWidth, s.draft.roomDepth);
           const copy: KitchenModule = {
             ...original,
             id: `${original.type}_${Date.now()}_copy`,
             label: `${original.label} (copia)`,
-            x: original.x + 20,
+            x, z,
           };
           const idx = s.draft.modules.findIndex((m) => m.id === id);
           const updated = [...s.draft.modules.slice(0, idx + 1), copy, ...s.draft.modules.slice(idx + 1)];
@@ -225,13 +330,55 @@ export const useKitchenStore = create<KitchenStore>()(
       },
 
       applyHardwareToAll: (finish) => {
-        const isCabinet = (m: KitchenModule) => m.category === "lower" || m.category === "upper" || m.category === "tower";
+        const isCabinet = (m: KitchenModule) => m.category === "lower" || m.category === "upper" || m.category === "tower" || m.category === "corner";
         const affected = get().draft.modules.filter(isCabinet).length;
         set((s) => ({
           draft: {
             ...s.draft,
             modules: s.draft.modules.map((m) =>
               isCabinet(m) ? { ...m, options: { ...m.options, hardwareFinish: finish } } : m
+            ),
+          },
+        }));
+        return affected;
+      },
+
+      applyLowerHeightToAll: (heightCm) => {
+        const isLower = (m: KitchenModule) => m.category === "lower" || m.category === "corner";
+        const affected = get().draft.modules.filter(isLower).length;
+        set((s) => ({
+          draft: {
+            ...s.draft,
+            modules: s.draft.modules.map((m) =>
+              isLower(m) ? { ...m, dimensions: { ...m.dimensions, height: heightCm } } : m
+            ),
+          },
+        }));
+        return affected;
+      },
+
+      applyUpperMountHeightToAll: (mountHeightCm) => {
+        const isUpper = (m: KitchenModule) => m.category === "upper";
+        const affected = get().draft.modules.filter(isUpper).length;
+        set((s) => ({
+          draft: {
+            ...s.draft,
+            modules: s.draft.modules.map((m) =>
+              isUpper(m) ? { ...m, options: { ...m.options, mountHeight: mountHeightCm } } : m
+            ),
+          },
+        }));
+        return affected;
+      },
+
+      applyUpperHeightToAll: (heightCm) => {
+        const isUpper = (m: KitchenModule) => m.category === "upper";
+        const affected = get().draft.modules.filter(isUpper).length;
+        set((s) => ({
+          draft: {
+            ...s.draft,
+            modules: s.draft.modules.map((m) =>
+              isUpper(m) ? { ...m, dimensions: { ...m.dimensions, height: heightCm } } : m
             ),
           },
         }));
@@ -332,39 +479,8 @@ export const useKitchenStore = create<KitchenStore>()(
       // doors) to the draft shape, so old localStorage drafts are intentionally
       // orphaned instead of migrated (see v1→v2 bump above for precedent).
       name: "kitchen-draft-v3",
-      partialize: (state) => ({ draft: state.draft }),
+      partialize: (state) => ({ draft: state.draft, projectId: state.projectId }),
     }
   )
 );
 
-// ─── Helpers ───────────────────────────────────────────────────────────────────
-// Simple placement heuristic for newly added modules — no neighbor-collision
-// awareness, just a "good enough" cascade against the room's top wall (z≈0),
-// wrapping into a new row when it would overflow the room's width. Modules
-// placed this way keep rotation 0 (back faces -Z, i.e. the top wall).
-const ROW_GAP_CM = 10;
-
-function computeDefaultPlacement(modules: KitchenModule[], width: number, depth: number, roomWidth: number): { x: number; z: number } {
-  const rowModules = modules.filter((m) => m.rotation === 0);
-  if (rowModules.length === 0) {
-    return { x: width / 2, z: depth / 2 };
-  }
-
-  const rows = new Map<number, KitchenModule[]>();
-  for (const m of rowModules) {
-    const list = rows.get(m.z) ?? [];
-    list.push(m);
-    rows.set(m.z, list);
-  }
-  const lastZ = Math.max(...rows.keys());
-  const lastRow = rows.get(lastZ)!;
-  const usedWidth = lastRow.reduce((sum, m) => sum + m.dimensions.width, 0);
-
-  if (usedWidth + width <= roomWidth) {
-    return { x: usedWidth + width / 2, z: lastZ };
-  }
-
-  const maxDepthInRow = Math.max(...lastRow.map((m) => m.dimensions.depth));
-  const rowFarEdge = lastZ + maxDepthInRow / 2;
-  return { x: width / 2, z: rowFarEdge + ROW_GAP_CM + depth / 2 };
-}

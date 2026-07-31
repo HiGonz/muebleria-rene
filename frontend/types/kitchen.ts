@@ -3,6 +3,7 @@ export type ModuleCategory =
   | "lower"       // Muebles bajos (piso)
   | "upper"       // Muebles altos (aéreos)
   | "tower"       // Torres
+  | "corner"      // Esquineros — variantes de esquina de muebles existentes
   | "countertop"  // Encimeras y superficies
   | "appliance"   // Espacios para electrodomésticos
   | "accessory";  // Accesorios y complementos
@@ -20,7 +21,15 @@ export type LowerModuleType =
   | "botellero_extraible"
   | "despensero_bajo"
   | "bajo_lavavajillas"
-  | "base_refrigerador";
+  | "base_refrigerador"
+  | "desayunador";
+
+// Esquineros reuse a base module's own options/materials/hardware logic
+// unchanged — only the carcass/countertop/shelf geometry grows a blind
+// fondo×fondo extension. See CornerBlindCabinetMesh in ModulePreview3D.tsx.
+export type CornerModuleType =
+  | "gabinete_bajo_esquinero_puertas"
+  | "gabinete_superior_esquinero_puertas";
 
 export type UpperModuleType =
   | "alacena_aerea"
@@ -29,14 +38,18 @@ export type UpperModuleType =
   | "campanero"
   | "alacena_cristal"
   | "despensero_alto"
-  | "gabinete_microondas";
+  | "gabinete_microondas"
+  | "corona_luz"
+  | "aereo_hueco_inferior"
+  | "cava_vinos";
 
 export type TowerModuleType =
   | "torre_horno_microondas"
   | "torre_despensa"
   | "torre_despensa_jalable"
   | "torre_refrigerador"
-  | "torre_almacenamiento";
+  | "torre_almacenamiento"
+  | "librero_giratorio_espejo";
 
 export type CountertopModuleType =
   | "cubierta"
@@ -63,18 +76,24 @@ export type AccessoryModuleType =
   | "lavavajillas"
   | "campana_extractora"
   | "herrajes"
-  | "zoclo"
   | "panel_lateral"
   | "panel_remate"
   | "panel_decorativo"
   | "organizador_especias"
   | "cubertero"
-  | "basurero_extraible";
+  | "especiero_aluminio";
+
+// Pull-out accessories that live INSIDE a cabinet, behind one specific door —
+// not freestanding modules of their own. Picked per-door via
+// ModuleOptions.doorAccessories (see DoorDef.pullOutAccessory) and rendered
+// sliding out in sync with that door's own open animation (DoorPanel).
+export type PullOutAccessoryType = "canasta_especiero_cromado" | "basurero_extraible" | "soporte_garrafon";
 
 export type KitchenModuleType =
   | LowerModuleType
   | UpperModuleType
   | TowerModuleType
+  | CornerModuleType
   | CountertopModuleType
   | ApplianceModuleType
   | AccessoryModuleType;
@@ -117,8 +136,17 @@ export type EdgeProfile = "PVC 0.4mm" | "PVC 2mm" | "ABS 1mm" | "Madera sólida"
 export type HardwareFinish = "Acero inoxidable" | "Negro mate" | "Dorado" | "Bronce" | "Cromo" | "Sin jaladores";
 
 // ─── Side panels ───────────────────────────────────────────────────────────────
-/** Whether a module's left/right side needs a panel, and which material pool it draws from. */
-export type SidePanelMode = "ninguno" | "interior" | "exterior";
+/** Whether a module's left/right side needs a panel, and which material pool it draws from.
+ *  "alambrin" is a decorative chrome wire-lattice panel (sold as 3m×15cm strips)
+ *  instead of a solid board — e.g. a desayunador's bar-facing side. */
+export type SidePanelMode = "ninguno" | "interior" | "exterior" | "alambrin";
+/** Same idea as SidePanelMode, for a module's BACK panel — normally hidden against
+ *  a wall (plain interior board), but a desayunador/peninsula's back is exposed
+ *  toward the seating side, so it can be finished in exterior board or alambrín
+ *  instead, and a librero giratorio's back carries a mirror ("espejo"). */
+export type BackPanelMode = "interior" | "exterior" | "alambrin" | "espejo";
+/** Toe-kick (zócalo) trim material — MDF cut to size, or aluminum strip stock sold in 3m pieces. */
+export type ZocaloMaterial = "MDF" | "Aluminio";
 
 // ─── Module Dimensions ─────────────────────────────────────────────────────────
 export interface ModuleDimensions {
@@ -149,8 +177,26 @@ export interface DoorDef {
   offsetPct: number;       // left-offset percentage, 0-100
   fromBottomCm: number;    // distance from interior floor in cm
   heightCm: number;        // face panel height in cm
-  hingeLeft: boolean;      // hinge side
+  hingeLeft: boolean;      // hinge side (ignored when hingeTop is true)
+  // Upper cabinets only: hinges along the TOP edge instead of a side,
+  // opening outward/upward like a flap or awning door (bottom edge swings
+  // out and rises) — hingeLeft is ignored when set.
+  hingeTop?: boolean;
   doorStyle: DoorStyle;
+  // A pull-out (canasta/basurero/soporte garrafón) mounted just inside this
+  // door. Independent of `pullOut` below — with `pullOut` false (the
+  // default) it's a hinged door and the accessory slides out on its own
+  // rails in sync with the door swinging open; with `pullOut` true, the door
+  // itself slides forward on rails and carries the accessory (or the
+  // module's fixed shelves, if no accessory is set) with it. Populated from
+  // ModuleOptions.doorAccessories, index-aligned with door order, same
+  // convention as doorHingeSides.
+  pullOutAccessory?: PullOutAccessoryType | null;
+  // This door slides straight out on rails instead of swinging on a hinge —
+  // see pullOutAccessory above for how it interacts with an assigned
+  // accessory. Populated from ModuleOptions.doorPullOut, index-aligned with
+  // door order.
+  pullOut?: boolean;
 }
 
 // ─── Module Options ────────────────────────────────────────────────────────────
@@ -159,10 +205,6 @@ export interface ModuleOptions {
   drawers: number;
   doors: number;
   shelves: number;
-  // When true (and the module has exactly one door), the shelves mount to
-  // the inside of that door and swing out with it instead of sitting fixed
-  // in the carcass — a "puerta con estantes jalables" pull-out larder door.
-  pullOutShelves?: boolean;
   // Lower cabinet specifics
   hasToeKick: boolean;
   toeKickHeight: number;        // cm (default 8)
@@ -189,7 +231,7 @@ export interface ModuleOptions {
   // Countertop details (cubierta, isla, barra)
   hasBacksplash: boolean;
   backsplashHeight: number;     // cm (default 60)
-  backsplashMaterial: BoardMaterial | CountertopMaterial | "Azulejo" | "Piedra" | "Vidrio";
+  backsplashMaterial: BoardMaterial | CountertopMaterial | "Azulejo" | "Piedra" | "Vidrio" | "WPC mármol";
   // Tower openings
   ovenOpening: boolean;
   microwaveOpening: boolean;
@@ -221,8 +263,38 @@ export interface ModuleOptions {
   exteriorTexture: ExteriorTextureId;
   // Side panels: a module neighboring another on one side doesn't need a panel there;
   // marked manually per module since adjacency isn't inferred from geometry.
+  // For corner-category modules, leftSidePanel is repurposed to mean the
+  // extension's own outer edge ("costado lateral izquierdo") — the extra
+  // seam between the original cabinet and the extension gets its own
+  // independent slot below.
   leftSidePanel: SidePanelMode;
   rightSidePanel: SidePanelMode;
+  // Corner cabinets only ("costado frontal izquierdo"): the extension's own
+  // FRONT face — same plane as the doors, but fixed/non-opening since the
+  // extension has no door. No "exterior" choice on purpose: a finished
+  // exterior-board panel there would read as a fake door front. "ninguno"
+  // leaves it open (reach in from the front); "interior" closes it with a
+  // plain interior-board filler. There is no internal divider between the
+  // original cabinet and the extension — they always share one open cavity.
+  leftFrontSidePanel: "ninguno" | "interior";
+  // Per-door hinge side override (index-aligned with the auto-generated door
+  // order, left to right). Undefined/missing entries fall back to the
+  // default alternating pattern (even index = hinges left, odd = hinges
+  // right) — same as before this existed, so it's opt-in and non-breaking.
+  // "arriba" (upper cabinets only) hinges along the bottom edge instead,
+  // opening upward like a lift/flap door.
+  doorHingeSides?: ("izquierda" | "derecha" | "arriba")[];
+  // Per-door pull-out accessory (index-aligned with the auto-generated door
+  // order, same convention as doorHingeSides). null/undefined = no accessory
+  // behind that door.
+  doorAccessories?: (PullOutAccessoryType | null)[];
+  // Per-door: true = this door slides straight out on rails instead of
+  // swinging on a hinge (index-aligned with door order). Independent of
+  // doorAccessories — a door can be pull-out with or without an accessory
+  // assigned (fixed shelves ride along with it either way), and a door with
+  // an accessory doesn't require being pull-out (the accessory then slides
+  // on its own rails behind the still-hinged door instead).
+  doorPullOut?: boolean[];
   // Detailed face layout (when true, drawerDefs/doorDefs override drawers/doors count)
   useDetailedLayout?: boolean;
   drawerDefs?: DrawerDef[];
@@ -237,6 +309,21 @@ export interface ModuleOptions {
   // countertopMaterial + countertopColor; left unset for legacy modules that
   // only ever had the plain material dropdown.
   countertopModel?: string;
+  // Corona de luz only — indirect lighting on the underside: either a
+  // continuous LED strip or a row of individual round bulbs spread evenly
+  // across the width. Both are flat (negligible thickness).
+  lightMode?: "tira" | "foquitos";
+  lightStripWidth?: number;   // cm, front-to-back width of the flat LED strip (lightMode "tira")
+  bulbCount?: number;         // how many flat round bulbs (lightMode "foquitos")
+  lightColor?: string;        // emissive color, e.g. warm white
+  // Back panel — see BackPanelMode. Defaults to "interior" (plain board,
+  // hidden against the wall) for every module except desayunador.
+  backPanelMaterial?: BackPanelMode;
+  // Desayunador only — extra countertop depth (cm) added toward the seating
+  // side, on top of the cabinet's own (shallower) depth.
+  barOverhangCm?: number;
+  // Zócalo accessory only — MDF cut to size, or aluminum strip (3m stock pieces).
+  zocaloMaterial?: ZocaloMaterial;
 }
 
 // ─── Kitchen Module ────────────────────────────────────────────────────────────
@@ -279,7 +366,7 @@ export interface KitchenDraft {
   ceilingHeight: number; // cm
   // Modules
   modules: KitchenModule[];
-  // Windows & doors — rendered as gaps in the perimeter walls in the 3D view
+  // Windows & doors — rendered as flat markers on the perimeter walls in the 3D view
   openings: WallOpening[];
   // UI state
   editingModuleId: string | null;
@@ -313,7 +400,7 @@ export interface KitchenMaterialLine {
   cutLayout?: {
     sheetWidthCm: number;
     sheetHeightCm: number;
-    sheets: { part: string; x: number; y: number; width: number; height: number }[][];
+    sheets: { part: string; x: number; y: number; width: number; height: number; moduleId?: string; moduleLabel?: string }[][];
   };
   /** Sub-items when this line groups several related items (e.g. hardware types) under one row. */
   subLines?: { label: string; quantity: number; unit: string; unitCost: number; subtotal: number }[];

@@ -21,7 +21,7 @@ type FormData = z.infer<typeof schema>;
 
 export default function LoginPage() {
   const router = useRouter();
-  const setUser = useAuthStore((state) => state.setUser);
+  const setSession = useAuthStore((state) => state.setSession);
   const [formError, setFormError] = useState("");
   const {
     register,
@@ -49,8 +49,8 @@ export default function LoginPage() {
             onSubmit={handleSubmit(async (values) => {
               try {
                 setFormError("");
-                const user = await login(values.email, values.password);
-                setUser(user as never);
+                const { user, token } = await login(values.email, values.password);
+                setSession(user, token);
                 router.push('/dashboard');
               } catch (error) {
                 setFormError(error instanceof Error ? error.message : 'No fue posible iniciar sesión');

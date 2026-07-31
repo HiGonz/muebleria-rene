@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { KitchenBuilder } from "@/components/kitchen/KitchenBuilder";
 
 export const metadata = {
@@ -5,5 +6,9 @@ export const metadata = {
 };
 
 export default function KitchenBuilderPage() {
-  return <KitchenBuilder />;
+  return (
+    <Suspense fallback={null}>
+      <KitchenBuilder />
+    </Suspense>
+  );
 }

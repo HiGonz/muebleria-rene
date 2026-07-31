@@ -21,13 +21,13 @@ function CountertopModelPicker({ value, onChange }: { value: string | undefined;
           type="button"
           onClick={() => onChange(m.id)}
           className={`flex items-center gap-2 rounded-lg border p-2 text-left transition-colors ${
-            value === m.id ? "border-indigo-500 bg-indigo-500/10" : "border-white/10 bg-white/3 hover:border-white/25"
+            value === m.id ? "border-brass bg-brass/10" : "border-ivory/10 bg-ivory/3 hover:border-ivory/25"
           }`}
         >
           <span className="h-7 w-7 shrink-0 rounded-md border border-black/20" style={{ backgroundColor: m.color }} />
           <span className="min-w-0">
-            <span className="block truncate text-[11px] font-medium text-white">{m.label}</span>
-            <span className="block text-[10px] text-zinc-500">${m.pricePerM2.toLocaleString("es-MX")}/m²</span>
+            <span className="block truncate text-[11px] font-medium text-ivory">{m.label}</span>
+            <span className="block text-[10px] text-warmgray">${m.pricePerM2.toLocaleString("es-MX")}/m²</span>
           </span>
         </button>
       ))}
@@ -42,10 +42,10 @@ function SelectInput<T extends string>({ value, onChange, options }: {
     <select
       value={value}
       onChange={(e) => onChange(e.target.value as T)}
-      className="h-10 w-full rounded-xl border border-white/10 bg-white/5 px-3 text-sm text-white"
+      className="h-10 w-full rounded-xl border border-ivory/10 bg-ivory/5 px-3 text-sm text-ivory"
     >
       {options.map((o) => (
-        <option key={o} value={o} className="bg-[#111118]">{o}</option>
+        <option key={o} value={o} className="bg-surface">{o}</option>
       ))}
     </select>
   );
@@ -61,7 +61,7 @@ function TexturePicker({ value, onChange, allowNone }: {
           type="button"
           onClick={() => onChange("ninguna")}
           className={`rounded-lg border px-3 py-1.5 text-[11px] transition-colors ${
-            value === "ninguna" ? "border-indigo-500 bg-indigo-500/10 text-white" : "border-white/10 bg-white/3 text-zinc-400 hover:border-white/25"
+            value === "ninguna" ? "border-brass bg-brass/10 text-ivory" : "border-ivory/10 bg-ivory/3 text-warmgray hover:border-ivory/25"
           }`}
         >
           Ninguna (color liso)
@@ -74,11 +74,11 @@ function TexturePicker({ value, onChange, allowNone }: {
           onClick={() => onChange(t.id)}
           title={t.label}
           className={`flex flex-col items-center gap-1 rounded-lg border p-1.5 transition-colors ${
-            value === t.id ? "border-indigo-500 bg-indigo-500/10" : "border-white/10 bg-white/3 hover:border-white/25"
+            value === t.id ? "border-brass bg-brass/10" : "border-ivory/10 bg-ivory/3 hover:border-ivory/25"
           }`}
         >
           <span className="h-8 w-12 rounded-md border border-black/20" style={{ backgroundColor: t.swatch }} />
-          <span className="text-[10px] text-zinc-400">{t.label}</span>
+          <span className="text-[10px] text-warmgray">{t.label}</span>
         </button>
       ))}
     </div>
@@ -95,12 +95,12 @@ function ApplyButton({ onClick }: { onClick: () => number }) {
           setConfirmed(count);
           setTimeout(() => setConfirmed(null), 2500);
         }}
-        className="rounded-xl bg-indigo-600 px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-indigo-500"
+        className="rounded-xl bg-brass px-4 py-2 text-xs font-semibold text-ink transition-colors hover:bg-brass-soft"
       >
         Aplicar a toda la cocina
       </button>
       {confirmed !== null && (
-        <span className="text-xs text-emerald-400">✓ Aplicado a {confirmed} mueble{confirmed !== 1 ? "s" : ""}</span>
+        <span className="text-xs text-sage">✓ Aplicado a {confirmed} mueble{confirmed !== 1 ? "s" : ""}</span>
       )}
     </div>
   );
@@ -129,14 +129,14 @@ export function GlobalMaterialsModal({ onClose }: { onClose: () => void }) {
         animate={{ opacity: 1, scale: 1 }}
         transition={{ duration: 0.15 }}
         onClick={(e) => e.stopPropagation()}
-        className="flex max-h-[85vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#0d0d14] shadow-2xl"
+        className="flex max-h-[85vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-ivory/10 bg-surface-raised shadow-2xl"
       >
-        <div className="flex shrink-0 items-center justify-between border-b border-white/8 px-5 py-4">
+        <div className="flex shrink-0 items-center justify-between border-b border-ivory/8 px-5 py-4">
           <div>
-            <h2 className="text-sm font-semibold text-white">Materiales globales</h2>
-            <p className="mt-0.5 text-xs text-zinc-500">Homogeneiza el acabado de toda la cocina en pocos clics</p>
+            <h2 className="font-display text-sm font-semibold text-ivory">Materiales globales</h2>
+            <p className="mt-0.5 text-xs text-warmgray">Homogeneiza el acabado de toda la cocina en pocos clics</p>
           </div>
-          <button onClick={onClose} className="rounded-lg p-1.5 text-zinc-500 transition-colors hover:bg-white/8 hover:text-white">
+          <button onClick={onClose} className="rounded-lg p-1.5 text-warmgray transition-colors hover:bg-ivory/8 hover:text-ivory">
             <X size={18} />
           </button>
         </div>
@@ -144,27 +144,27 @@ export function GlobalMaterialsModal({ onClose }: { onClose: () => void }) {
         <div className="flex-1 overflow-y-auto p-5 space-y-6">
           {/* ── Exterior ────────────────────────────────────────────────── */}
           <div className="space-y-3">
-            <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500">Tablero exterior</p>
-            <p className="text-[11px] text-zinc-600">Puertas, cajones, paneles de punta y el frente del zócalo, en todos los muebles.</p>
+            <p className="text-xs font-semibold uppercase tracking-widest text-warmgray">Tablero exterior</p>
+            <p className="text-[11px] text-warmgray/70">Puertas, cajones, paneles de punta y el frente del zócalo, en todos los muebles.</p>
             <div className="space-y-1">
-              <label className="block text-xs font-medium text-zinc-400 uppercase tracking-wider">Material</label>
+              <label className="block text-xs font-medium text-warmgray uppercase tracking-wider">Material</label>
               <SelectInput value={exteriorMaterial} onChange={setExteriorMaterial} options={BOARD_OPTIONS} />
             </div>
             <div className="space-y-1">
-              <label className="block text-xs font-medium text-zinc-400 uppercase tracking-wider">Acabado / textura</label>
+              <label className="block text-xs font-medium text-warmgray uppercase tracking-wider">Acabado / textura</label>
               <TexturePicker value={exteriorTexture} onChange={(v) => setExteriorTexture(v as ExteriorTextureId)} />
             </div>
             <ApplyButton onClick={() => applyExteriorToAll(exteriorMaterial, exteriorTexture)} />
           </div>
 
-          <div className="border-t border-white/8" />
+          <div className="border-t border-ivory/8" />
 
           {/* ── Countertop ──────────────────────────────────────────────── */}
           <div className="space-y-3">
-            <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500">Cubierta</p>
-            <p className="text-[11px] text-zinc-600">Toda cubierta independiente y la integrada en muebles bajos con cubierta.</p>
+            <p className="text-xs font-semibold uppercase tracking-widest text-warmgray">Cubierta</p>
+            <p className="text-[11px] text-warmgray/70">Toda cubierta independiente y la integrada en muebles bajos con cubierta.</p>
             <div className="space-y-1">
-              <label className="block text-xs font-medium text-zinc-400 uppercase tracking-wider">Modelo</label>
+              <label className="block text-xs font-medium text-warmgray uppercase tracking-wider">Modelo</label>
               <CountertopModelPicker
                 value={countertopModelId}
                 onChange={(id) => {
@@ -175,32 +175,32 @@ export function GlobalMaterialsModal({ onClose }: { onClose: () => void }) {
               />
             </div>
             <div className="space-y-1">
-              <label className="block text-xs font-medium text-zinc-400 uppercase tracking-wider">Color (ajuste fino)</label>
+              <label className="block text-xs font-medium text-warmgray uppercase tracking-wider">Color (ajuste fino)</label>
               <div className="flex gap-2">
                 <input
                   type="color"
                   value={countertopColor}
                   onChange={(e) => setCountertopColor(e.target.value)}
-                  className="h-10 w-14 cursor-pointer rounded-xl border border-white/10 bg-transparent p-1"
+                  className="h-10 w-14 cursor-pointer rounded-xl border border-ivory/10 bg-transparent p-1"
                 />
                 <Input value={countertopColor} onChange={(e) => setCountertopColor(e.target.value)} className="font-mono text-sm" />
               </div>
             </div>
             <div className="space-y-1">
-              <label className="block text-xs font-medium text-zinc-400 uppercase tracking-wider">Textura</label>
+              <label className="block text-xs font-medium text-warmgray uppercase tracking-wider">Textura</label>
               <TexturePicker value={countertopTexture} onChange={setCountertopTexture} allowNone />
             </div>
             <ApplyButton onClick={() => applyCountertopToAll(countertopModelId, countertopColor, countertopTexture)} />
           </div>
 
-          <div className="border-t border-white/8" />
+          <div className="border-t border-ivory/8" />
 
           {/* ── Hardware ────────────────────────────────────────────────── */}
           <div className="space-y-3">
-            <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500">Herrajes</p>
-            <p className="text-[11px] text-zinc-600">Jaladores de puertas y cajones en todos los muebles bajos, altos y torres.</p>
+            <p className="text-xs font-semibold uppercase tracking-widest text-warmgray">Herrajes</p>
+            <p className="text-[11px] text-warmgray/70">Jaladores de puertas y cajones en todos los muebles bajos, altos y torres.</p>
             <div className="space-y-1">
-              <label className="block text-xs font-medium text-zinc-400 uppercase tracking-wider">Acabado</label>
+              <label className="block text-xs font-medium text-warmgray uppercase tracking-wider">Acabado</label>
               <SelectInput value={hardwareFinish} onChange={setHardwareFinish} options={HARDWARE_OPTIONS} />
             </div>
             <ApplyButton onClick={() => applyHardwareToAll(hardwareFinish)} />

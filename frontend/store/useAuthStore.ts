@@ -11,7 +11,8 @@ interface AuthUser {
 
 interface AuthState {
   user: AuthUser | null;
-  setUser: (user: AuthUser) => void;
+  token: string | null;
+  setSession: (user: AuthUser, token: string) => void;
   logout: () => void;
 }
 
@@ -19,8 +20,9 @@ export const useAuthStore = create<AuthState>()(
   persist(
     (set) => ({
       user: null,
-      setUser: (user) => set({ user }),
-      logout: () => set({ user: null }),
+      token: null,
+      setSession: (user, token) => set({ user, token }),
+      logout: () => set({ user: null, token: null }),
     }),
     { name: "muebleria-auth" },
   ),

@@ -411,7 +411,7 @@ export function ModuleForm({ module, onChange }: Props) {
           </div>
         </div>
       )}
-      {isAccessory && (type === "herrajes" || type === "zoclo" || type === "panel_lateral" || type === "panel_remate" || type === "panel_decorativo") && (
+      {isAccessory && (type === "herrajes" || type === "panel_lateral" || type === "panel_remate" || type === "panel_decorativo") && (
         <div className="grid grid-cols-2 gap-3">
           <FieldGroup label="Material">
             <SelectInput

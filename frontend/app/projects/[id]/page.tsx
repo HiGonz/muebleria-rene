@@ -1,13 +1,24 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import { AppShell } from "@/components/layout/AppShell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { SceneCanvas } from "@/components/3d/SceneCanvas";
 import { getProject } from "@/services/api";
+import type { ProjectRecord } from "@/services/mockData";
 
-export default async function ProjectDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-  const project = await getProject(id);
+export default function ProjectDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const [project, setProject] = useState<ProjectRecord | null>(null);
+
+  useEffect(() => {
+    params.then(({ id }) => getProject(id)).then(setProject);
+  }, [params]);
+
+  if (!project) {
+    return <AppShell title="Proyecto" subtitle="Cargando proyecto"><Card>Cargando...</Card></AppShell>;
+  }
 
   return (
     <AppShell title={project.projectName} subtitle={`Proyecto ${project.id}`}>

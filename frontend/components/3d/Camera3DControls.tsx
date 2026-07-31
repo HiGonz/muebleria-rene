@@ -40,12 +40,12 @@ export function Camera3DControls({ presets, toggles, onZoomIn, onZoomOut, onUndo
                  lg:absolute lg:left-4 lg:top-4 lg:right-auto lg:bottom-auto lg:flex-row lg:flex-wrap lg:items-start"
     >
       {undoCount > 0 && (
-        <div className="pointer-events-auto rounded-2xl p-1.5" style={{ background: "rgba(12,12,18,0.7)", backdropFilter: "blur(12px)" }}>
+        <div className="pointer-events-auto rounded-2xl p-1.5" style={{ background: "rgba(21,17,12,0.72)", backdropFilter: "blur(12px)" }}>
           <button
             onClick={onUndo}
             aria-label="Deshacer último movimiento"
             title={`Deshacer último movimiento (${undoCount} disponible${undoCount !== 1 ? "s" : ""})`}
-            className="relative flex h-11 w-11 items-center justify-center rounded-xl text-amber-300 transition-colors hover:bg-white/10 hover:text-amber-200 active:scale-90"
+            className="relative flex h-11 w-11 items-center justify-center rounded-xl text-amber-300 transition-colors hover:bg-ivory/10 hover:text-amber-200 active:scale-90"
           >
             <Undo2 size={18} />
             <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-amber-500 text-[9px] font-bold text-black">
@@ -54,29 +54,29 @@ export function Camera3DControls({ presets, toggles, onZoomIn, onZoomOut, onUndo
           </button>
         </div>
       )}
-      <div className="pointer-events-auto flex flex-col gap-1.5 rounded-2xl p-1.5 lg:flex-row" style={{ background: "rgba(12,12,18,0.7)", backdropFilter: "blur(12px)" }}>
+      <div className="pointer-events-auto flex flex-col gap-1.5 rounded-2xl p-1.5 lg:flex-row" style={{ background: "rgba(21,17,12,0.72)", backdropFilter: "blur(12px)" }}>
         {presets.map((p) => (
           <CtrlButton key={p.key} action={p} />
         ))}
       </div>
-      <div className="pointer-events-auto flex flex-col gap-1.5 rounded-2xl p-1.5 lg:flex-row" style={{ background: "rgba(12,12,18,0.7)", backdropFilter: "blur(12px)" }}>
+      <div className="pointer-events-auto flex flex-col gap-1.5 rounded-2xl p-1.5 lg:flex-row" style={{ background: "rgba(21,17,12,0.72)", backdropFilter: "blur(12px)" }}>
         <button
           onClick={onZoomIn}
           aria-label="Acercar"
-          className="flex h-11 w-11 items-center justify-center rounded-xl text-zinc-300 transition-colors hover:bg-white/10 hover:text-white active:scale-90"
+          className="flex h-11 w-11 items-center justify-center rounded-xl text-ivory/80 transition-colors hover:bg-ivory/10 hover:text-ivory active:scale-90"
         >
           <ZoomIn size={18} />
         </button>
         <button
           onClick={onZoomOut}
           aria-label="Alejar"
-          className="flex h-11 w-11 items-center justify-center rounded-xl text-zinc-300 transition-colors hover:bg-white/10 hover:text-white active:scale-90"
+          className="flex h-11 w-11 items-center justify-center rounded-xl text-ivory/80 transition-colors hover:bg-ivory/10 hover:text-ivory active:scale-90"
         >
           <ZoomOut size={18} />
         </button>
       </div>
       {toggles.length > 0 && (
-        <div className="pointer-events-auto flex flex-col gap-1.5 rounded-2xl p-1.5 lg:flex-row" style={{ background: "rgba(12,12,18,0.7)", backdropFilter: "blur(12px)" }}>
+        <div className="pointer-events-auto flex flex-col gap-1.5 rounded-2xl p-1.5 lg:flex-row" style={{ background: "rgba(21,17,12,0.72)", backdropFilter: "blur(12px)" }}>
           {toggles.map((t) => (
             <CtrlButton key={t.key} action={t} />
           ))}
@@ -94,7 +94,7 @@ function CtrlButton({ action }: { action: CameraAction }) {
       aria-label={action.label}
       title={action.label}
       className={`flex h-11 w-11 items-center justify-center rounded-xl transition-colors active:scale-90 ${
-        action.active ? "bg-indigo-500 text-white" : "text-zinc-300 hover:bg-white/10 hover:text-white"
+        action.active ? "bg-brass text-ink" : "text-ivory/80 hover:bg-ivory/10 hover:text-ivory"
       }`}
     >
       <Icon size={18} />

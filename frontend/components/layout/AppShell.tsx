@@ -7,6 +7,7 @@ import { useState } from "react";
 import { Sidebar } from "./Sidebar";
 import { useAuthStore } from "@/store/useAuthStore";
 import { Button } from "@/components/ui/button";
+import { logout as logoutApi } from "@/services/api";
 
 export function AppShell({ title, subtitle, children }: { title: string; subtitle: string; children: React.ReactNode }) {
   const router = useRouter();
@@ -40,7 +41,8 @@ export function AppShell({ title, subtitle, children }: { title: string; subtitl
             <Button
               variant="ghost"
               className="h-10 w-10 rounded-xl px-0"
-              onClick={() => {
+              onClick={async () => {
+                await logoutApi();
                 logout();
                 router.push("/login");
               }}

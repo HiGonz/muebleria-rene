@@ -4,17 +4,17 @@ import dynamic from "next/dynamic";
 import { Trash2, Copy, RotateCw } from "lucide-react";
 import { useKitchenStore } from "@/store/useKitchenStore";
 import { Input, Textarea } from "@/components/ui/input";
-import { BOARD_COSTS, COUNTERTOP_MODELS } from "@/services/kitchenData";
+import { BOARD_COSTS, COUNTERTOP_MODELS, PULL_OUT_ACCESSORY_LABELS, NICHE_ACCESSORY_MATCH, getCatalogEntry } from "@/services/kitchenData";
 import { WOOD_TEXTURES } from "@/components/3d/woodTextures";
-import type { BoardMaterial, ExteriorTextureId, KitchenModule } from "@/types/kitchen";
+import type { BoardMaterial, ExteriorTextureId, KitchenModule, PullOutAccessoryType, SidePanelMode } from "@/types/kitchen";
 
 const ModulePreview3D = dynamic(
   () => import("@/components/3d/ModulePreview3D").then((m) => ({ default: m.ModulePreview3D })),
   {
     ssr: false,
     loading: () => (
-      <div className="flex h-55 w-full items-center justify-center rounded-xl border border-white/8 bg-[#080810]">
-        <span className="text-xs text-zinc-600">Cargando vista 3D…</span>
+      <div className="flex h-55 w-full items-center justify-center rounded-xl border border-ivory/8 bg-surface">
+        <span className="text-xs text-warmgray/70">Cargando vista 3D…</span>
       </div>
     ),
   }
@@ -22,12 +22,64 @@ const ModulePreview3D = dynamic(
 
 type ModOptions = KitchenModule["options"];
 
+const SIDE_PANEL_OPTIONS: { value: SidePanelMode; label: string }[] = [
+  { value: "ninguno", label: "Ninguno (vecino)" },
+  { value: "interior", label: "Interior" },
+  { value: "exterior", label: "Exterior (de punta)" },
+  { value: "alambrin", label: "Alambrín" },
+];
+
+const BACK_PANEL_OPTIONS: { value: NonNullable<ModOptions["backPanelMaterial"]>; label: string }[] = [
+  { value: "interior", label: "Interior (oculto contra el muro)" },
+  { value: "exterior", label: "Exterior (acabado)" },
+  { value: "alambrin", label: "Alambrín" },
+  { value: "espejo", label: "Espejo" },
+];
+
+const ZOCALO_MATERIAL_OPTIONS: { value: NonNullable<ModOptions["zocaloMaterial"]>; label: string }[] = [
+  { value: "MDF", label: "MDF (cortado a medida)" },
+  { value: "Aluminio", label: "Aluminio (tira de 3m)" },
+];
+
+const DOOR_ACCESSORY_OPTIONS: { value: "" | PullOutAccessoryType; label: string }[] = [
+  { value: "", label: "Ninguno" },
+  ...(Object.entries(PULL_OUT_ACCESSORY_LABELS) as [PullOutAccessoryType, string][]).map(([value, label]) => ({ value, label })),
+];
+
+const BACKSPLASH_MATERIAL_OPTIONS: { value: ModOptions["backsplashMaterial"]; label: string }[] = [
+  { value: "Azulejo", label: "Azulejo" },
+  { value: "Piedra", label: "Piedra" },
+  { value: "Vidrio", label: "Vidrio" },
+  { value: "WPC mármol", label: "WPC mármol" },
+];
+
+const DOOR_HINGE_OPTIONS: { value: "izquierda" | "derecha"; label: string }[] = [
+  { value: "izquierda", label: "Izquierda (abre a la izquierda)" },
+  { value: "derecha", label: "Derecha (abre a la derecha)" },
+];
+
+// Upper cabinets only: a third choice, hinged along the bottom edge and
+// opening upward like a lift/flap door — doesn't make sense on a base
+// cabinet (nothing to swing up into), so it's excluded from DOOR_HINGE_OPTIONS.
+const DOOR_HINGE_OPTIONS_UPPER: { value: "izquierda" | "derecha" | "arriba"; label: string }[] = [
+  { value: "izquierda", label: "Izquierda (abre a la izquierda)" },
+  { value: "derecha", label: "Derecha (abre a la derecha)" },
+  { value: "arriba", label: "Abatible (bisagra arriba, jaladera abajo)" },
+];
+
+// No "exterior" choice here on purpose — a finished exterior-board panel on
+// the corner extension's front would read as a fake door that doesn't open.
+const FRONT_FILLER_OPTIONS: { value: "ninguno" | "interior"; label: string }[] = [
+  { value: "ninguno", label: "Ninguno (abierto)" },
+  { value: "interior", label: "Interior (panel liso)" },
+];
+
 // ─── Field helpers (kept local to this component — the legacy ModuleForm used
 // by the Constructor tab is being migrated away from, not shared with) ────────
 function Section({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
-      <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-zinc-500">{label}</p>
+      <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-warmgray">{label}</p>
       {children}
     </div>
   );
@@ -36,7 +88,7 @@ function Section({ label, children }: { label: string; children: React.ReactNode
 function FieldGroup({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="space-y-1">
-      <label className="block text-xs font-medium text-zinc-400 uppercase tracking-wider">{label}</label>
+      <label className="block text-xs font-medium text-warmgray uppercase tracking-wider">{label}</label>
       {children}
     </div>
   );
@@ -48,7 +100,30 @@ function NumInput({ value, onChange, min = 0, max = 9999, unit }: {
   return (
     <div className="relative">
       <Input type="number" min={min} max={max} value={value} onChange={(e) => onChange(Number(e.target.value))} />
-      {unit && <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-zinc-500">{unit}</span>}
+      {unit && <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-warmgray">{unit}</span>}
+    </div>
+  );
+}
+
+// Quick presets for a numeric field — most cabinets are either 1 or 2 doors,
+// so these sit above the NumInput to set the common case in one click while
+// the number field still covers everything else (0, 3+).
+function QuickCountButtons({ value, options, onChange }: { value: number; options: number[]; onChange: (v: number) => void }) {
+  return (
+    <div className="flex gap-1.5">
+      {options.map((n) => (
+        <button
+          key={n}
+          type="button"
+          onClick={() => onChange(n)}
+          aria-pressed={value === n}
+          className={`flex h-8 flex-1 items-center justify-center rounded-lg border text-xs font-semibold transition-colors ${
+            value === n ? "border-brass bg-brass/15 text-brass-soft" : "border-ivory/10 bg-ivory/3 text-ivory/70 hover:border-ivory/25"
+          }`}
+        >
+          {n}
+        </button>
+      ))}
     </div>
   );
 }
@@ -60,10 +135,10 @@ function SelectInput<T extends string>({ value, onChange, options }: {
     <select
       value={value}
       onChange={(e) => onChange(e.target.value as T)}
-      className="h-10 w-full rounded-xl border border-white/10 bg-white/5 px-3 text-sm text-white"
+      className="h-10 w-full rounded-xl border border-ivory/10 bg-ivory/5 px-3 text-sm text-ivory"
     >
       {options.map((o) => (
-        <option key={o.value} value={o.value} className="bg-[#111118]">{o.label}</option>
+        <option key={o.value} value={o.value} className="bg-surface">{o.label}</option>
       ))}
     </select>
   );
@@ -79,11 +154,11 @@ function TexturePicker({ value, onChange }: { value: ExteriorTextureId; onChange
           onClick={() => onChange(t.id)}
           title={t.label}
           className={`flex flex-col items-center gap-1 rounded-lg border p-1.5 transition-colors ${
-            value === t.id ? "border-indigo-500 bg-indigo-500/10" : "border-white/10 bg-white/3 hover:border-white/25"
+            value === t.id ? "border-brass bg-brass/10" : "border-ivory/10 bg-ivory/3 hover:border-ivory/25"
           }`}
         >
           <span className="h-8 w-12 rounded-md border border-black/20" style={{ backgroundColor: t.swatch }} />
-          <span className="text-[10px] text-zinc-400">{t.label}</span>
+          <span className="text-[10px] text-warmgray">{t.label}</span>
         </button>
       ))}
     </div>
@@ -99,13 +174,13 @@ function CountertopModelPicker({ value, onChange }: { value: string | undefined;
           type="button"
           onClick={() => onChange(m.id)}
           className={`flex items-center gap-2 rounded-lg border p-2 text-left transition-colors ${
-            value === m.id ? "border-indigo-500 bg-indigo-500/10" : "border-white/10 bg-white/3 hover:border-white/25"
+            value === m.id ? "border-brass bg-brass/10" : "border-ivory/10 bg-ivory/3 hover:border-ivory/25"
           }`}
         >
           <span className="h-7 w-7 shrink-0 rounded-md border border-black/20" style={{ backgroundColor: m.color }} />
           <span className="min-w-0">
-            <span className="block truncate text-[11px] font-medium text-white">{m.label}</span>
-            <span className="block text-[10px] text-zinc-500">${m.pricePerM2.toLocaleString("es-MX")}/m²</span>
+            <span className="block truncate text-[11px] font-medium text-ivory">{m.label}</span>
+            <span className="block text-[10px] text-warmgray">${m.pricePerM2.toLocaleString("es-MX")}/m²</span>
           </span>
         </button>
       ))}
@@ -122,7 +197,10 @@ const BOARD_OPTIONS = (Object.keys(BOARD_COSTS) as BoardMaterial[]).map((k) => (
 // other lower/upper/tower types get a reasonable generic fallback until they're
 // migrated too.
 export function ModuleInspector() {
-  const { getEditingModule, updateModule, setEditingModule, removeModule, duplicateModule, rotateModule } = useKitchenStore();
+  const {
+    getEditingModule, updateModule, setEditingModule, removeModule, duplicateModule, rotateModule,
+    applyExteriorToAll, applyHardwareToAll, applyCountertopToAll, placeAccessoryInNiche,
+  } = useKitchenStore();
   const module = getEditingModule();
 
   if (!module) return null;
@@ -134,41 +212,50 @@ export function ModuleInspector() {
   const updateDim = (key: keyof typeof dim, val: number) => updateModule(module.id, { dimensions: { ...dim, [key]: val } });
   const updateOpt = (key: keyof ModOptions, val: unknown) => updateModule(module.id, { options: { ...opt, [key]: val } as ModOptions });
 
-  const isLower = category === "lower";
-  const isUpper = category === "upper";
+  // gabinete_superior_esquinero_puertas is category "corner" (so it groups
+  // under Esquineros in the catalog) but is wall-mounted like any other
+  // aéreo — treat it as isUpper, not isLower, for every field this drives
+  // (zócalo section, mountHeight, door-hinge options).
+  const isUpperCorner = type === "gabinete_superior_esquinero_puertas";
+  const isLower = (category === "lower" || category === "corner") && !isUpperCorner;
+  const isUpper = category === "upper" || isUpperCorner;
   const isTower = category === "tower";
   const isCountertop = category === "countertop";
   const isAppliance = category === "appliance";
   const isAccessory = category === "accessory";
   const isCajonera = type === "cajonera";
+  // Corona de luz is a decorative light valance, not a storage cabinet — no
+  // doors/drawers/countertop concept, so those generic sections are skipped
+  // in favor of its own "Iluminación" section below.
+  const isLightCrown = type === "corona_luz";
   const showHeightField = !(isCountertop && type === "cubierta");
   // Cabinets can optionally carry their own built-in countertop; standalone
   // countertop modules (cubierta, isla, etc.) always are one, so there's
   // nothing to toggle — and it's meaningless for an appliance/accessory.
-  const canToggleCountertop = isLower || isUpper || isTower;
+  const canToggleCountertop = (isLower || isUpper || isTower) && !isLightCrown;
   const showCountertopSection = isCountertop || canToggleCountertop;
   const showCountertopAppearance = isCountertop || (opt.includesCountertop && canToggleCountertop);
 
   return (
     <div className="flex h-full flex-col">
       {/* ── Header ──────────────────────────────────────────────────────── */}
-      <div className="flex shrink-0 items-center justify-between border-b border-white/8 px-5 py-4">
-        <p className="truncate text-sm font-semibold text-white">{module.label}</p>
+      <div className="flex shrink-0 items-center justify-between border-b border-ivory/8 px-5 py-4">
+        <p className="truncate font-display text-sm font-semibold text-ivory">{module.label}</p>
         <div className="flex shrink-0 items-center gap-1">
-          <button onClick={() => rotateModule(module.id)} title="Rotar 90°" className="rounded-lg p-1.5 text-zinc-500 hover:bg-white/8 hover:text-white transition-colors">
+          <button onClick={() => rotateModule(module.id)} title="Rotar 90°" className="rounded-lg p-1.5 text-warmgray hover:bg-ivory/8 hover:text-ivory transition-colors">
             <RotateCw size={15} />
           </button>
-          <button onClick={() => duplicateModule(module.id)} title="Duplicar" className="rounded-lg p-1.5 text-zinc-500 hover:bg-white/8 hover:text-white transition-colors">
+          <button onClick={() => duplicateModule(module.id)} title="Duplicar" className="rounded-lg p-1.5 text-warmgray hover:bg-ivory/8 hover:text-ivory transition-colors">
             <Copy size={15} />
           </button>
           <button
             onClick={() => { removeModule(module.id); }}
             title="Eliminar"
-            className="rounded-lg p-1.5 text-zinc-500 hover:bg-rose-500/15 hover:text-rose-400 transition-colors"
+            className="rounded-lg p-1.5 text-warmgray hover:bg-terracotta/15 hover:text-terracotta transition-colors"
           >
             <Trash2 size={15} />
           </button>
-          <button onClick={() => setEditingModule(null)} className="ml-1 text-xl leading-none text-zinc-500 hover:text-white transition-colors">&times;</button>
+          <button onClick={() => setEditingModule(null)} className="ml-1 text-xl leading-none text-warmgray hover:text-ivory transition-colors">&times;</button>
         </div>
       </div>
 
@@ -203,59 +290,148 @@ export function ModuleInspector() {
         {/* ── Boards ────────────────────────────────────────────────────── */}
         {!isCountertop && !isAppliance && !isAccessory && (
           <>
-            <div className="rounded-xl border border-white/8 bg-white/3 px-3 py-2.5">
-              <p className="text-[10px] font-semibold uppercase tracking-widest text-zinc-500">Tablero interior</p>
-              <p className="mt-0.5 text-xs text-zinc-300">Melamina blanca 15mm · Blanco</p>
-              <p className="mt-0.5 text-[10px] text-zinc-600">Estándar del taller — no configurable por mueble.</p>
+            <div className="rounded-xl border border-ivory/8 bg-ivory/3 px-3 py-2.5">
+              <p className="text-[10px] font-semibold uppercase tracking-widest text-warmgray">Tablero interior</p>
+              <p className="mt-0.5 text-xs text-ivory/80">Melamina blanca 15mm · Blanco</p>
+              <p className="mt-0.5 text-[10px] text-warmgray/70">Estándar del taller — no configurable por mueble.</p>
             </div>
 
             <Section label="Tablero exterior (puertas, cajones y remates visibles)">
               <div className="space-y-3">
                 <FieldGroup label="Material">
-                  <SelectInput value={opt.exteriorMaterial} onChange={(v) => updateOpt("exteriorMaterial", v)} options={BOARD_OPTIONS} />
+                  <SelectInput value={opt.exteriorMaterial} onChange={(v) => applyExteriorToAll(v, opt.exteriorTexture)} options={BOARD_OPTIONS} />
                 </FieldGroup>
                 <FieldGroup label="Acabado / textura">
-                  <TexturePicker value={opt.exteriorTexture} onChange={(v) => updateOpt("exteriorTexture", v)} />
+                  <TexturePicker value={opt.exteriorTexture} onChange={(v) => applyExteriorToAll(opt.exteriorMaterial, v)} />
                 </FieldGroup>
+                <p className="text-[10px] text-warmgray/70">Se aplica a toda la cocina — es el mismo acabado en todos los muebles.</p>
               </div>
             </Section>
 
             <Section label="Paneles laterales">
               <div className="grid grid-cols-2 gap-3">
-                <FieldGroup label="Costado izquierdo">
-                  <SelectInput
-                    value={opt.leftSidePanel}
-                    onChange={(v) => updateOpt("leftSidePanel", v)}
-                    options={[
-                      { value: "ninguno", label: "Ninguno (vecino)" },
-                      { value: "interior", label: "Interior" },
-                      { value: "exterior", label: "Exterior (de punta)" },
-                    ]}
-                  />
-                </FieldGroup>
+                {category === "corner" ? (
+                  <>
+                    <FieldGroup label="Costado frontal izquierdo">
+                      <SelectInput value={opt.leftFrontSidePanel} onChange={(v) => updateOpt("leftFrontSidePanel", v)} options={FRONT_FILLER_OPTIONS} />
+                    </FieldGroup>
+                    <FieldGroup label="Costado lateral izquierdo (extensión)">
+                      <SelectInput value={opt.leftSidePanel} onChange={(v) => updateOpt("leftSidePanel", v)} options={SIDE_PANEL_OPTIONS} />
+                    </FieldGroup>
+                  </>
+                ) : (
+                  <FieldGroup label="Costado izquierdo">
+                    <SelectInput value={opt.leftSidePanel} onChange={(v) => updateOpt("leftSidePanel", v)} options={SIDE_PANEL_OPTIONS} />
+                  </FieldGroup>
+                )}
                 <FieldGroup label="Costado derecho">
-                  <SelectInput
-                    value={opt.rightSidePanel}
-                    onChange={(v) => updateOpt("rightSidePanel", v)}
-                    options={[
-                      { value: "ninguno", label: "Ninguno (vecino)" },
-                      { value: "interior", label: "Interior" },
-                      { value: "exterior", label: "Exterior (de punta)" },
-                    ]}
-                  />
+                  <SelectInput value={opt.rightSidePanel} onChange={(v) => updateOpt("rightSidePanel", v)} options={SIDE_PANEL_OPTIONS} />
                 </FieldGroup>
               </div>
+              {category === "corner" && (
+                <p className="mt-2 text-[10px] text-warmgray/70">
+                  El costado frontal izquierdo es el propio frente de la extensión (abierto o cerrado con un panel liso, nunca una puerta); el costado lateral izquierdo es su borde exterior, para cuando se une a otro mueble.
+                </p>
+              )}
             </Section>
+
+            {(type === "desayunador" || type === "librero_giratorio_espejo") && (
+              <Section label="Panel trasero">
+                <div className="grid grid-cols-2 gap-3">
+                  <FieldGroup label="Material">
+                    <SelectInput value={opt.backPanelMaterial ?? "interior"} onChange={(v) => updateOpt("backPanelMaterial", v)} options={BACK_PANEL_OPTIONS} />
+                  </FieldGroup>
+                  {type === "desayunador" && (
+                    <FieldGroup label="Vuelo extra de cubierta">
+                      <NumInput value={opt.barOverhangCm ?? 30} onChange={(v) => updateOpt("barOverhangCm", v)} min={0} max={60} unit="cm" />
+                    </FieldGroup>
+                  )}
+                </div>
+                <p className="mt-2 text-[10px] text-warmgray/70">
+                  {type === "desayunador"
+                    ? "El respaldo queda expuesto hacia el lado del banquillo (no contra un muro), por eso lleva un acabado en vez de tablero liso. La cubierta vuela este tanto extra sobre ese lado."
+                    : "El respaldo lleva un espejo en vez de tablero — visible por el lado opuesto a los estantes."}
+                </p>
+              </Section>
+            )}
+
+            {isLightCrown && (
+              <Section label="Iluminación">
+                <div className="space-y-3">
+                  <FieldGroup label="Tipo de luz">
+                    <SelectInput
+                      value={opt.lightMode ?? "tira"}
+                      onChange={(v) => updateOpt("lightMode", v)}
+                      options={[
+                        { value: "tira", label: "Tira de LED" },
+                        { value: "foquitos", label: "Foquitos individuales" },
+                      ]}
+                    />
+                  </FieldGroup>
+                  {(opt.lightMode ?? "tira") === "tira" ? (
+                    <FieldGroup label="Ancho de la tira">
+                      <NumInput value={opt.lightStripWidth ?? 3} onChange={(v) => updateOpt("lightStripWidth", v)} min={1} max={10} unit="cm" />
+                    </FieldGroup>
+                  ) : (
+                    <FieldGroup label="Cantidad de foquitos">
+                      <NumInput value={opt.bulbCount ?? 6} onChange={(v) => updateOpt("bulbCount", v)} min={1} max={20} />
+                    </FieldGroup>
+                  )}
+                  <FieldGroup label="Color de luz">
+                    <div className="flex gap-2">
+                      <input
+                        type="color"
+                        value={opt.lightColor || "#fff2d0"}
+                        onChange={(e) => updateOpt("lightColor", e.target.value)}
+                        className="h-10 w-14 cursor-pointer rounded-xl border border-ivory/10 bg-transparent p-1"
+                      />
+                      <Input
+                        value={opt.lightColor || ""}
+                        onChange={(e) => updateOpt("lightColor", e.target.value)}
+                        placeholder="#fff2d0"
+                        className="font-mono text-sm"
+                      />
+                    </div>
+                  </FieldGroup>
+                  {(opt.lightMode ?? "tira") === "foquitos" && (
+                    <p className="text-[10px] text-warmgray/70">Los foquitos se reparten en partes iguales a lo ancho del mueble.</p>
+                  )}
+                </div>
+              </Section>
+            )}
           </>
         )}
 
+        {/* ── Salpicadera (backsplash) — muebles bajos y esquineros ──────── */}
+        {isLower && (
+          <Section label="Salpicadera">
+            <label className="mb-3 flex items-center gap-2 text-sm text-ivory/85">
+              <input type="checkbox" checked={opt.hasBacksplash} onChange={(e) => updateOpt("hasBacksplash", e.target.checked)} className="h-4 w-4 rounded border-ivory/20 bg-ivory/5" />
+              Llevar salpicadera entre la cubierta y las alacenas
+            </label>
+            {opt.hasBacksplash && (
+              <div className="grid grid-cols-2 gap-3">
+                <FieldGroup label="Material">
+                  <SelectInput value={opt.backsplashMaterial} onChange={(v) => updateOpt("backsplashMaterial", v)} options={BACKSPLASH_MATERIAL_OPTIONS} />
+                </FieldGroup>
+                <FieldGroup label="Altura">
+                  <NumInput value={opt.backsplashHeight} onChange={(v) => updateOpt("backsplashHeight", v)} min={10} max={120} unit="cm" />
+                </FieldGroup>
+              </div>
+            )}
+          </Section>
+        )}
+
         {/* ── Doors & Drawers (smart per type) ─────────────────────────── */}
-        {(isLower || isUpper || isTower) && (
+        {(isLower || isUpper || isTower) && !isLightCrown && (
           <Section label={isCajonera ? "Cajones" : "Puertas y cajones"}>
             <div className="grid grid-cols-2 gap-3">
               {!isCajonera && (
                 <FieldGroup label="Núm. puertas">
-                  <NumInput value={opt.doors} onChange={(v) => updateOpt("doors", v)} min={0} max={6} />
+                  <div className="space-y-1.5">
+                    <QuickCountButtons value={opt.doors} options={[1, 2]} onChange={(v) => updateOpt("doors", v)} />
+                    <NumInput value={opt.doors} onChange={(v) => updateOpt("doors", v)} min={0} max={6} />
+                  </div>
                 </FieldGroup>
               )}
               <FieldGroup label="Núm. cajones">
@@ -264,18 +440,6 @@ export function ModuleInspector() {
               {!isCajonera && (
                 <FieldGroup label="Repisas">
                   <NumInput value={opt.shelves} onChange={(v) => updateOpt("shelves", v)} min={0} max={10} />
-                </FieldGroup>
-              )}
-              {!isCajonera && opt.doors === 1 && opt.shelves > 0 && (
-                <FieldGroup label="Repisas jalables">
-                  <SelectInput
-                    value={opt.pullOutShelves ? "si" : "no"}
-                    onChange={(v) => updateOpt("pullOutShelves", v === "si")}
-                    options={[
-                      { value: "no", label: "Fijas en el mueble" },
-                      { value: "si", label: "Se jalan con la puerta" },
-                    ]}
-                  />
                 </FieldGroup>
               )}
               {!isCajonera && (
@@ -308,7 +472,7 @@ export function ModuleInspector() {
               <FieldGroup label="Herrajes">
                 <SelectInput
                   value={opt.hardwareFinish}
-                  onChange={(v) => updateOpt("hardwareFinish", v)}
+                  onChange={(v) => applyHardwareToAll(v)}
                   options={[
                     { value: "Acero inoxidable", label: "Acero inoxidable" },
                     { value: "Negro mate", label: "Negro mate" },
@@ -320,7 +484,82 @@ export function ModuleInspector() {
                 />
               </FieldGroup>
             </div>
-            <p className="mt-2 text-[10px] text-zinc-600">Los cajones se distribuyen automáticamente en el área disponible.</p>
+            <p className="mt-2 text-[10px] text-warmgray/70">Los cajones se distribuyen automáticamente en el área disponible. Los herrajes se aplican a toda la cocina.</p>
+          </Section>
+        )}
+
+        {/* ── Door hinge sides (independent per door) — corner cabinets get
+             izquierda/derecha; upper cabinets also get arriba (abatible). ── */}
+        {(category === "corner" || category === "upper") && !opt.useDetailedLayout && opt.doors > 0 && (
+          <Section label="Apertura de puertas">
+            <div className="grid grid-cols-2 gap-3">
+              {Array.from({ length: opt.doors }, (_, i) => {
+                const defaultSide = i % 2 === 0 ? "izquierda" : "derecha";
+                const current = opt.doorHingeSides?.[i] ?? defaultSide;
+                return (
+                  <FieldGroup key={i} label={`Puerta ${i + 1}`}>
+                    <SelectInput
+                      value={current}
+                      onChange={(v) => {
+                        const next = Array.from({ length: opt.doors }, (_, j) => opt.doorHingeSides?.[j] ?? (j % 2 === 0 ? "izquierda" : "derecha"));
+                        next[i] = v;
+                        updateOpt("doorHingeSides", next);
+                      }}
+                      options={isUpper ? DOOR_HINGE_OPTIONS_UPPER : DOOR_HINGE_OPTIONS}
+                    />
+                  </FieldGroup>
+                );
+              })}
+            </div>
+            <p className="mt-2 text-[10px] text-warmgray/70">La bisagra queda en el lado contrario a la apertura elegida (o arriba, con la jaladera abajo, para la opción abatible).</p>
+          </Section>
+        )}
+
+        {/* ── Per-door: opening type (hinged/pull-out) and interior accessory —
+             independent settings, not tied to each other. A pull-out door
+             takes any assigned accessory (or the module's fixed shelves)
+             along with it; a hinged door with an accessory slides just the
+             accessory out on its own rails when opened. ─────────────────── */}
+        {(isLower || isUpper || isTower) && !opt.useDetailedLayout && opt.doors > 0 && (
+          <Section label="Puertas: apertura y accesorio interior">
+            <div className="space-y-3">
+              {Array.from({ length: opt.doors }, (_, i) => {
+                const currentAccessory = opt.doorAccessories?.[i] ?? "";
+                const currentPullOut = opt.doorPullOut?.[i] ?? false;
+                return (
+                  <div key={i} className="grid grid-cols-2 gap-3 rounded-xl border border-ivory/8 bg-ivory/3 p-3">
+                    <FieldGroup label={`Puerta ${i + 1}: apertura`}>
+                      <SelectInput
+                        value={currentPullOut ? "jalable" : "abatible"}
+                        onChange={(v) => {
+                          const next = Array.from({ length: opt.doors }, (_, j) => opt.doorPullOut?.[j] ?? false);
+                          next[i] = v === "jalable";
+                          updateOpt("doorPullOut", next);
+                        }}
+                        options={[
+                          { value: "abatible", label: "Abatible (bisagra)" },
+                          { value: "jalable", label: "Jalable (sobre rieles)" },
+                        ]}
+                      />
+                    </FieldGroup>
+                    <FieldGroup label="Accesorio interior">
+                      <SelectInput
+                        value={currentAccessory}
+                        onChange={(v) => {
+                          const next = Array.from({ length: opt.doors }, (_, j) => opt.doorAccessories?.[j] ?? null);
+                          next[i] = v || null;
+                          updateOpt("doorAccessories", next);
+                        }}
+                        options={DOOR_ACCESSORY_OPTIONS}
+                      />
+                    </FieldGroup>
+                  </div>
+                );
+              })}
+            </div>
+            <p className="mt-2 text-[10px] text-warmgray/70">
+              Con puerta abatible, el accesorio se extrae sobre sus propios rieles al abrir la puerta. Con puerta jalable, es la puerta la que se desliza y lleva el accesorio (o las repisas fijas, si no tiene accesorio) consigo.
+            </p>
           </Section>
         )}
 
@@ -340,7 +579,15 @@ export function ModuleInspector() {
                   <NumInput value={opt.toeKickHeight} onChange={(v) => updateOpt("toeKickHeight", v)} min={4} max={20} unit="cm" />
                 </FieldGroup>
               )}
+              {opt.hasToeKick && (
+                <FieldGroup label="Material del zoclo">
+                  <SelectInput value={opt.zocaloMaterial ?? "MDF"} onChange={(v) => updateOpt("zocaloMaterial", v)} options={ZOCALO_MATERIAL_OPTIONS} />
+                </FieldGroup>
+              )}
             </div>
+            {opt.hasToeKick && opt.zocaloMaterial === "Aluminio" && (
+              <p className="mt-2 text-[10px] text-warmgray/70">Se compra en tiras de 3m — la cotización redondea al número de piezas necesarias.</p>
+            )}
           </Section>
         )}
 
@@ -364,6 +611,15 @@ export function ModuleInspector() {
                 <NumInput value={opt.applianceHeight} onChange={(v) => updateOpt("applianceHeight", v)} min={30} max={250} unit="cm" />
               </FieldGroup>
             </div>
+            {NICHE_ACCESSORY_MATCH[type] && (
+              <button
+                type="button"
+                onClick={() => placeAccessoryInNiche(module.id, NICHE_ACCESSORY_MATCH[type]!)}
+                className="mt-3 w-full rounded-xl border border-brass/30 bg-brass/10 px-3 py-2.5 text-sm font-medium text-brass-soft transition-colors hover:bg-brass/15"
+              >
+                Colocar {getCatalogEntry(NICHE_ACCESSORY_MATCH[type]!)?.label.toLowerCase()} aquí
+              </button>
+            )}
           </Section>
         )}
 
@@ -391,24 +647,22 @@ export function ModuleInspector() {
                   onChange={(id) => {
                     const model = COUNTERTOP_MODELS.find((m) => m.id === id);
                     if (!model) return;
-                    updateModule(module.id, {
-                      options: { ...opt, countertopModel: model.id, countertopMaterial: model.material, countertopColor: model.color },
-                    });
+                    applyCountertopToAll(model.id, model.color, opt.countertopTexture ?? "ninguna");
                   }}
                 />
-                <p className="mt-1 text-[10px] text-zinc-600">Catálogo inicial — más adelante se administrará desde un panel dedicado.</p>
+                <p className="mt-1 text-[10px] text-warmgray/70">Se aplica a toda la cocina. Catálogo inicial — más adelante se administrará desde un panel dedicado.</p>
               </FieldGroup>
               <FieldGroup label="Color (ajuste fino)">
                 <div className="flex gap-2">
                   <input
                     type="color"
                     value={opt.countertopColor || "#8e8070"}
-                    onChange={(e) => updateOpt("countertopColor", e.target.value)}
-                    className="h-10 w-14 cursor-pointer rounded-xl border border-white/10 bg-transparent p-1"
+                    onChange={(e) => applyCountertopToAll(opt.countertopModel ?? "", e.target.value, opt.countertopTexture ?? "ninguna")}
+                    className="h-10 w-14 cursor-pointer rounded-xl border border-ivory/10 bg-transparent p-1"
                   />
                   <Input
                     value={opt.countertopColor || ""}
-                    onChange={(e) => updateOpt("countertopColor", e.target.value)}
+                    onChange={(e) => applyCountertopToAll(opt.countertopModel ?? "", e.target.value, opt.countertopTexture ?? "ninguna")}
                     placeholder="Automático según material"
                     className="font-mono text-sm"
                   />
@@ -418,11 +672,11 @@ export function ModuleInspector() {
                 <div className="flex flex-wrap gap-2">
                   <button
                     type="button"
-                    onClick={() => updateOpt("countertopTexture", "ninguna")}
+                    onClick={() => applyCountertopToAll(opt.countertopModel ?? "", opt.countertopColor ?? "", "ninguna")}
                     className={`rounded-lg border px-3 py-1.5 text-[11px] transition-colors ${
                       !opt.countertopTexture || opt.countertopTexture === "ninguna"
-                        ? "border-indigo-500 bg-indigo-500/10 text-white"
-                        : "border-white/10 bg-white/3 text-zinc-400 hover:border-white/25"
+                        ? "border-brass bg-brass/10 text-ivory"
+                        : "border-ivory/10 bg-ivory/3 text-warmgray hover:border-ivory/25"
                     }`}
                   >
                     Ninguna (color liso)
@@ -431,14 +685,14 @@ export function ModuleInspector() {
                     <button
                       key={t.id}
                       type="button"
-                      onClick={() => updateOpt("countertopTexture", t.id)}
+                      onClick={() => applyCountertopToAll(opt.countertopModel ?? "", opt.countertopColor ?? "", t.id)}
                       title={t.label}
                       className={`flex items-center gap-1.5 rounded-lg border px-2 py-1.5 transition-colors ${
-                        opt.countertopTexture === t.id ? "border-indigo-500 bg-indigo-500/10" : "border-white/10 bg-white/3 hover:border-white/25"
+                        opt.countertopTexture === t.id ? "border-brass bg-brass/10" : "border-ivory/10 bg-ivory/3 hover:border-ivory/25"
                       }`}
                     >
                       <span className="h-4 w-4 rounded-full border border-black/20" style={{ backgroundColor: t.swatch }} />
-                      <span className="text-[10px] text-zinc-400">{t.label}</span>
+                      <span className="text-[10px] text-warmgray">{t.label}</span>
                     </button>
                   ))}
                 </div>
