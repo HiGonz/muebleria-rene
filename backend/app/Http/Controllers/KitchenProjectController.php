@@ -52,8 +52,8 @@ class KitchenProjectController extends Controller
             'modules.*.height'      => 'required|integer|min:1|max:500',
             'modules.*.width'       => 'required|integer|min:1|max:500',
             'modules.*.depth'       => 'required|integer|min:1|max:200',
-            'modules.*.x'           => 'required|integer',
-            'modules.*.z'           => 'required|integer',
+            'modules.*.x'           => 'required|numeric',
+            'modules.*.z'           => 'required|numeric',
             'modules.*.rotation'    => ['required', Rule::in([0, 90, 180, 270])],
             'modules.*.options'     => 'required|array',
         ]);
@@ -149,8 +149,8 @@ class KitchenProjectController extends Controller
             'modules.*.height'      => 'required|integer|min:1|max:500',
             'modules.*.width'       => 'required|integer|min:1|max:500',
             'modules.*.depth'       => 'required|integer|min:1|max:200',
-            'modules.*.x'           => 'required|integer',
-            'modules.*.z'           => 'required|integer',
+            'modules.*.x'           => 'required|numeric',
+            'modules.*.z'           => 'required|numeric',
             'modules.*.rotation'    => ['required', Rule::in([0, 90, 180, 270])],
             'modules.*.options'     => 'required|array',
         ]);

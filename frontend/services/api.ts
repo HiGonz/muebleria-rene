@@ -127,8 +127,13 @@ function mapKitchenPayload(draft: KitchenDraft) {
       height: m.dimensions.height,
       width: m.dimensions.width,
       depth: m.dimensions.depth,
-      x: Math.round(m.x),
-      z: Math.round(m.z),
+      // 2-decimal precision, not whole cm — rounding each module's position
+      // independently to a whole centimeter let two cabinets that were
+      // snapped exactly flush (see snapToNeighbor) drift up to ~1cm apart
+      // after a save/reload, since each one's rounding could go a different
+      // direction. Still rounds off float noise from the drag math itself.
+      x: Math.round(m.x * 100) / 100,
+      z: Math.round(m.z * 100) / 100,
       rotation: m.rotation,
       options: m.options,
     })),

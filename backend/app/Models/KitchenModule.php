@@ -26,8 +26,11 @@ class KitchenModule extends Model
         'height'   => 'integer',
         'width'    => 'integer',
         'depth'    => 'integer',
-        'x'        => 'integer',
-        'z'        => 'integer',
+        // Not integer — see the widen_kitchen_modules_position_precision
+        // migration: a module snapped flush against a neighbor needs
+        // sub-centimeter precision to stay flush through a save/reload.
+        'x'        => 'float',
+        'z'        => 'float',
         'rotation' => 'integer',
     ];
 
