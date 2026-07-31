@@ -1685,12 +1685,56 @@ export function calculateKitchenMaterials(modules: KitchenModule[]): { lines: Ki
   // their own unique wallKey from addCountertop, so they never merge with
   // anything and always land as a single-segment run.
   const M_TO_FT = 1 / 0.3048;
-  const COUNTERTOP_UNIT_FT = 6;
+  // Stock countertop lengths the shop actually carries. Largest first so
+  // that, when two combinations tie on total waste, pickCountertopStock's
+  // tie-break (fewest pieces) also prefers fewer, longer pieces over more,
+  // shorter ones — same "reach for the big piece first" instinct the old
+  // 6'/12'-only version had.
+  const COUNTERTOP_STOCK_LENGTHS_FT = [12, 10, 8, 6, 4];
   const WALL_GAP_TOLERANCE_M = 0.02;
   const WALL_LABELS: Record<number, string> = { 0: "Norte", 90: "Oeste", 180: "Sur", 270: "Este" };
   const fmtFt = (n: number) => {
     const rounded = Math.round(n * 10) / 10;
     return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
+  };
+
+  // Cheapest way to cover neededFt of countertop from COUNTERTOP_STOCK_LENGTHS_FT
+  // stock pieces: smallest total footage (that's what's billed) that's >=
+  // neededFt, breaking ties toward fewer pieces. Plain unbounded-coin-change
+  // DP over whole feet — stock lengths are all even, so every even total
+  // from 4' up is reachable and the search below never runs off the end of
+  // the table.
+  const pickCountertopStock = (neededFt: number): { totalFt: number; pieces: { length: number; count: number }[] } => {
+    // Tiny epsilon guards against a length that's meant to land exactly on a
+    // stock-length boundary reading as e.g. 12.0000001' from float
+    // conversion and rounding up to an extra, unnecessary piece.
+    const target = Math.ceil(neededFt - 1e-9);
+    const maxLen = Math.max(...COUNTERTOP_STOCK_LENGTHS_FT);
+    const maxSum = target + maxLen;
+    const minPieces = new Array(maxSum + 1).fill(Infinity);
+    const usedLength = new Array(maxSum + 1).fill(0);
+    minPieces[0] = 0;
+    for (let s = 1; s <= maxSum; s++) {
+      for (const len of COUNTERTOP_STOCK_LENGTHS_FT) {
+        if (len <= s && minPieces[s - len] + 1 < minPieces[s]) {
+          minPieces[s] = minPieces[s - len] + 1;
+          usedLength[s] = len;
+        }
+      }
+    }
+    let totalFt = Math.max(target, 0);
+    while (totalFt <= maxSum && !Number.isFinite(minPieces[totalFt])) totalFt++;
+    const countByLength = new Map<number, number>();
+    let remaining = totalFt;
+    while (remaining > 0) {
+      const len = usedLength[remaining];
+      countByLength.set(len, (countByLength.get(len) ?? 0) + 1);
+      remaining -= len;
+    }
+    const pieces = COUNTERTOP_STOCK_LENGTHS_FT
+      .filter((len) => countByLength.has(len))
+      .map((len) => ({ length: len, count: countByLength.get(len)! }));
+    return { totalFt, pieces };
   };
 
   const segmentsByGroup = new Map<string, CountertopSegment[]>();
@@ -1744,17 +1788,9 @@ export function calculateKitchenMaterials(modules: KitchenModule[]): { lines: Ki
 
   for (const { label, pricePerM2, meters, rotation, moduleLabel } of countertopRuns) {
     const neededFt = meters * M_TO_FT;
-    // Tiny epsilon guards against a length that's meant to land exactly on a
-    // 6'/12' boundary reading as e.g. 12.0000001' from float conversion and
-    // rounding up to an extra, unnecessary piece.
-    const sixUnits = Math.ceil(neededFt / COUNTERTOP_UNIT_FT - 1e-9);
-    const twelves = Math.floor(sixUnits / 2);
-    const sixes = sixUnits % 2;
-    const totalFt = sixUnits * COUNTERTOP_UNIT_FT;
+    const { totalFt, pieces: stockPieces } = pickCountertopStock(neededFt);
     const wasteFt = totalFt - neededFt;
-    const pieces: string[] = [];
-    if (twelves > 0) pieces.push(`${twelves} ${twelves === 1 ? "pieza" : "piezas"} de 12'`);
-    if (sixes > 0) pieces.push(`${sixes} ${sixes === 1 ? "pieza" : "piezas"} de 6'`);
+    const pieces = stockPieces.map(({ length, count }) => `${count} ${count === 1 ? "pieza" : "piezas"} de ${length}'`);
     const pricePerFt = pricePerM2 * STANDARD_COUNTERTOP_DEPTH_M * 0.3048; // $/m² · m(depth) = $/linear m → $/linear ft
     let wallSuffix = "";
     if ((runsPerLabel.get(label) ?? 0) > 1) {
