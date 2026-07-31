@@ -111,17 +111,40 @@ function boxesOverlap(a: ReturnType<typeof moduleBox>, b: ReturnType<typeof modu
   );
 }
 
+// Vertical extent (meters) a module's cabinet body actually occupies. Wall
+// band modules (see placementBand) start at their own mountHeight — not
+// necessarily the catalog default of 144 — rather than the floor, which is
+// what lets a "puente" cabinet or a corona_luz sit directly above a regular
+// upper at the same x/z: their footprints overlap in plan view, but their
+// bodies don't actually occupy the same space in the room.
+function moduleYRange(mod: KitchenModule): { minY: number; maxY: number } {
+  const isWallMounted = mod.category === "upper" || mod.type === "gabinete_superior_esquinero_puertas";
+  const minY = isWallMounted ? (mod.options.mountHeight || 144) / 100 : 0;
+  return { minY, maxY: minY + mod.dimensions.height / 100 };
+}
+
+function yRangesOverlap(a: { minY: number; maxY: number }, b: { minY: number; maxY: number }): boolean {
+  return a.minY < b.maxY - OVERLAP_TOLERANCE_M && a.maxY > b.minY + OVERLAP_TOLERANCE_M;
+}
+
 // Returns the first same-band module a candidate placement would overlap, or
 // null if it's clear. Position/rotation are explicit (not read from `mod`) so
-// a drag/nudge target can be checked before committing it to the store.
+// a drag/nudge target can be checked before committing it to the store. Two
+// same-band modules only count as colliding if their footprints AND their
+// vertical extents overlap — same-band alone isn't enough once mountHeight
+// lets two wall-mounted modules (e.g. a base upper row and a bridge/"puente"
+// row above it) share x/z at different heights.
 function findOverlap(mod: KitchenModule, x: number, z: number, rotation: KitchenModule["rotation"], modules: KitchenModule[]): KitchenModule | null {
   const band = placementBand(mod);
   if (!band) return null;
   const candidate = moduleBox(mod, x, z, rotation);
+  const candidateYRange = moduleYRange(mod);
   for (const other of modules) {
     if (other.id === mod.id || placementBand(other) !== band) continue;
     const otherBox = moduleBox(other, other.x / 100, other.z / 100, other.rotation);
-    if (boxesOverlap(candidate, otherBox)) return other;
+    if (!boxesOverlap(candidate, otherBox)) continue;
+    if (!yRangesOverlap(candidateYRange, moduleYRange(other))) continue;
+    return other;
   }
   return null;
 }
