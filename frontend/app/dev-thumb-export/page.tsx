@@ -34,7 +34,7 @@ export default function DevThumbExport() {
         });
       }
       setIndex((i) => i + 1);
-    }, 1500);
+    }, 3000);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [index]);

@@ -1129,6 +1129,86 @@ function AereoHuecoInferiorMesh({ module, wireframe = false, onSelect }: {
   );
 }
 
+// ─── Cajón con hueco superior — a lower cabinet split evenly in half: one
+// drawer at the bottom, a fully open cubby above it (no shelf, no door) —
+// the mirror image of AereoHuecoInferiorMesh's open-below/closed-above
+// split, but for a floor cabinet (toe-kick + countertop instead of neither).
+function CajonHuecoSuperiorMesh({ module, wireframe = false, onSelect }: {
+  module: KitchenModule; wireframe?: boolean; onSelect?: () => void;
+}) {
+  const W = module.dimensions.width / 100;
+  const H = module.dimensions.height / 100;
+  const D = module.dimensions.depth / 100;
+  const color = module.options.color || "#d4c5b0";
+  const exteriorColor = module.options.exteriorColor || color;
+  const exteriorMap = getWoodTexture(module.options.exteriorTexture);
+  const exteriorRoughness = getWoodRoughness(module.options.exteriorTexture);
+  const leftColor = module.options.leftSidePanel === "ninguno" || module.options.leftSidePanel === "lambrin" ? null : module.options.leftSidePanel === "exterior" ? exteriorColor : color;
+  const rightColor = module.options.rightSidePanel === "ninguno" || module.options.rightSidePanel === "lambrin" ? null : module.options.rightSidePanel === "exterior" ? exteriorColor : color;
+  const leftMap = module.options.leftSidePanel === "exterior" ? exteriorMap : null;
+  const rightMap = module.options.rightSidePanel === "exterior" ? exteriorMap : null;
+
+  const toeKick = module.options.hasToeKick ? module.options.toeKickHeight / 100 : 0;
+  const ctThick = module.options.includesCountertop ? module.options.countertopThickness / 100 : 0;
+  const ctOverhang = (module.options.countertopOverhang || 2) / 100;
+  const ctColorMap: Record<string, string> = {
+    "Granito natural": "#5c5c5c", "Granito reconstituido": "#7a7a7a", "Cuarzo engineered": "#e8e0d4",
+    "Mármol": "#f0ece4", "Acero inoxidable": "#b0b0b0", "Postformado": "#c8b89a", "Cemento pulido": "#909090", "Corian": "#efe8dc",
+  };
+  const ctColor = module.options.countertopColor || ctColorMap[module.options.countertopMaterial] || "#8e8070";
+  const ctTextureId = module.options.countertopTexture !== "ninguna" ? module.options.countertopTexture : undefined;
+  const ctMap = ctTextureId ? getWoodTexture(ctTextureId) : null;
+  const ctRoughness = ctTextureId ? getWoodRoughness(ctTextureId) : 0.35;
+  const ctMetalness = ctTextureId ? 0.04 : 0.08;
+
+  // Same usable-height budget every other zone split in this file uses
+  // (toe-kick/countertop/top-reveal excluded), just cut evenly in two
+  // instead of sized per drawer/door count.
+  const topMarginH = TOP_FACE_MARGIN_CM / 100;
+  const usableH = Math.max(H - toeKick - ctThick - topMarginH, 0);
+  const zoneH = usableH / 2;
+  const dividerY = toeKick + T + zoneH;
+  const dividerColor = shiftColor(color, -0.04);
+
+  const drawerDef: DrawerDef = {
+    id: "chs-d0", label: "Cajón 1", heightCm: zoneH * 100, fromBottomCm: 0, isGhost: false,
+    widthPct: 100, offsetPct: 0, drawerSystem: module.options.drawerSystem,
+  };
+
+  return (
+    <group>
+      <Carcass W={W} H={H} D={D} color={color} leftColor={leftColor} rightColor={rightColor} leftMap={leftMap} rightMap={rightMap} hasTop={ctThick === 0} wireframe={wireframe} />
+      {/* Divider between the drawer zone (bottom) and the open cubby above */}
+      <Box pos={[0, dividerY, 0]} size={[W - T * 2, T, D]} color={dividerColor} wireframe={wireframe} />
+      {module.options.leftSidePanel === "lambrin" && (
+        <LambrinPanel pos={[-W / 2 + T / 2, H / 2, 0]} faceW={D} faceH={H} horizontal={false} outward={-1} color={exteriorColor} map={exteriorMap} roughness={exteriorRoughness} wireframe={wireframe} />
+      )}
+      {module.options.rightSidePanel === "lambrin" && (
+        <LambrinPanel pos={[W / 2 - T / 2, H / 2, 0]} faceW={D} faceH={H} horizontal={false} outward={1} color={exteriorColor} map={exteriorMap} roughness={exteriorRoughness} wireframe={wireframe} />
+      )}
+      {module.options.leftSidePanel !== "exterior" && (
+        <SideFiller side="left" W={W} H={H} D={D} color={exteriorColor} map={exteriorMap} roughness={exteriorRoughness} wireframe={wireframe} />
+      )}
+      {module.options.rightSidePanel !== "exterior" && (
+        <SideFiller side="right" W={W} H={H} D={D} color={exteriorColor} map={exteriorMap} roughness={exteriorRoughness} wireframe={wireframe} />
+      )}
+      {toeKick > 0 && (
+        <ToeKick W={W} D={D} height={toeKick} color={exteriorColor} map={exteriorMap} roughness={exteriorRoughness} aluminum={module.options.zocaloMaterial === "Aluminio"} wireframe={wireframe} />
+      )}
+      {ctThick > 0 && (
+        <Countertop
+          W={W} H={H} D={D} ctThick={ctThick} ctOverhang={ctOverhang} hasSink={false}
+          ctColor={ctColor} ctMap={ctMap} ctRoughness={ctRoughness} ctMetalness={ctMetalness} wireframe={wireframe}
+        />
+      )}
+      <DrawerFace
+        drawer={drawerDef} W={W} D={D} toeKick={toeKick} color={exteriorColor} map={exteriorMap} roughness={exteriorRoughness}
+        hardware={module.options.hardwareFinish} wireframe={wireframe} onSelect={onSelect} interiorColor={color}
+      />
+    </group>
+  );
+}
+
 // ─── Librero giratorio con espejo — fixed gray housing framing a second,
 // separate body that spins 180° on a vertical axis through its own center.
 // The housing's DEPTH sizes the rotating unit's front-facing WIDTH (has to
@@ -1542,6 +1622,12 @@ export function CabinetMesh({ module, wireframe = false, onSelect }: {
   // Two doors covering only the top zone, open cubby zone below.
   if (module.type === "aereo_hueco_inferior") {
     return <AereoHuecoInferiorMesh module={module} wireframe={wireframe} onSelect={onSelect} />;
+  }
+
+  // One drawer at the bottom, open cubby above it — the floor-cabinet
+  // mirror image of aereo_hueco_inferior.
+  if (module.type === "cajon_hueco_superior") {
+    return <CajonHuecoSuperiorMesh module={module} wireframe={wireframe} onSelect={onSelect} />;
   }
 
   // Fixed gray housing + a separate body that spins 180° between a shelf

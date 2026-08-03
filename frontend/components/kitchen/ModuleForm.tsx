@@ -218,31 +218,6 @@ export function ModuleForm({ module, onChange }: Props) {
                 <NumInput value={opt.shelves} onChange={(v) => updateOpt("shelves", v)} min={0} max={10} />
               </FieldGroup>
             )}
-            <FieldGroup label="Estilo de puerta">
-              <SelectInput
-                value={opt.doorStyle}
-                onChange={(v) => updateOpt("doorStyle", v)}
-                options={[
-                  { value: "Lisa", label: "Lisa" },
-                  { value: "Marco y panel", label: "Marco y panel" },
-                  { value: "Vidrio esmerilado", label: "Vidrio esmerilado" },
-                  { value: "Vidrio transparente", label: "Vidrio transparente" },
-                  { value: "Sin puerta", label: "Sin puerta (abierto)" },
-                ]}
-              />
-            </FieldGroup>
-            <FieldGroup label="Sistema de cajón">
-              <SelectInput
-                value={opt.drawerSystem}
-                onChange={(v) => updateOpt("drawerSystem", v)}
-                options={[
-                  { value: "Simple", label: "Simple" },
-                  { value: "Extracción total", label: "Extracción total" },
-                  { value: "Soft-close", label: "Soft-close" },
-                  { value: "Con frente decorativo", label: "Con frente decorativo" },
-                ]}
-              />
-            </FieldGroup>
             <FieldGroup label="Herrajes">
               <SelectInput
                 value={opt.hardwareFinish}
@@ -321,16 +296,6 @@ export function ModuleForm({ module, onChange }: Props) {
           <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-zinc-500">Cubierta / Encimera</p>
           <CountertopFields opt={opt} updateOpt={updateOpt} />
           {(type === "cubierta_tarja") && <SinkFields opt={opt} updateOpt={updateOpt} />}
-          {(type === "isla_central" || type === "peninsula" || type === "barra_desayunadora") && (
-            <div className="mt-3 grid grid-cols-2 gap-3">
-              <Toggle checked={opt.hasBacksplash} onChange={(v) => updateOpt("hasBacksplash", v)} label="Salpicadero / Respaldo" />
-              {opt.hasBacksplash && (
-                <FieldGroup label="Alto salpicadero">
-                  <NumInput value={opt.backsplashHeight} onChange={(v) => updateOpt("backsplashHeight", v)} min={10} max={120} unit="cm" />
-                </FieldGroup>
-              )}
-            </div>
-          )}
         </div>
       )}
 

@@ -46,13 +46,6 @@ const DOOR_ACCESSORY_OPTIONS: { value: "" | PullOutAccessoryType; label: string 
   ...(Object.entries(PULL_OUT_ACCESSORY_LABELS) as [PullOutAccessoryType, string][]).map(([value, label]) => ({ value, label })),
 ];
 
-const BACKSPLASH_MATERIAL_OPTIONS: { value: ModOptions["backsplashMaterial"]; label: string }[] = [
-  { value: "Azulejo", label: "Azulejo" },
-  { value: "Piedra", label: "Piedra" },
-  { value: "Vidrio", label: "Vidrio" },
-  { value: "WPC mármol", label: "WPC mármol" },
-];
-
 const DOOR_HINGE_OPTIONS: { value: "izquierda" | "derecha"; label: string }[] = [
   { value: "izquierda", label: "Izquierda (abre a la izquierda)" },
   { value: "derecha", label: "Derecha (abre a la derecha)" },
@@ -240,6 +233,11 @@ export function ModuleInspector() {
   // doors/drawers/countertop concept, so those generic sections are skipped
   // in favor of its own "Iluminación" section below.
   const isLightCrown = type === "corona_luz";
+  // Cajón con hueco superior has its own dedicated mesh (CajonHuecoSuperiorMesh)
+  // with a fixed single drawer and a fixed open cubby above it — doors/
+  // drawers/shelves counts and drawer-zone height aren't read by that mesh
+  // at all, so those fields would silently do nothing if shown.
+  const isFixedDrawerHueco = type === "cajon_hueco_superior";
   const showHeightField = !(isCountertop && type === "cubierta");
   // Cabinets can optionally carry their own built-in countertop; standalone
   // countertop modules (cubierta, isla, etc.) always are one, so there's
@@ -467,31 +465,12 @@ export function ModuleInspector() {
           </>
         )}
 
-        {/* ── Salpicadera (backsplash) — muebles bajos y esquineros ──────── */}
-        {isLower && (
-          <Section label="Salpicadera">
-            <label className="mb-3 flex items-center gap-2 text-sm text-ivory/85">
-              <input type="checkbox" checked={opt.hasBacksplash} onChange={(e) => updateOpt("hasBacksplash", e.target.checked)} className="h-4 w-4 rounded border-ivory/20 bg-ivory/5" />
-              Llevar salpicadera entre la cubierta y las alacenas
-            </label>
-            {opt.hasBacksplash && (
-              <div className="grid grid-cols-2 gap-3">
-                <FieldGroup label="Material">
-                  <SelectInput value={opt.backsplashMaterial} onChange={(v) => updateOpt("backsplashMaterial", v)} options={BACKSPLASH_MATERIAL_OPTIONS} />
-                </FieldGroup>
-                <FieldGroup label="Altura">
-                  <NumInput value={opt.backsplashHeight} onChange={(v) => updateOpt("backsplashHeight", v)} min={10} max={120} unit="cm" />
-                </FieldGroup>
-              </div>
-            )}
-          </Section>
-        )}
 
         {/* ── Doors & Drawers (smart per type) ─────────────────────────── */}
         {(isLower || isUpper || isTower) && !isLightCrown && (
           <Section label={isCajonera ? "Cajones" : "Puertas y cajones"}>
             <div className="grid grid-cols-2 gap-3">
-              {!isCajonera && (
+              {!isCajonera && !isFixedDrawerHueco && (
                 <FieldGroup label="Núm. puertas">
                   <div className="space-y-1.5">
                     <QuickCountButtons value={opt.doors} options={[1, 2]} onChange={(v) => updateOpt("doors", v)} />
@@ -499,9 +478,11 @@ export function ModuleInspector() {
                   </div>
                 </FieldGroup>
               )}
-              <FieldGroup label="Núm. cajones">
-                <NumInput value={opt.drawers} onChange={(v) => updateOpt("drawers", v)} min={0} max={8} />
-              </FieldGroup>
+              {!isFixedDrawerHueco && (
+                <FieldGroup label="Núm. cajones">
+                  <NumInput value={opt.drawers} onChange={(v) => updateOpt("drawers", v)} min={0} max={8} />
+                </FieldGroup>
+              )}
               {!isCajonera && opt.doors > 0 && opt.drawers > 0 && (
                 <FieldGroup label="Altura de cajones">
                   <NumInput
@@ -513,38 +494,11 @@ export function ModuleInspector() {
                   />
                 </FieldGroup>
               )}
-              {!isCajonera && (
+              {!isCajonera && !isFixedDrawerHueco && (
                 <FieldGroup label="Repisas">
                   <NumInput value={opt.shelves} onChange={(v) => updateOpt("shelves", v)} min={0} max={10} />
                 </FieldGroup>
               )}
-              {!isCajonera && (
-                <FieldGroup label="Estilo de puerta">
-                  <SelectInput
-                    value={opt.doorStyle}
-                    onChange={(v) => updateOpt("doorStyle", v)}
-                    options={[
-                      { value: "Lisa", label: "Lisa" },
-                      { value: "Marco y panel", label: "Marco y panel" },
-                      { value: "Vidrio esmerilado", label: "Vidrio esmerilado" },
-                      { value: "Vidrio transparente", label: "Vidrio transparente" },
-                      { value: "Sin puerta", label: "Sin puerta (abierto)" },
-                    ]}
-                  />
-                </FieldGroup>
-              )}
-              <FieldGroup label="Estilo de cajón">
-                <SelectInput
-                  value={opt.drawerSystem}
-                  onChange={(v) => updateOpt("drawerSystem", v)}
-                  options={[
-                    { value: "Simple", label: "Simple" },
-                    { value: "Extracción total", label: "Extracción total" },
-                    { value: "Soft-close", label: "Soft-close" },
-                    { value: "Con frente decorativo", label: "Con frente decorativo" },
-                  ]}
-                />
-              </FieldGroup>
               <FieldGroup label="Herrajes">
                 <SelectInput
                   value={opt.hardwareFinish}
