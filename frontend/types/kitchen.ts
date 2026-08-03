@@ -10,6 +10,7 @@ export type ModuleCategory =
 
 // ─── Module Types ──────────────────────────────────────────────────────────────
 export type LowerModuleType =
+  | "hueco_bajo_repisa"
   | "cajonera"
   | "bajo_tarja"
   | "bajo_estufa"

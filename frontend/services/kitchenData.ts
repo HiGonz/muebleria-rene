@@ -291,6 +291,21 @@ export const PULL_OUT_ACCESSORY_LABELS: Record<PullOutAccessoryType, string> = {
 // ─── Module Catalog ────────────────────────────────────────────────────────────
 export const MODULE_CATALOG: ModuleCatalogEntry[] = [
   // ── MUEBLES BAJOS ──────────────────────────────────────────────────────────
+  // Angosto y totalmente abierto — sin puertas ni cajones, una sola repisa
+  // partiendo su altura a la mitad. Reutiliza CabinetMesh sin cambios: con
+  // doors:0/drawers:0 no se renderan frentes (getEffectiveDoors/Drawers
+  // devuelven []), y Shelves ya centra una repisa única a medio camino entre
+  // el zócalo y la cubierta.
+  {
+    type: "hueco_bajo_repisa",
+    category: "lower",
+    label: "Hueco con Repisa",
+    description: "Mueble bajo angosto y abierto, sin puertas ni cajones, con una sola repisa a la mitad de su altura",
+    icon: "🗂️",
+    defaultDimensions: { height: 90, width: 20, depth: 60 },
+    defaultOptions: { drawers: 0, doors: 0, shelves: 1 },
+    configurableFields: ["height", "width", "depth", "doors", "drawers", "shelves", "includesCountertop", "countertopMaterial", "hardwareFinish", "boardMaterial", "color"],
+  },
   {
     type: "cajonera",
     category: "lower",
