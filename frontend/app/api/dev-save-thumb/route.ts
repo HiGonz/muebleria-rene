@@ -5,6 +5,12 @@ import { writeFile } from "fs/promises";
 import path from "path";
 
 export async function POST(req: NextRequest) {
+  // Writes to the app's own filesystem — must never be reachable once
+  // deployed, unlike the page it's paired with (that one's just an inert
+  // React tree with no effect if nobody opens it).
+  if (process.env.NODE_ENV === "production") {
+    return NextResponse.json({ error: "not available in production" }, { status: 404 });
+  }
   const { type, dataUrl } = await req.json();
   if (!/^[a-z0-9_]+$/.test(type)) {
     return NextResponse.json({ error: "bad type" }, { status: 400 });
