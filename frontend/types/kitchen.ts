@@ -12,6 +12,7 @@ export type ModuleCategory =
 export type LowerModuleType =
   | "hueco_bajo_repisa"
   | "gabinete_bajo_puerta_simple"
+  | "gabinete_bajo_puerta_jalable"
   | "cajonera"
   | "bajo_tarja"
   | "bajo_estufa"

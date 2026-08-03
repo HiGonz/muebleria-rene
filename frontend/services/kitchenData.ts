@@ -317,6 +317,16 @@ export const MODULE_CATALOG: ModuleCatalogEntry[] = [
     configurableFields: ["height", "width", "depth", "doors", "shelves", "doorStyle", "includesCountertop", "countertopMaterial", "hardwareFinish", "boardMaterial", "color"],
   },
   {
+    type: "gabinete_bajo_puerta_jalable",
+    category: "lower",
+    label: "Gabinete Bajo con Puerta Jalable",
+    description: "Mueble bajo de una puerta que se jala como cajón (sobre rieles), con jaladera superior y dos repisas internas que se deslizan con la puerta",
+    icon: "📥",
+    defaultDimensions: { height: 90, width: 60, depth: 60 },
+    defaultOptions: { drawers: 0, doors: 1, shelves: 2, doorStyle: "Lisa", doorPullOut: [true] },
+    configurableFields: ["height", "width", "depth", "doors", "shelves", "doorStyle", "includesCountertop", "countertopMaterial", "hardwareFinish", "boardMaterial", "color"],
+  },
+  {
     type: "cajonera",
     category: "lower",
     label: "Cajonera",

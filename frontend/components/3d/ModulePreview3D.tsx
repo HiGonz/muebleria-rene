@@ -200,13 +200,21 @@ function Carcass({ W, H, D, color, leftColor, rightColor, leftMap, rightMap, has
 }
 
 // ─── Shelves (interior, evenly spaced between floor and top panel) ───────────
-function Shelves({ W, H, D, count, toeKick, ctThick, color, wireframe = false }: {
+function Shelves({ W, H, D, count, toeKick, ctThick, color, wireframe = false, zoneHeightM }: {
   W: number; H: number; D: number; count: number; toeKick: number; ctThick: number; color: string; wireframe?: boolean;
+  // Confines the shelf grid to a shorter interior zone than the full
+  // carcass — used when a door's own opening is shorter than the cabinet
+  // because drawers are stacked above it (see getEffectiveDoors/
+  // resolveDrawerZoneHeight). Without it, shelves spaced evenly across the
+  // whole height land partly behind the drawer boxes, reading as one
+  // cramped gap and one oversized one instead of even spacing behind the
+  // door. Omit for the normal case (shelves span the full cavity).
+  zoneHeightM?: number;
 }) {
   if (count <= 0) return null;
   const iW = W - T * 2;
   const bottomY = toeKick + T;
-  const topY = H - ctThick - T;
+  const topY = zoneHeightM !== undefined ? bottomY + zoneHeightM : H - ctThick - T;
   const usableH = Math.max(topY - bottomY, 0);
   const shelfColor = shiftColor(color, -0.04);
   return (
@@ -984,9 +992,18 @@ function PullOutLarderDoor({
           wireframe={wireframe}
         />
       </mesh>
-      {/* A centered horizontal pull — no hinge side to bias it toward on a sliding front */}
+      {/* Near the top edge, not centered — no hinge side to bias it toward on a
+          sliding front, and a top pull reads as "grab here to slide out" the
+          way a real jalable larder door's handle does. Clamped so a very
+          short door never pushes it past its own center. */}
       {!wireframe && handleLook && (
-        <Box pos={[0, 0, 0.012]} size={[dW * 0.5, 0.008, 0.006]} color={handleLook.color} roughness={handleLook.roughness} metalness={handleLook.metalness} />
+        <Box
+          pos={[0, Math.max(dH / 2 - 0.04, 0), 0.012]}
+          size={[dW * 0.5, 0.008, 0.006]}
+          color={handleLook.color}
+          roughness={handleLook.roughness}
+          metalness={handleLook.metalness}
+        />
       )}
       {accessory ? (
         <group position={[0, 0, shelfZ]}>
@@ -1581,7 +1598,10 @@ export function CabinetMesh({ module, wireframe = false, onSelect }: {
           fixed shelves with it — see PullOutLarderDoor — so they're skipped
           here to avoid a duplicate, non-sliding set floating in the carcass. */}
       {!isStoveCabinet && !doors.some((d) => d.pullOut && !d.pullOutAccessory) && module.options.shelves > 0 && (
-        <Shelves W={W} H={H} D={D} count={module.options.shelves} toeKick={toeKick} ctThick={ctThick} color={color} wireframe={wireframe} />
+        <Shelves
+          W={W} H={H} D={D} count={module.options.shelves} toeKick={toeKick} ctThick={ctThick} color={color} wireframe={wireframe}
+          zoneHeightM={drawers.length > 0 && doors.length > 0 ? doors[0].heightCm / 100 : undefined}
+        />
       )}
       {!isStoveCabinet && ctThick > 0 && (
         <Countertop
