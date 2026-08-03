@@ -1,33 +1,88 @@
 "use client";
 
 import { useState } from "react";
-import { MODULE_CATALOG, CATEGORY_LABELS, CATEGORY_ICONS, getModulesByCategory } from "@/services/kitchenData";
+import { ChevronLeft } from "lucide-react";
+import { MODULE_CATALOG } from "@/services/kitchenData";
 import { useKitchenStore } from "@/store/useKitchenStore";
 import { useCatalogThumbnails } from "./CatalogThumbnails";
-import type { ModuleCategory } from "@/types/kitchen";
+import type { KitchenModuleType, ModuleCatalogEntry } from "@/types/kitchen";
 
-const CATEGORIES: ModuleCategory[] = ["lower", "upper", "tower", "corner", "countertop", "appliance", "accessory"];
+// Purely a navigation grouping for this panel's landing screen — distinct
+// from ModuleCategory (the data model stored on every module, used by the
+// store/backend/3D renderer). Keeping it local means we can reshuffle how
+// modules are browsed without touching anything that depends on the real
+// category. "Mesas y sillas" has no catalog entries yet (no table/chair
+// module types exist) — it's a placeholder group until those are added.
+//
+// Matching by ModuleCategory alone isn't precise enough for two groups:
+// the catalog's "appliance" category is actually built-in niches/cutouts
+// (nicho_refrigerador, espacio_lavavajillas, etc.), while the free-standing
+// appliances themselves (tarja, estufa, refrigerador...) are tagged
+// "accessory" alongside unrelated hardware/panels/organizers. So
+// "Electrodoméstico" and "Otros" list their member types explicitly to
+// split that category correctly instead of taking it whole.
+const APPLIANCE_ITEM_TYPES: KitchenModuleType[] = [
+  "tarja", "parrilla", "estufa", "refrigerador", "microondas", "lavavajillas", "campana_extractora",
+];
+const OTHER_ACCESSORY_TYPES: KitchenModuleType[] = [
+  "herrajes", "panel_lateral", "panel_remate", "panel_decorativo", "organizador_especias", "cubertero", "especiero_aluminio",
+];
+
+interface SelectorGroup {
+  id: string;
+  label: string;
+  icon: string;
+  match: (entry: ModuleCatalogEntry) => boolean;
+}
+
+const SELECTOR_GROUPS: SelectorGroup[] = [
+  { id: "armario_bajo", label: "Armario Bajo", icon: "🗄️", match: (e) => e.category === "lower" },
+  { id: "armario_pared", label: "Armario de pared", icon: "📦", match: (e) => e.category === "upper" },
+  { id: "armario_esquina", label: "Armario de Esquina", icon: "📐", match: (e) => e.category === "corner" },
+  { id: "armarios_altos", label: "Armarios altos", icon: "🏗️", match: (e) => e.category === "tower" },
+  { id: "electrodomestico", label: "Electrodoméstico", icon: "⚡", match: (e) => e.category === "appliance" || APPLIANCE_ITEM_TYPES.includes(e.type) },
+  { id: "mesas_sillas", label: "Mesas y sillas", icon: "🍽️", match: () => false },
+  { id: "otros", label: "Otros", icon: "🔩", match: (e) => e.category === "countertop" || OTHER_ACCESSORY_TYPES.includes(e.type) },
+];
 
 export function ModuleSelector() {
-  const { addModule, closeSelector, selectorCategory, setSelectorCategory } = useKitchenStore();
+  const { addModule, closeSelector } = useKitchenStore();
   const [search, setSearch] = useState("");
+  const [group, setGroup] = useState<SelectorGroup | null>(null);
   const { thumbs } = useCatalogThumbnails();
 
-  const category = selectorCategory;
-  const modules = category ? getModulesByCategory(category) : MODULE_CATALOG;
-  const filtered = search.trim()
-    ? modules.filter((m) => m.label.toLowerCase().includes(search.toLowerCase()) || m.description.toLowerCase().includes(search.toLowerCase()))
-    : modules;
+  const searching = search.trim().length > 0;
+  const showLanding = !searching && !group;
+  const scopedModules = group ? MODULE_CATALOG.filter(group.match) : MODULE_CATALOG;
+  const filtered = searching
+    ? scopedModules.filter((m) => m.label.toLowerCase().includes(search.toLowerCase()) || m.description.toLowerCase().includes(search.toLowerCase()))
+    : scopedModules;
 
   return (
     <div className="flex h-full flex-col">
       {/* Header */}
       <div className="flex items-center justify-between px-5 py-4 border-b border-ivory/8">
-        <h2 className="font-display text-base font-semibold text-ivory">Agregar módulo</h2>
+        <div className="flex items-center gap-1.5">
+          {group && (
+            <button
+              onClick={() => setGroup(null)}
+              aria-label="Volver a categorías"
+              title="Volver a categorías"
+              className="-ml-1.5 rounded-lg p-1 text-warmgray hover:bg-ivory/8 hover:text-ivory transition-colors"
+            >
+              <ChevronLeft size={18} />
+            </button>
+          )}
+          <h2 className="font-display text-base font-semibold text-ivory">
+            {group ? group.label : "Agregar módulo"}
+          </h2>
+        </div>
         <button onClick={closeSelector} className="text-warmgray hover:text-ivory transition-colors text-xl leading-none">&times;</button>
       </div>
 
-      {/* Search */}
+      {/* Search — always searches the whole catalog when nothing is
+          scoped yet (no group open), and narrows within the open group
+          otherwise. */}
       <div className="px-4 pt-3 pb-2">
         <input
           type="search"
@@ -38,52 +93,27 @@ export function ModuleSelector() {
         />
       </div>
 
-      {/* Category tabs */}
-      <div className="flex gap-1 overflow-x-auto px-4 py-2 scrollbar-hide">
-        <button
-          onClick={() => setSelectorCategory(null)}
-          className={`shrink-0 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${!category ? "bg-brass text-ink" : "text-warmgray hover:text-ivory hover:bg-ivory/8"}`}
-        >
-          Todos
-        </button>
-        {CATEGORIES.map((cat) => (
-          <button
-            key={cat}
-            onClick={() => setSelectorCategory(cat)}
-            className={`shrink-0 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${category === cat ? "bg-brass text-ink" : "text-warmgray hover:text-ivory hover:bg-ivory/8"}`}
-          >
-            {CATEGORY_ICONS[cat]} {CATEGORY_LABELS[cat]}
-          </button>
-        ))}
-      </div>
-
-      {/* Module list — real 3D previews, one per row */}
       <div className="flex-1 overflow-y-auto px-4 pb-4">
-        {!search && !category && (
-          // Grouped by category
-          <div className="space-y-5 pt-2">
-            {CATEGORIES.map((cat) => {
-              const catModules = getModulesByCategory(cat);
-              return (
-                <div key={cat}>
-                  <div className="mb-2 flex items-center gap-2">
-                    <span className="text-base">{CATEGORY_ICONS[cat]}</span>
-                    <p className="text-xs font-semibold uppercase tracking-widest text-warmgray">{CATEGORY_LABELS[cat]}</p>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    {catModules.map((entry) => (
-                      <ModuleChip key={entry.type} entry={entry} thumb={thumbs[entry.type]} onAdd={() => addModule(entry.type)} />
-                    ))}
-                  </div>
-                </div>
-              );
-            })}
+        {showLanding ? (
+          // ── Category landing screen — the first thing the + button shows ──
+          <div className="grid grid-cols-2 gap-3 pt-2">
+            {SELECTOR_GROUPS.map((g) => (
+              <button
+                key={g.id}
+                onClick={() => setGroup(g)}
+                className="flex flex-col items-center gap-2 rounded-xl border border-ivory/8 bg-ivory/4 px-3 py-6 text-center transition-all hover:border-brass/50 hover:bg-brass/8 active:scale-[0.97]"
+              >
+                <span className="text-3xl">{g.icon}</span>
+                <span className="text-xs font-semibold text-ivory leading-tight">{g.label}</span>
+              </button>
+            ))}
           </div>
-        )}
-        {(search || category) && (
+        ) : (
           <div className="grid grid-cols-2 gap-2 pt-2">
             {filtered.length === 0 && (
-              <p className="col-span-2 py-8 text-center text-sm text-warmgray">No se encontraron módulos</p>
+              <p className="col-span-2 py-8 text-center text-sm text-warmgray">
+                {group && scopedModules.length === 0 ? "Próximamente" : "No se encontraron módulos"}
+              </p>
             )}
             {filtered.map((entry) => (
               <ModuleChip key={entry.type} entry={entry} thumb={thumbs[entry.type]} onAdd={() => addModule(entry.type)} />

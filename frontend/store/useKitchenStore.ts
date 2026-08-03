@@ -77,7 +77,6 @@ interface KitchenStore {
   projectId: number | null;
   // Panel UI state (not persisted in draft)
   showSelector: boolean;
-  selectorCategory: ModuleCategory | null;
   activeTab: "builder" | "3d" | "summary";
   moveHistory: MoveHistoryEntry[];
 
@@ -125,9 +124,8 @@ interface KitchenStore {
   setEditingModule: (id: string | null) => void;
 
   // Selector panel
-  openSelector: (category?: ModuleCategory) => void;
+  openSelector: () => void;
   closeSelector: () => void;
-  setSelectorCategory: (category: ModuleCategory | null) => void;
 
   // Tab
   setActiveTab: (tab: "builder" | "3d" | "summary") => void;
@@ -144,7 +142,6 @@ export const useKitchenStore = create<KitchenStore>()(
       draft: initialDraft,
       projectId: null,
       showSelector: false,
-      selectorCategory: null,
       activeTab: "3d",
       moveHistory: [],
 
@@ -153,13 +150,13 @@ export const useKitchenStore = create<KitchenStore>()(
         set((s) => ({ draft: { ...s.draft, ...payload } })),
 
       resetDraft: () =>
-        set({ draft: { ...initialDraft }, projectId: null, showSelector: false, selectorCategory: null, activeTab: "3d", moveHistory: [] }),
+        set({ draft: { ...initialDraft }, projectId: null, showSelector: false, activeTab: "3d", moveHistory: [] }),
 
       loadSampleKitchen: (variant = 1) =>
-        set({ draft: buildSampleKitchen(variant), projectId: null, showSelector: false, selectorCategory: null, activeTab: "3d", moveHistory: [] }),
+        set({ draft: buildSampleKitchen(variant), projectId: null, showSelector: false, activeTab: "3d", moveHistory: [] }),
 
       loadProject: (projectId, draft) =>
-        set({ draft, projectId, showSelector: false, selectorCategory: null, activeTab: "3d", moveHistory: [] }),
+        set({ draft, projectId, showSelector: false, activeTab: "3d", moveHistory: [] }),
 
       // ── Module actions ────────────────────────────────────────────────────
       addModule: (type) =>
@@ -472,14 +469,11 @@ export const useKitchenStore = create<KitchenStore>()(
         set((s) => ({ draft: { ...s.draft, editingModuleId: id }, showSelector: id === null ? s.showSelector : false })),
 
       // ── Selector panel ────────────────────────────────────────────────────
-      openSelector: (category) =>
-        set({ showSelector: true, selectorCategory: category ?? null }),
+      openSelector: () =>
+        set({ showSelector: true }),
 
       closeSelector: () =>
         set({ showSelector: false }),
-
-      setSelectorCategory: (category) =>
-        set({ selectorCategory: category }),
 
       // ── Tab ───────────────────────────────────────────────────────────────
       setActiveTab: (tab) => set({ activeTab: tab }),
