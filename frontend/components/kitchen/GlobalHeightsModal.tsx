@@ -4,17 +4,12 @@ import { useState } from "react";
 import { motion } from "framer-motion";
 import { X } from "lucide-react";
 import { useKitchenStore } from "@/store/useKitchenStore";
-import { Input } from "@/components/ui/input";
+import { NumberInput } from "@/components/ui/input";
 
 function NumInput({ value, onChange, min = 0, max = 9999, unit }: {
   value: number; onChange: (v: number) => void; min?: number; max?: number; unit?: string;
 }) {
-  return (
-    <div className="relative">
-      <Input type="number" min={min} max={max} value={value} onChange={(e) => onChange(Number(e.target.value))} />
-      {unit && <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-warmgray">{unit}</span>}
-    </div>
-  );
+  return <NumberInput value={value} onChange={onChange} min={min} max={max} unit={unit} />;
 }
 
 function ApplyButton({ onClick }: { onClick: () => number }) {

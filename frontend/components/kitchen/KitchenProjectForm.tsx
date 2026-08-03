@@ -1,7 +1,7 @@
 "use client";
 
 import { useKitchenStore } from "@/store/useKitchenStore";
-import { Input, Textarea } from "@/components/ui/input";
+import { Input, NumberInput, Textarea } from "@/components/ui/input";
 import { RoomOpeningsEditor } from "./RoomOpeningsEditor";
 
 export function KitchenProjectForm() {
@@ -39,24 +39,15 @@ export function KitchenProjectForm() {
         <div className="grid grid-cols-2 gap-3">
           <label className="space-y-1 text-sm text-ivory/80">
             <span>Ancho</span>
-            <div className="relative">
-              <Input type="number" min={100} max={1500} value={draft.roomWidth} onChange={(e) => updateProject({ roomWidth: Number(e.target.value) })} />
-              <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-warmgray">cm</span>
-            </div>
+            <NumberInput min={100} max={1500} value={draft.roomWidth} onChange={(v) => updateProject({ roomWidth: v })} unit="cm" />
           </label>
           <label className="space-y-1 text-sm text-ivory/80">
             <span>Largo</span>
-            <div className="relative">
-              <Input type="number" min={100} max={1500} value={draft.roomDepth} onChange={(e) => updateProject({ roomDepth: Number(e.target.value) })} />
-              <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-warmgray">cm</span>
-            </div>
+            <NumberInput min={100} max={1500} value={draft.roomDepth} onChange={(v) => updateProject({ roomDepth: v })} unit="cm" />
           </label>
           <label className="space-y-1 text-sm text-ivory/80">
             <span>Altura de techo</span>
-            <div className="relative">
-              <Input type="number" min={200} max={400} value={draft.ceilingHeight} onChange={(e) => updateProject({ ceilingHeight: Number(e.target.value) })} />
-              <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-warmgray">cm</span>
-            </div>
+            <NumberInput min={200} max={400} value={draft.ceilingHeight} onChange={(v) => updateProject({ ceilingHeight: v })} unit="cm" />
           </label>
         </div>
       </div>

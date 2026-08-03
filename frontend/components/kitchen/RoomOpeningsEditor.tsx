@@ -2,7 +2,7 @@
 
 import { Trash2 } from "lucide-react";
 import { useKitchenStore } from "@/store/useKitchenStore";
-import { Input } from "@/components/ui/input";
+import { NumberInput } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import type { WallSide } from "@/types/kitchen";
 
@@ -28,10 +28,7 @@ function SelectInput<T extends string>({ value, onChange, options }: {
 function NumField({ value, onChange, min = 0, max = 999 }: {
   value: number; onChange: (v: number) => void; min?: number; max?: number;
 }) {
-  return (
-    <Input type="number" min={min} max={max} value={value}
-      onChange={(e) => onChange(Number(e.target.value))} className="h-9 text-xs" />
-  );
+  return <NumberInput value={value} onChange={onChange} min={min} max={max} className="h-9 text-xs" />;
 }
 
 // Windows & doors on the room's perimeter walls — rendered as flat markers

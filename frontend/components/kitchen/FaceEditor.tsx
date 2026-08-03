@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import type { KitchenModule, DrawerDef, DoorDef, DrawerSystem, DoorStyle } from "@/types/kitchen";
-import { Input } from "@/components/ui/input";
+import { Input, NumberInput } from "@/components/ui/input";
 import { getEffectiveDrawers, getEffectiveDoors } from "@/components/3d/ModulePreview3D";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -431,16 +431,16 @@ export function FaceEditor({ module, onChange }: FaceEditorProps) {
             <Input value={activeDrawer.label} onChange={(e) => updateDrawer(activeDrawer.id, { label: e.target.value })} className="h-8 text-xs" />
           </FieldRow>
           <FieldRow label="Alto (cm)">
-            <Input type="number" min={1} value={activeDrawer.heightCm} onChange={(e) => updateDrawer(activeDrawer.id, { heightCm: +e.target.value })} className="h-8 text-xs" />
+            <NumberInput min={1} value={activeDrawer.heightCm} onChange={(v) => updateDrawer(activeDrawer.id, { heightCm: v })} className="h-8 text-xs" />
           </FieldRow>
           <FieldRow label="Desde abajo (cm)">
-            <Input type="number" min={0} value={activeDrawer.fromBottomCm} onChange={(e) => updateDrawer(activeDrawer.id, { fromBottomCm: +e.target.value })} className="h-8 text-xs" />
+            <NumberInput min={0} value={activeDrawer.fromBottomCm} onChange={(v) => updateDrawer(activeDrawer.id, { fromBottomCm: v })} className="h-8 text-xs" />
           </FieldRow>
           <FieldRow label="Ancho (%)">
-            <Input type="number" min={1} max={100} value={activeDrawer.widthPct} onChange={(e) => updateDrawer(activeDrawer.id, { widthPct: +e.target.value })} className="h-8 text-xs" />
+            <NumberInput min={1} max={100} value={activeDrawer.widthPct} onChange={(v) => updateDrawer(activeDrawer.id, { widthPct: v })} className="h-8 text-xs" />
           </FieldRow>
           <FieldRow label="Desfase izq (%)">
-            <Input type="number" min={0} max={99} value={activeDrawer.offsetPct} onChange={(e) => updateDrawer(activeDrawer.id, { offsetPct: +e.target.value })} className="h-8 text-xs" />
+            <NumberInput min={0} max={99} value={activeDrawer.offsetPct} onChange={(v) => updateDrawer(activeDrawer.id, { offsetPct: v })} className="h-8 text-xs" />
           </FieldRow>
           <OrientToggle
             value={activeDrawer.orientation ?? "horizontal"}
@@ -465,16 +465,16 @@ export function FaceEditor({ module, onChange }: FaceEditorProps) {
             <Input value={activeDoor.label} onChange={(e) => updateDoor(activeDoor.id, { label: e.target.value })} className="h-8 text-xs" />
           </FieldRow>
           <FieldRow label="Alto (cm)">
-            <Input type="number" min={1} value={activeDoor.heightCm} onChange={(e) => updateDoor(activeDoor.id, { heightCm: +e.target.value })} className="h-8 text-xs" />
+            <NumberInput min={1} value={activeDoor.heightCm} onChange={(v) => updateDoor(activeDoor.id, { heightCm: v })} className="h-8 text-xs" />
           </FieldRow>
           <FieldRow label="Ancho (%)">
-            <Input type="number" min={1} max={100} value={activeDoor.widthPct} onChange={(e) => updateDoor(activeDoor.id, { widthPct: +e.target.value })} className="h-8 text-xs" />
+            <NumberInput min={1} max={100} value={activeDoor.widthPct} onChange={(v) => updateDoor(activeDoor.id, { widthPct: v })} className="h-8 text-xs" />
           </FieldRow>
           <FieldRow label="Desfase izq (%)">
-            <Input type="number" min={0} max={99} value={activeDoor.offsetPct} onChange={(e) => updateDoor(activeDoor.id, { offsetPct: +e.target.value })} className="h-8 text-xs" />
+            <NumberInput min={0} max={99} value={activeDoor.offsetPct} onChange={(v) => updateDoor(activeDoor.id, { offsetPct: v })} className="h-8 text-xs" />
           </FieldRow>
           <FieldRow label="Desde abajo (cm)">
-            <Input type="number" min={0} value={activeDoor.fromBottomCm} onChange={(e) => updateDoor(activeDoor.id, { fromBottomCm: +e.target.value })} className="h-8 text-xs" />
+            <NumberInput min={0} value={activeDoor.fromBottomCm} onChange={(v) => updateDoor(activeDoor.id, { fromBottomCm: v })} className="h-8 text-xs" />
           </FieldRow>
           <CheckRow
             label="Bisagra izquierda"
@@ -594,18 +594,18 @@ function AddForm({
           <Input value={String(draft.label ?? "")} onChange={set("label")} className="h-8 text-xs" />
         </FieldRow>
         <FieldRow label="Alto (cm)">
-          <Input type="number" min={1} value={Number(draft.heightCm ?? 12)} onChange={set("heightCm")} className="h-8 text-xs" />
+          <NumberInput min={1} value={Number(draft.heightCm ?? 12)} onChange={(v) => setVal("heightCm", v)} className="h-8 text-xs" />
         </FieldRow>
         <FieldRow label="Desde abajo (cm)">
-          <Input type="number" min={0} value={Number(draft.fromBottomCm ?? 0)} onChange={set("fromBottomCm")} className="h-8 text-xs" />
+          <NumberInput min={0} value={Number(draft.fromBottomCm ?? 0)} onChange={(v) => setVal("fromBottomCm", v)} className="h-8 text-xs" />
         </FieldRow>
         <FieldRow label="Ancho (%)">
-          <Input type="number" min={1} max={100} value={Number(draft.widthPct ?? 100)} onChange={set("widthPct")} className="h-8 text-xs" />
+          <NumberInput min={1} max={100} value={Number(draft.widthPct ?? 100)} onChange={(v) => setVal("widthPct", v)} className="h-8 text-xs" />
         </FieldRow>
         {mode === "door" && (
           <>
             <FieldRow label="Desfase izq (%)">
-              <Input type="number" min={0} max={99} value={Number(draft.offsetPct ?? 0)} onChange={set("offsetPct")} className="h-8 text-xs" />
+              <NumberInput min={0} max={99} value={Number(draft.offsetPct ?? 0)} onChange={(v) => setVal("offsetPct", v)} className="h-8 text-xs" />
             </FieldRow>
             <CheckRow label="Bisagra izquierda" checked={Boolean(draft.hingeLeft ?? true)} onChange={(v) => set("hingeLeft")({ target: { type: "checkbox", checked: v } } as React.ChangeEvent<HTMLInputElement>)} />
           </>
@@ -613,7 +613,7 @@ function AddForm({
         {mode === "drawer" && (
           <>
             <FieldRow label="Desfase izq (%)">
-              <Input type="number" min={0} max={99} value={Number(draft.offsetPct ?? 0)} onChange={set("offsetPct")} className="h-8 text-xs" />
+              <NumberInput min={0} max={99} value={Number(draft.offsetPct ?? 0)} onChange={(v) => setVal("offsetPct", v)} className="h-8 text-xs" />
             </FieldRow>
             <OrientToggle
               value={(draft.orientation as "horizontal" | "vertical") ?? "horizontal"}

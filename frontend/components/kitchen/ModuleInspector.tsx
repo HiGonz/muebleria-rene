@@ -3,7 +3,7 @@
 import dynamic from "next/dynamic";
 import { Trash2, Copy, RotateCw, Lock, Unlock } from "lucide-react";
 import { useKitchenStore } from "@/store/useKitchenStore";
-import { Input, Textarea } from "@/components/ui/input";
+import { Input, NumberInput, Textarea } from "@/components/ui/input";
 import { BOARD_COSTS, COUNTERTOP_MODELS, PULL_OUT_ACCESSORY_LABELS, NICHE_ACCESSORY_MATCH, getCatalogEntry } from "@/services/kitchenData";
 import { WOOD_TEXTURES } from "@/components/3d/woodTextures";
 import type { BoardMaterial, ExteriorTextureId, KitchenModule, PullOutAccessoryType, SidePanelMode } from "@/types/kitchen";
@@ -114,12 +114,7 @@ function defaultDrawerZoneHeight(module: KitchenModule): number {
 function NumInput({ value, onChange, min = 0, max = 9999, unit }: {
   value: number; onChange: (v: number) => void; min?: number; max?: number; unit?: string;
 }) {
-  return (
-    <div className="relative">
-      <Input type="number" min={min} max={max} value={value} onChange={(e) => onChange(Number(e.target.value))} />
-      {unit && <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-warmgray">{unit}</span>}
-    </div>
-  );
+  return <NumberInput value={value} onChange={onChange} min={min} max={max} unit={unit} />;
 }
 
 // Quick presets for a numeric field — most cabinets are either 1 or 2 doors,
@@ -573,9 +568,9 @@ export function ModuleInspector() {
           </Section>
         )}
 
-        {/* ── Door hinge sides (independent per door) — corner cabinets get
-             izquierda/derecha; upper cabinets also get arriba (abatible). ── */}
-        {(category === "corner" || category === "upper") && !opt.useDetailedLayout && opt.doors > 0 && (
+        {/* ── Door hinge sides (independent per door) — lower/corner cabinets
+             get izquierda/derecha; upper cabinets also get arriba (abatible). ── */}
+        {(category === "lower" || category === "corner" || category === "upper") && !opt.useDetailedLayout && opt.doors > 0 && (
           <Section label="Apertura de puertas">
             <div className="grid grid-cols-2 gap-3">
               {Array.from({ length: opt.doors }, (_, i) => {

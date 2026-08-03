@@ -307,6 +307,16 @@ export const MODULE_CATALOG: ModuleCatalogEntry[] = [
     configurableFields: ["height", "width", "depth", "doors", "drawers", "shelves", "includesCountertop", "countertopMaterial", "hardwareFinish", "boardMaterial", "color"],
   },
   {
+    type: "gabinete_bajo_puerta_simple",
+    category: "lower",
+    label: "Gabinete Bajo de 1 Puerta",
+    description: "Mueble bajo con una sola puerta y un estante interior",
+    icon: "🚪",
+    defaultDimensions: { height: 90, width: 60, depth: 60 },
+    defaultOptions: { drawers: 0, doors: 1, shelves: 1, doorStyle: "Lisa" },
+    configurableFields: ["height", "width", "depth", "doors", "shelves", "doorStyle", "includesCountertop", "countertopMaterial", "hardwareFinish", "boardMaterial", "color"],
+  },
+  {
     type: "cajonera",
     category: "lower",
     label: "Cajonera",

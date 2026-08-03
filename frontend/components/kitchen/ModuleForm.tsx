@@ -1,6 +1,6 @@
 "use client";
 
-import { Input } from "@/components/ui/input";
+import { Input, NumberInput } from "@/components/ui/input";
 import type { KitchenModule } from "@/types/kitchen";
 import { BOARD_COSTS, COUNTERTOP_COSTS } from "@/services/kitchenData";
 
@@ -24,14 +24,7 @@ function FieldGroup({ label, children }: { label: string; children: React.ReactN
 function NumInput({ value, onChange, min = 0, max = 9999, step = 1, unit }: {
   value: number; onChange: (v: number) => void; min?: number; max?: number; step?: number; unit?: string;
 }) {
-  return (
-    <div className="relative">
-      <Input type="number" min={min} max={max} step={step} value={value}
-        onChange={(e) => onChange(Number(e.target.value))}
-      />
-      {unit && <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-zinc-500">{unit}</span>}
-    </div>
-  );
+  return <NumberInput value={value} onChange={onChange} min={min} max={max} step={step} unit={unit} />;
 }
 
 function SelectInput<T extends string>({ value, onChange, options }: {
