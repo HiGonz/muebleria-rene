@@ -879,37 +879,43 @@ function ModuleDimensionsLabel({ mod }: { mod: KitchenModule }) {
   const lineColor = "#a8d8b9";
   // Drawn on top of everything else in the scene instead of being occluded
   // by whatever cabinet happens to sit between it and the camera — a
-  // measurement overlay, not a physical object, so a mueble partially
-  // hiding it defeats the point (you can't read a number that's half
-  // behind another cabinet). depthTest off + a high renderOrder together
-  // are what actually achieve that; either alone still gets clipped.
-  const alwaysOnTop = { depthTest: false, renderOrder: 999 };
+  // measurement overlay, not a physical object, so another mueble (e.g. a
+  // second row of aéreos stacked above the first) hiding it defeats the
+  // point. depthTest alone isn't enough: it stops THIS mesh from being
+  // rejected by what's already drawn, but with depthWrite still on it
+  // still leaves its own depth in the buffer, and Three.js's default
+  // opaque-pass ordering doesn't guarantee it draws last — so a cabinet
+  // drawn afterward could still paint over it. depthWrite:false (nothing
+  // left in the depth buffer for it to lose to) + a high renderOrder
+  // (draws dead last) closes both gaps.
+  const alwaysOnTop = { depthTest: false, depthWrite: false, renderOrder: 999 };
   return (
     <group position={[mod.x / 100, labelY, mod.z / 100]} rotation={[0, THREE.MathUtils.degToRad(mod.rotation), 0]}>
       <mesh renderOrder={alwaysOnTop.renderOrder}>
         <boxGeometry args={[halfW * 2, 0.003, 0.003]} />
-        <meshBasicMaterial color={lineColor} depthTest={alwaysOnTop.depthTest} />
+        <meshBasicMaterial color={lineColor} depthTest={alwaysOnTop.depthTest} depthWrite={alwaysOnTop.depthWrite} />
       </mesh>
       {/* End ticks, like a tape measure laid across the top edge */}
       <mesh position={[-halfW, 0, 0]} renderOrder={alwaysOnTop.renderOrder}>
         <boxGeometry args={[0.003, 0.025, 0.003]} />
-        <meshBasicMaterial color={lineColor} depthTest={alwaysOnTop.depthTest} />
+        <meshBasicMaterial color={lineColor} depthTest={alwaysOnTop.depthTest} depthWrite={alwaysOnTop.depthWrite} />
       </mesh>
       <mesh position={[halfW, 0, 0]} renderOrder={alwaysOnTop.renderOrder}>
         <boxGeometry args={[0.003, 0.025, 0.003]} />
-        <meshBasicMaterial color={lineColor} depthTest={alwaysOnTop.depthTest} />
+        <meshBasicMaterial color={lineColor} depthTest={alwaysOnTop.depthTest} depthWrite={alwaysOnTop.depthWrite} />
       </mesh>
-      <Billboard position={[0, 0.05, 0]}>
+      <Billboard position={[0, 0.07, 0]}>
         <Text
-          fontSize={0.065}
+          fontSize={0.1}
           color={lineColor}
           anchorX="center"
           anchorY="middle"
-          outlineWidth={0.004}
+          outlineWidth={0.006}
           outlineColor="#000000"
           outlineOpacity={1}
           renderOrder={alwaysOnTop.renderOrder}
           material-depthTest={alwaysOnTop.depthTest}
+          material-depthWrite={alwaysOnTop.depthWrite}
         >
           {footprintWidth} cm
         </Text>
