@@ -19,8 +19,6 @@ export type LowerModuleType =
   | "bajo_tarja"
   | "bajo_estufa"
   | "bajo_parrilla"
-  | "bajo_horno_empotrable"
-  | "esquinero_inferior"
   | "gabinete_bajo_puertas"
   | "gabinete_bajo_cajones"
   | "botellero_extraible"

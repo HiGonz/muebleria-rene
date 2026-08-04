@@ -251,7 +251,6 @@ export function ModuleForm({ module, onChange }: Props) {
           </div>
           {opt.includesCountertop && <CountertopFields opt={opt} updateOpt={updateOpt} />}
           {(type === "bajo_tarja" || type === "cubierta_tarja") && <SinkFields opt={opt} updateOpt={updateOpt} />}
-          {(type === "esquinero_inferior") && <CornerFields opt={opt} updateOpt={updateOpt} />}
         </div>
       )}
 
