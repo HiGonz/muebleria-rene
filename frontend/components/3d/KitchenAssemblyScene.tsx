@@ -1,7 +1,7 @@
 "use client";
 
 import { Canvas, useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
-import { Grid, Html, OrbitControls } from "@react-three/drei";
+import { Billboard, Grid, Html, OrbitControls, Text } from "@react-three/drei";
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type RefObject, type ReactNode } from "react";
 import * as THREE from "three";
 import { Home, Eye, EyeOff, MoveHorizontal, ArrowUp, Box as BoxIcon, Tag, Ruler, ChevronDown, ChevronUp, Settings2, Trash2, Lock, Unlock } from "lucide-react";
@@ -192,6 +192,34 @@ function clampModuleToRoom(mod: KitchenModule, x: number, z: number, roomWidthM:
   const minZ = Math.min(halfD + wallInset, roomDepthM / 2);
   const maxZ = Math.max(minZ, roomDepthM - halfD - wallInset);
   return { x: Math.min(Math.max(x, minX), maxX), z: Math.min(Math.max(z, minZ), maxZ) };
+}
+
+// Aéreos (wall cabinets) — never free-floating: whichever wall `rotation`
+// faces, the perpendicular axis is pinned exactly to that wall's flush
+// position (same figure clampModuleToRoom already computes as its min/max
+// for that axis), and only the along-wall axis is left free, clamped to
+// the room-bounds range for that axis. Dragging one is then a single
+// degree of freedom — slide along the wall — instead of two, which is the
+// whole point: it can't be pulled away from the wall mid-drag.
+function isWallMounted(mod: KitchenModule): boolean {
+  return mod.category === "upper" || mod.type === "gabinete_superior_esquinero_puertas";
+}
+function wallFlushXZ(
+  mod: KitchenModule, x: number, z: number, roomWidthM: number, roomDepthM: number, rotation: KitchenModule["rotation"],
+): { x: number; z: number } {
+  const footprintWidth = blindCornerFootprintWidth(mod);
+  const isRotated = rotation === 90 || rotation === 270;
+  const halfW = (isRotated ? mod.dimensions.depth : footprintWidth) / 200;
+  const halfD = (isRotated ? footprintWidth : mod.dimensions.depth) / 200;
+  const wallInset = WALL_THICKNESS_M / 2;
+  const minX = Math.min(halfW + wallInset, roomWidthM / 2);
+  const maxX = Math.max(minX, roomWidthM - halfW - wallInset);
+  const minZ = Math.min(halfD + wallInset, roomDepthM / 2);
+  const maxZ = Math.max(minZ, roomDepthM - halfD - wallInset);
+  if (rotation === 0) return { x: Math.min(Math.max(x, minX), maxX), z: minZ };   // north wall (z=0)
+  if (rotation === 180) return { x: Math.min(Math.max(x, minX), maxX), z: maxZ }; // south wall
+  if (rotation === 90) return { x: minX, z: Math.min(Math.max(z, minZ), maxZ) };  // west wall (x=0)
+  return { x: maxX, z: Math.min(Math.max(z, minZ), maxZ) };                       // 270, east wall
 }
 
 interface SideEdgeSeg {
@@ -826,11 +854,20 @@ function ModuleLabel({ mod }: { mod: KitchenModule }) {
   );
 }
 
-// ─── Dimensions badge ──────────────────────────────────────────────────────────
+// ─── Dimension line ─────────────────────────────────────────────────────────
 // Toggled independently from the name label (can be shown alone, or stacked
 // just under it) so every module's width is readable at a glance across the
 // whole room at once — the one number that actually matters for lining up a
 // run of cabinets against a wall — without opening each one's inspector.
+//
+// An architectural dimension line — a real 3D line laid across the module's
+// own width axis, with tick marks at each end, not a floating chat-bubble
+// badge. The line itself is attached to the module (rotates with it, so it
+// visually IS the width being measured). The number rides in a Billboard so
+// it stays camera-facing: an attached (non-billboard) label mirrors when
+// viewed from behind and goes edge-on/unreadable from top-down — using
+// drei's SDF Text (not an Html/DOM label) keeps it crisp at any zoom instead
+// of the blurriness a CSS-transformed DOM node gets under a 3D transform.
 function ModuleDimensionsLabel({ mod }: { mod: KitchenModule }) {
   const labelY = moduleTopY(mod) + 0.02;
   // Blind-corner cabinets' real footprint is width + depth (the blind
@@ -839,31 +876,27 @@ function ModuleDimensionsLabel({ mod }: { mod: KitchenModule }) {
   // dimensions.width here would silently drop the extension's width.
   const footprintWidth = blindCornerFootprintWidth(mod);
   const halfW = footprintWidth / 200;
-  const lineColor = "#8fbf9f";
+  const lineColor = "#a8d8b9";
   return (
-    // A real dimension line laid across the module's own width axis (local
-    // X), not a camera-facing badge — the group's rotation matches the
-    // module's own, so the line (and the number on it, via Html's
-    // `transform` mode) turns with it instead of always facing the camera.
     <group position={[mod.x / 100, labelY, mod.z / 100]} rotation={[0, THREE.MathUtils.degToRad(mod.rotation), 0]}>
       <mesh>
-        <boxGeometry args={[halfW * 2, 0.004, 0.004]} />
+        <boxGeometry args={[halfW * 2, 0.003, 0.003]} />
         <meshBasicMaterial color={lineColor} />
       </mesh>
       {/* End ticks, like a tape measure laid across the top edge */}
       <mesh position={[-halfW, 0, 0]}>
-        <boxGeometry args={[0.004, 0.03, 0.004]} />
+        <boxGeometry args={[0.003, 0.025, 0.003]} />
         <meshBasicMaterial color={lineColor} />
       </mesh>
       <mesh position={[halfW, 0, 0]}>
-        <boxGeometry args={[0.004, 0.03, 0.004]} />
+        <boxGeometry args={[0.003, 0.025, 0.003]} />
         <meshBasicMaterial color={lineColor} />
       </mesh>
-      <Html transform center position={[0, 0.035, 0]} distanceFactor={6} zIndexRange={[9, 0]} style={{ pointerEvents: "none" }}>
-        <span className="whitespace-nowrap rounded-full border border-sage/40 bg-black/80 px-2.5 py-1 text-[11px] font-semibold tabular-nums text-sage shadow-[0_2px_10px_rgba(0,0,0,0.6)] backdrop-blur-sm">
+      <Billboard position={[0, 0.05, 0]}>
+        <Text fontSize={0.05} color={lineColor} anchorX="center" anchorY="middle" outlineWidth={0.0025} outlineColor="#000000" outlineOpacity={0.75}>
           {footprintWidth} cm
-        </span>
-      </Html>
+        </Text>
+      </Billboard>
     </group>
   );
 }
@@ -1168,6 +1201,11 @@ function AssemblyContent({
       onModuleNudge(mod.id, 0, 0, direction === "up" ? stepCm : -stepCm);
       return;
     }
+    // An aéreo's local "forward"/"back" is exactly away-from/into its wall —
+    // same glued-to-the-wall rule the drag handler enforces, just a no-op
+    // here instead of a re-clamp since left/right nudges already can't
+    // touch that axis (rotation is always wall-aligned).
+    if (isWallMounted(mod) && (direction === "forward" || direction === "back")) return;
     const { right, forward } = localAxesXZ(mod);
     const axis = direction === "left" || direction === "right" ? right : forward;
     const sign = direction === "right" || direction === "forward" ? 1 : -1;
@@ -1263,7 +1301,11 @@ function AssemblyContent({
       // snapToNeighbor. Re-clamped afterward since a snap target right by a
       // wall could otherwise push the module a hair past it.
       const snapped = snapToNeighbor(mod, clamped.x, clamped.z, modules);
-      const { x, z } = clamp(snapped.x, snapped.z);
+      let { x, z } = clamp(snapped.x, snapped.z);
+      // Aéreos stay glued to whichever wall they're already on for the
+      // whole gesture — only the along-wall coordinate follows the drag.
+      // Which wall it's on can still change, but only on release (below).
+      if (isWallMounted(mod)) ({ x, z } = wallFlushXZ(mod, x, z, roomWidthM, roomDepthM, mod.rotation));
       setDragPreview({ id: state.id, x: x * 100, z: z * 100 });
     };
     const handleUp = (ev: PointerEvent) => {
@@ -1282,8 +1324,11 @@ function AssemblyContent({
           // raw unsnapped drag on release.
           const clamped = clamp(state.startX + (hit.x - state.startPointerX), state.startZ + (hit.z - state.startPointerZ));
           const snapped = snapToNeighbor(mod, clamped.x, clamped.z, modules);
-          const { x, z } = clamp(snapped.x, snapped.z);
+          let { x, z } = clamp(snapped.x, snapped.z);
           const rotation = nearestWallRotation(x, z, roomWidthM, roomDepthM, mod.rotation);
+          // Re-flushes against whichever wall `rotation` ended up facing —
+          // matters when the drag crossed a corner and switched walls.
+          if (isWallMounted(mod)) ({ x, z } = wallFlushXZ(mod, x, z, roomWidthM, roomDepthM, rotation));
           const blocker = findOverlap(mod, x, z, rotation, modules);
           if (blocker) {
             // Doesn't snap all the way back to where the drag started —
