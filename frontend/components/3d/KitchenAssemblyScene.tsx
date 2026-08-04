@@ -838,12 +838,33 @@ function ModuleDimensionsLabel({ mod }: { mod: KitchenModule }) {
   // collision/placement math already uses. Showing the bare
   // dimensions.width here would silently drop the extension's width.
   const footprintWidth = blindCornerFootprintWidth(mod);
+  const halfW = footprintWidth / 200;
+  const lineColor = "#8fbf9f";
   return (
-    <Html position={[mod.x / 100, labelY, mod.z / 100]} center distanceFactor={6} zIndexRange={[9, 0]} style={{ pointerEvents: "none" }}>
-      <span className="whitespace-nowrap rounded-full border border-sage/40 bg-black/80 px-2.5 py-1 text-[11px] font-semibold tabular-nums text-sage shadow-[0_2px_10px_rgba(0,0,0,0.6)] backdrop-blur-sm">
-        {footprintWidth} cm
-      </span>
-    </Html>
+    // A real dimension line laid across the module's own width axis (local
+    // X), not a camera-facing badge — the group's rotation matches the
+    // module's own, so the line (and the number on it, via Html's
+    // `transform` mode) turns with it instead of always facing the camera.
+    <group position={[mod.x / 100, labelY, mod.z / 100]} rotation={[0, THREE.MathUtils.degToRad(mod.rotation), 0]}>
+      <mesh>
+        <boxGeometry args={[halfW * 2, 0.004, 0.004]} />
+        <meshBasicMaterial color={lineColor} />
+      </mesh>
+      {/* End ticks, like a tape measure laid across the top edge */}
+      <mesh position={[-halfW, 0, 0]}>
+        <boxGeometry args={[0.004, 0.03, 0.004]} />
+        <meshBasicMaterial color={lineColor} />
+      </mesh>
+      <mesh position={[halfW, 0, 0]}>
+        <boxGeometry args={[0.004, 0.03, 0.004]} />
+        <meshBasicMaterial color={lineColor} />
+      </mesh>
+      <Html transform center position={[0, 0.035, 0]} distanceFactor={6} zIndexRange={[9, 0]} style={{ pointerEvents: "none" }}>
+        <span className="whitespace-nowrap rounded-full border border-sage/40 bg-black/80 px-2.5 py-1 text-[11px] font-semibold tabular-nums text-sage shadow-[0_2px_10px_rgba(0,0,0,0.6)] backdrop-blur-sm">
+          {footprintWidth} cm
+        </span>
+      </Html>
+    </group>
   );
 }
 

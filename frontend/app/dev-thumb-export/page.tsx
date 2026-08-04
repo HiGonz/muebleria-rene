@@ -1,55 +1,57 @@
 "use client";
 
 // Dev-only tool, not linked from anywhere in the app's navigation — renders
-// ModulePreview3D off-screen for whatever catalog types are listed below and
-// saves each canvas as a real PNG straight into public/module-thumbnails/
-// via the paired /api/dev-save-thumb route. Reuse it whenever a new module
-// type is added to MODULE_CATALOG (see CatalogThumbnails.tsx for why this
-// step exists — no live-render fallback, thumbnails are static files):
-//   1. Edit TYPES below to the new type(s).
-//   2. Open /dev-thumb-export, click "restart" (a real click — a
-//      script-triggered one doesn't count for some browser behavior), wait
-//      for "done".
-import { useEffect, useState } from "react";
+// ModulePreview3D for whatever catalog types are passed via ?types=a,b,c and
+// exposes each one as <div data-thumb-slot="TYPE" data-ready="true"><canvas>.
+// Meant to be driven by scripts/generate-thumbnails.mjs (Playwright, headless,
+// one process, no manual clicking) rather than by hand — see that script's
+// header comment for usage. Reuse whenever a new module type needs a
+// thumbnail (see CatalogThumbnails.tsx for why this step exists — no
+// live-render fallback, thumbnails are static files).
+import { Suspense, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { ModulePreview3D } from "@/components/3d/ModulePreview3D";
 import { buildNewModule } from "@/services/kitchenData";
 import type { KitchenModuleType } from "@/types/kitchen";
 
-const TYPES: KitchenModuleType[] = [];
-
-export default function DevThumbExport() {
-  const [index, setIndex] = useState(0);
-  const modules = TYPES.map((t) => buildNewModule(t));
-
+function Slot({ type }: { type: KitchenModuleType }) {
+  const [ready, setReady] = useState(false);
+  // A fixed settle delay, not a pixel/frame probe — R3F's own resize/first-
+  // paint timing turned out to vary a lot (cold GPU context, dev-server
+  // recompiles) and polling pixel data from the page side was unreliable.
+  // Playwright drives this headless, so a generous fixed wait costs wall
+  // clock, not tokens.
   useEffect(() => {
-    if (index >= modules.length) return;
-    const timer = setTimeout(() => {
-      const canvas = document.querySelector(`[data-thumb-slot="${index}"] canvas`);
-      if (canvas instanceof HTMLCanvasElement) {
-        const url = canvas.toDataURL("image/png");
-        fetch("/api/dev-save-thumb", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ type: modules[index].type, dataUrl: url }),
-        });
-      }
-      setIndex((i) => i + 1);
-    }, 3000);
-    return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [index]);
+    const t = setTimeout(() => setReady(true), 1500);
+    return () => clearTimeout(t);
+  }, []);
+  const mod = buildNewModule(type);
+  return (
+    <div data-thumb-slot={type} data-ready={ready} style={{ width: 288, height: 220 }}>
+      <ModulePreview3D module={mod} />
+    </div>
+  );
+}
+
+function DevThumbExportInner() {
+  const params = useSearchParams();
+  const typesParam = params.get("types");
+  const types = (typesParam ? typesParam.split(",").filter(Boolean) : []) as KitchenModuleType[];
 
   return (
     <div style={{ background: "#111" }}>
-      {index < modules.length && (
-        <div data-thumb-slot={index} style={{ width: 288 }}>
-          <ModulePreview3D module={modules[index]} />
-        </div>
-      )}
-      <p style={{ color: "#fff" }}>
-        {modules.length === 0 ? "edit TYPES in this file first" : index >= modules.length ? "done" : `rendering ${index + 1}/${modules.length}`}
-      </p>
-      <button id="__restart" style={{ color: "#fff" }} onClick={() => setIndex(0)}>restart</button>
+      {types.length === 0 && <p style={{ color: "#fff" }}>Pass ?types=a,b,c</p>}
+      {types.map((t) => (
+        <Slot key={t} type={t} />
+      ))}
     </div>
+  );
+}
+
+export default function DevThumbExport() {
+  return (
+    <Suspense fallback={null}>
+      <DevThumbExportInner />
+    </Suspense>
   );
 }
