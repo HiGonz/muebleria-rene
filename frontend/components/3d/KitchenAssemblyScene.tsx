@@ -1153,7 +1153,9 @@ function AssemblyContent({
   const { camera, gl, raycaster } = useThree();
   const dragRef = useRef<DragState | null>(null);
   const [dragPreview, setDragPreview] = useState<DragPreview | null>(null);
-  const floorPlane = useRef(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0)).current;
+  // Reused, mutated in place per-raycast rather than recreated — only its
+  // constant (plane height) ever changes.
+  const dragPlane = useRef(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0)).current;
 
   // Nudges the selected module by NUDGE_STEP_CM (well, by whatever step the
   // toolbar has active — see the store's nudgeModule) along the module's own
@@ -1213,15 +1215,25 @@ function AssemblyContent({
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [selectedId, keyboardStepCm]);
 
-  const getFloorHit = (clientX: number, clientY: number): THREE.Vector3 | null => {
+  // Raycasts against a horizontal plane at planeY (room-space meters), not
+  // always the floor — a wall cabinet or counter-height accessory (tarja,
+  // parrilla, microondas...) doesn't actually sit at y=0, and intersecting
+  // the pointer ray against the floor instead of the plane the module is
+  // really on meant a small mouse movement mapped to a much larger 3D
+  // movement the higher up the dragged module actually was (a perspective-
+  // camera ray grazes a plane far below the object at a shallower angle
+  // than it does the object's own, closer plane) — most noticeable on
+  // aéreos, barely there on floor cabinets since planeY≈0 for those already.
+  const getFloorHit = (clientX: number, clientY: number, planeY: number): THREE.Vector3 | null => {
     const rect = gl.domElement.getBoundingClientRect();
     const ndc = new THREE.Vector2(
       ((clientX - rect.left) / rect.width) * 2 - 1,
       -((clientY - rect.top) / rect.height) * 2 + 1
     );
     raycaster.setFromCamera(ndc, camera);
+    dragPlane.constant = -planeY;
     const point = new THREE.Vector3();
-    return raycaster.ray.intersectPlane(floorPlane, point) ? point : null;
+    return raycaster.ray.intersectPlane(dragPlane, point) ? point : null;
   };
 
   const endDrag = (move: (e: PointerEvent) => void, up: (e: PointerEvent) => void, pointerId: number) => {
@@ -1234,7 +1246,8 @@ function AssemblyContent({
   };
 
   const handleDragStart = (mod: KitchenModule, e: ThreeEvent<PointerEvent>) => {
-    const hit = getFloorHit(e.nativeEvent.clientX, e.nativeEvent.clientY);
+    const planeY = baseY(mod);
+    const hit = getFloorHit(e.nativeEvent.clientX, e.nativeEvent.clientY, planeY);
     if (!hit) return;
     const pointerId = e.nativeEvent.pointerId;
 
@@ -1243,7 +1256,7 @@ function AssemblyContent({
     const handleMove = (ev: PointerEvent) => {
       const state = dragRef.current;
       if (!state || ev.pointerId !== state.pointerId) return;
-      const hit = getFloorHit(ev.clientX, ev.clientY);
+      const hit = getFloorHit(ev.clientX, ev.clientY, planeY);
       if (!hit) return;
       const clamped = clamp(state.startX + (hit.x - state.startPointerX), state.startZ + (hit.z - state.startPointerZ));
       // Pulls flush against a compatible neighbor once dragged close — see
@@ -1261,7 +1274,7 @@ function AssemblyContent({
         // A plain click, not a drag — (de)select the module instead of moving it.
         onSelectModule(selectedId === state.id ? null : state.id);
       } else {
-        const hit = getFloorHit(ev.clientX, ev.clientY);
+        const hit = getFloorHit(ev.clientX, ev.clientY, planeY);
         if (hit) {
           // Mirrors handleMove's clamp → snap → clamp pipeline exactly — this
           // used to only clamp, so the live preview would visibly snap flush
