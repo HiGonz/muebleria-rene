@@ -877,23 +877,40 @@ function ModuleDimensionsLabel({ mod }: { mod: KitchenModule }) {
   const footprintWidth = blindCornerFootprintWidth(mod);
   const halfW = footprintWidth / 200;
   const lineColor = "#a8d8b9";
+  // Drawn on top of everything else in the scene instead of being occluded
+  // by whatever cabinet happens to sit between it and the camera — a
+  // measurement overlay, not a physical object, so a mueble partially
+  // hiding it defeats the point (you can't read a number that's half
+  // behind another cabinet). depthTest off + a high renderOrder together
+  // are what actually achieve that; either alone still gets clipped.
+  const alwaysOnTop = { depthTest: false, renderOrder: 999 };
   return (
     <group position={[mod.x / 100, labelY, mod.z / 100]} rotation={[0, THREE.MathUtils.degToRad(mod.rotation), 0]}>
-      <mesh>
+      <mesh renderOrder={alwaysOnTop.renderOrder}>
         <boxGeometry args={[halfW * 2, 0.003, 0.003]} />
-        <meshBasicMaterial color={lineColor} />
+        <meshBasicMaterial color={lineColor} depthTest={alwaysOnTop.depthTest} />
       </mesh>
       {/* End ticks, like a tape measure laid across the top edge */}
-      <mesh position={[-halfW, 0, 0]}>
+      <mesh position={[-halfW, 0, 0]} renderOrder={alwaysOnTop.renderOrder}>
         <boxGeometry args={[0.003, 0.025, 0.003]} />
-        <meshBasicMaterial color={lineColor} />
+        <meshBasicMaterial color={lineColor} depthTest={alwaysOnTop.depthTest} />
       </mesh>
-      <mesh position={[halfW, 0, 0]}>
+      <mesh position={[halfW, 0, 0]} renderOrder={alwaysOnTop.renderOrder}>
         <boxGeometry args={[0.003, 0.025, 0.003]} />
-        <meshBasicMaterial color={lineColor} />
+        <meshBasicMaterial color={lineColor} depthTest={alwaysOnTop.depthTest} />
       </mesh>
       <Billboard position={[0, 0.05, 0]}>
-        <Text fontSize={0.05} color={lineColor} anchorX="center" anchorY="middle" outlineWidth={0.0025} outlineColor="#000000" outlineOpacity={0.75}>
+        <Text
+          fontSize={0.065}
+          color={lineColor}
+          anchorX="center"
+          anchorY="middle"
+          outlineWidth={0.004}
+          outlineColor="#000000"
+          outlineOpacity={1}
+          renderOrder={alwaysOnTop.renderOrder}
+          material-depthTest={alwaysOnTop.depthTest}
+        >
           {footprintWidth} cm
         </Text>
       </Billboard>
