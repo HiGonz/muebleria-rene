@@ -2,7 +2,7 @@
 
 import { Canvas, useFrame } from "@react-three/fiber";
 import { OrbitControls, MeshReflectorMaterial } from "@react-three/drei";
-import { useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { MathUtils, type Group, type Texture } from "three";
 import type { KitchenModule, DrawerDef, DoorDef, HardwareFinish, PullOutAccessoryType } from "@/types/kitchen";
 import { getWoodTexture, getWoodRoughness } from "./woodTextures";
@@ -12,6 +12,10 @@ import { useContextRecovery } from "./useContextRecovery";
 const T = 0.018;
 // ─── Interaction tuning ───────────────────────────────────────────────────────
 const DOOR_OPEN_ANGLE = Math.PI * 0.42; // ~76°
+// "Chapulina" hinge — swings open much further than a standard concealed
+// hinge (real hardware tops out around 170°; 180° would flatten the door
+// back against the cabinet's own side, which isn't how it actually sits).
+const WIDE_DOOR_OPEN_ANGLE = (170 * Math.PI) / 180;
 const DAMP_SPEED = 7;
 
 function setGrabCursor(hover: boolean) {
@@ -103,6 +107,7 @@ export function getEffectiveDoors(mod: KitchenModule): DoorDef[] {
       doorStyle: mod.options.doorStyle,
       pullOutAccessory: mod.options.doorAccessories?.[i] ?? null,
       pullOut: mod.options.doorPullOut?.[i] ?? false,
+      wideAngle: mod.options.doorHingeType?.[i] === "chapulina",
     };
   });
 }
@@ -828,12 +833,22 @@ function DoorPanel({
   const hingeOffsets = hingeCount === 3 ? [hingeSpan / 2 - hingeInset, 0, -hingeSpan / 2 + hingeInset] : [hingeSpan / 2 - hingeInset, -hingeSpan / 2 + hingeInset];
 
   const [open, setOpen] = useState(false);
+  // Changing the hinge side, top/side orientation, or wide-angle type while
+  // the door is sitting open would otherwise leave it mid-swing around a
+  // pivot that just moved to the opposite edge (or animating toward a now-
+  // different target angle from wherever it happened to be) — closing it
+  // first sidesteps that glitch entirely rather than trying to patch the
+  // in-flight animation.
+  useEffect(() => {
+    setOpen(false);
+  }, [door.hingeLeft, door.hingeTop, door.wideAngle]);
   const pivotRef = useRef<Group>(null);
+  const openAngle = door.wideAngle ? WIDE_DOOR_OPEN_ANGLE : DOOR_OPEN_ANGLE;
   // Side doors always swing outward (+Z, toward the room) regardless of
   // hinge side. A top-hinged door swings outward too — its free (bottom)
   // edge rises and moves toward the room as it opens, ending up roughly
   // horizontal like an awning, never dipping down or into the carcass.
-  const target = open ? (upOpening || door.hingeLeft ? -DOOR_OPEN_ANGLE : DOOR_OPEN_ANGLE) : 0;
+  const target = open ? (upOpening || door.hingeLeft ? -openAngle : openAngle) : 0;
 
   // A pull-out nested behind this door (canasta/basurero/soporte garrafón —
   // see PullOutAccessoryMesh) slides straight out on its own rails in sync

@@ -1,5 +1,6 @@
 "use client";
 
+import { Fragment } from "react";
 import dynamic from "next/dynamic";
 import { Trash2, Copy, RotateCw, Lock, Unlock } from "lucide-react";
 import { useKitchenStore } from "@/store/useKitchenStore";
@@ -58,6 +59,14 @@ const DOOR_HINGE_OPTIONS_UPPER: { value: "izquierda" | "derecha" | "arriba"; lab
   { value: "izquierda", label: "Izquierda (abre a la izquierda)" },
   { value: "derecha", label: "Derecha (abre a la derecha)" },
   { value: "arriba", label: "Abatible (bisagra arriba, jaladera abajo)" },
+];
+
+// Independent of hinge side — a chapulina hinge swings open to ~170°
+// instead of a standard hinge's more limited angle, regardless of which
+// edge it's mounted on.
+const DOOR_HINGE_TYPE_OPTIONS: { value: "normal" | "chapulina"; label: string }[] = [
+  { value: "normal", label: "Normal" },
+  { value: "chapulina", label: "Chapulina (abre 170°)" },
 ];
 
 // No "exterior" choice here on purpose — a finished exterior-board panel on
@@ -530,22 +539,36 @@ export function ModuleInspector() {
               {Array.from({ length: opt.doors }, (_, i) => {
                 const defaultSide = i % 2 === 0 ? "izquierda" : "derecha";
                 const current = opt.doorHingeSides?.[i] ?? defaultSide;
+                const currentType = opt.doorHingeType?.[i] ?? "normal";
                 return (
-                  <FieldGroup key={i} label={`Puerta ${i + 1}`}>
-                    <SelectInput
-                      value={current}
-                      onChange={(v) => {
-                        const next = Array.from({ length: opt.doors }, (_, j) => opt.doorHingeSides?.[j] ?? (j % 2 === 0 ? "izquierda" : "derecha"));
-                        next[i] = v;
-                        updateOpt("doorHingeSides", next);
-                      }}
-                      options={isUpper ? DOOR_HINGE_OPTIONS_UPPER : DOOR_HINGE_OPTIONS}
-                    />
-                  </FieldGroup>
+                  <Fragment key={i}>
+                    <FieldGroup label={`Puerta ${i + 1}`}>
+                      <SelectInput
+                        value={current}
+                        onChange={(v) => {
+                          const next = Array.from({ length: opt.doors }, (_, j) => opt.doorHingeSides?.[j] ?? (j % 2 === 0 ? "izquierda" : "derecha"));
+                          next[i] = v;
+                          updateOpt("doorHingeSides", next);
+                        }}
+                        options={isUpper ? DOOR_HINGE_OPTIONS_UPPER : DOOR_HINGE_OPTIONS}
+                      />
+                    </FieldGroup>
+                    <FieldGroup label={`Puerta ${i + 1}: bisagra`}>
+                      <SelectInput
+                        value={currentType}
+                        onChange={(v) => {
+                          const next = Array.from({ length: opt.doors }, (_, j) => opt.doorHingeType?.[j] ?? "normal");
+                          next[i] = v;
+                          updateOpt("doorHingeType", next);
+                        }}
+                        options={DOOR_HINGE_TYPE_OPTIONS}
+                      />
+                    </FieldGroup>
+                  </Fragment>
                 );
               })}
             </div>
-            <p className="mt-2 text-[10px] text-warmgray/70">La bisagra queda en el lado contrario a la apertura elegida (o arriba, con la jaladera abajo, para la opción abatible).</p>
+            <p className="mt-2 text-[10px] text-warmgray/70">La bisagra queda en el lado contrario a la apertura elegida (o arriba, con la jaladera abajo, para la opción abatible). Chapulina abre más (170°) sin importar el lado.</p>
           </Section>
         )}
 

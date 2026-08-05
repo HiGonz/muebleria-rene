@@ -201,6 +201,10 @@ export interface DoorDef {
   // accessory. Populated from ModuleOptions.doorPullOut, index-aligned with
   // door order.
   pullOut?: boolean;
+  // "Chapulina" hinge — swings open to ~170° instead of the standard
+  // hinge's more limited angle. Populated from ModuleOptions.doorHingeType,
+  // index-aligned with door order, same convention as doorHingeSides.
+  wideAngle?: boolean;
 }
 
 // ─── Module Options ────────────────────────────────────────────────────────────
@@ -306,6 +310,11 @@ export interface ModuleOptions {
   // "arriba" (upper cabinets only) hinges along the bottom edge instead,
   // opening upward like a lift/flap door.
   doorHingeSides?: ("izquierda" | "derecha" | "arriba")[];
+  // Per-door hinge type (index-aligned with door order, same convention as
+  // doorHingeSides). "chapulina" swings open to ~170° instead of the
+  // standard hinge's more limited angle — independent of which side it's
+  // on. Undefined/missing = "normal".
+  doorHingeType?: ("normal" | "chapulina")[];
   // Per-door pull-out accessory (index-aligned with the auto-generated door
   // order, same convention as doorHingeSides). null/undefined = no accessory
   // behind that door.

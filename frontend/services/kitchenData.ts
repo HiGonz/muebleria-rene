@@ -151,6 +151,7 @@ export const DEFAULT_OPTIONS: ModuleOptions = {
   rightSidePanel: "interior",
   leftFrontSidePanel: "ninguno",
   doorHingeSides: [],
+  doorHingeType: [],
   doorAccessories: [],
   doorPullOut: [],
   useDetailedLayout: false,
