@@ -2,7 +2,7 @@
 
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import { buildNewModule, buildSampleKitchen, calculateKitchenMaterials, getCountertopModel, findFreeSpotNear } from "@/services/kitchenData";
+import { buildNewModule, buildSampleKitchen, calculateKitchenMaterials, getCountertopModel, findFreeSpotNear, isFreestandingPosition, ISLAND_ELIGIBLE_CATEGORIES } from "@/services/kitchenData";
 import type { SampleKitchenVariant } from "@/services/kitchenData";
 import type {
   BoardMaterial, ExteriorTextureId, HardwareFinish, KitchenDraft, KitchenModule, KitchenModuleType,
@@ -286,11 +286,14 @@ export const useKitchenStore = create<KitchenStore>()(
           const mountHeight = dMountHeight
             ? Math.min(Math.max((mod.options.mountHeight || 144) + dMountHeight, 60), 280)
             : mod.options.mountHeight;
+          const islandMode = ISLAND_ELIGIBLE_CATEGORIES.has(mod.category)
+            ? isFreestandingPosition(x / 100, z / 100, s.draft.roomWidth / 100, s.draft.roomDepth / 100, mod.options.islandMode ?? false)
+            : mod.options.islandMode;
           return {
             draft: {
               ...s.draft,
               modules: s.draft.modules.map((m) =>
-                m.id === id ? { ...m, x, z, options: { ...m.options, mountHeight } } : m
+                m.id === id ? { ...m, x, z, options: { ...m.options, mountHeight, islandMode } } : m
               ),
             },
           };

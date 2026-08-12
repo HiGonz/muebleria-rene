@@ -12,7 +12,7 @@ import { Camera3DControls, type CameraAction } from "./Camera3DControls";
 import { SelectionToolbar, type NudgeDirection } from "./SelectionToolbar";
 import { getWoodTexture, getWoodRoughness } from "./woodTextures";
 import { useContextRecovery } from "./useContextRecovery";
-import { CATEGORY_ICONS, WALL_GAP_TOLERANCE_M, cornerPerpendicularRotation, cornerExtensionWorldCenterCm } from "@/services/kitchenData";
+import { CATEGORY_ICONS, WALL_GAP_TOLERANCE_M, cornerPerpendicularRotation, cornerExtensionWorldCenterCm, isFreestandingPosition, ISLAND_ELIGIBLE_CATEGORIES } from "@/services/kitchenData";
 import type { KitchenModule, WallOpening, WallSide } from "@/types/kitchen";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 
@@ -1149,25 +1149,6 @@ function nearestWallRotation(
   const currentDistance = distanceByRotation[currentRotation];
   if (currentDistance <= bestDistance + WALL_ROTATION_STICKY_MARGIN_M) return currentRotation;
   return bestRotation;
-}
-
-// A floor cabinet counts as a freestanding "island" once it's clearly away
-// from every wall — hysteresis (enter/release pair, same shape as
-// WALL_ROTATION_STICKY_MARGIN_M and the height-snap margins above) so the
-// state doesn't flicker right at the boundary. Only lower/tower/corner
-// cabinets are eligible; upper/appliance/countertop/accessory modules are
-// never islands regardless of position.
-const ISLAND_ENTER_DISTANCE_M = 0.85;
-const ISLAND_RELEASE_DISTANCE_M = 0.55;
-const ISLAND_ELIGIBLE_CATEGORIES = new Set<KitchenModule["category"]>(["lower", "tower", "corner"]);
-
-export function isFreestandingPosition(
-  x: number, z: number, roomWidthM: number, roomDepthM: number, wasIsland: boolean,
-): boolean {
-  const distanceToNearestWall = Math.min(x, roomWidthM - x, z, roomDepthM - z);
-  return wasIsland
-    ? distanceToNearestWall >= ISLAND_RELEASE_DISTANCE_M
-    : distanceToNearestWall > ISLAND_ENTER_DISTANCE_M;
 }
 
 // Within this many cm of another wall-mounted module's own mount height
@@ -2400,7 +2381,7 @@ function AssemblyContent({
       const islandEligible = ISLAND_ELIGIBLE_CATEGORIES.has(mod.category);
       const islandMode = islandEligible && isFreestandingPosition(x, z, roomWidthM, roomDepthM, liveIslandMode);
       liveIslandMode = islandMode;
-      const rotation = moveMode.fixed || islandMode ? mod.rotation : nearestWallRotation(x, z, roomWidthM, roomDepthM, liveRotation);
+      const rotation = moveMode.fixed ? mod.rotation : islandMode ? liveRotation : nearestWallRotation(x, z, roomWidthM, roomDepthM, liveRotation);
       liveRotation = rotation;
       if (isWallMounted(mod)) ({ x, z } = wallFlushXZ(mod, x, z, roomWidthM, roomDepthM, rotation));
       // Lines up with a cabinet in the other band (floor vs wall-mounted)
@@ -2438,7 +2419,7 @@ function AssemblyContent({
           const islandEligible = ISLAND_ELIGIBLE_CATEGORIES.has(mod.category);
           const islandMode = islandEligible && isFreestandingPosition(x, z, roomWidthM, roomDepthM, liveIslandMode);
           liveIslandMode = islandMode;
-          const rotation = moveMode.fixed || islandMode ? mod.rotation : nearestWallRotation(x, z, roomWidthM, roomDepthM, liveRotation);
+          const rotation = moveMode.fixed ? mod.rotation : islandMode ? liveRotation : nearestWallRotation(x, z, roomWidthM, roomDepthM, liveRotation);
           // Re-flushes against whichever wall `rotation` ended up facing —
           // matters when the drag crossed a corner and switched walls.
           if (isWallMounted(mod)) ({ x, z } = wallFlushXZ(mod, x, z, roomWidthM, roomDepthM, rotation));

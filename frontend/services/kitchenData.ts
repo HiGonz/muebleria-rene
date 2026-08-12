@@ -245,6 +245,26 @@ export function getCountertopModel(id: string | undefined): CountertopModel | un
   return COUNTERTOP_MODELS.find((m) => m.id === id);
 }
 
+// A floor cabinet counts as a freestanding "island" once it's clearly away
+// from every wall — hysteresis (enter/release pair) so the state doesn't
+// flicker right at the boundary. Only lower/tower/corner cabinets are
+// eligible; upper/appliance/countertop/accessory modules are never islands
+// regardless of position. Shared by the drag-interaction code
+// (KitchenAssemblyScene.tsx) and the nudge action (useKitchenStore.ts) —
+// lives here (not in the 3D component file) so the store can use it too.
+export const ISLAND_ENTER_DISTANCE_M = 0.85;
+export const ISLAND_RELEASE_DISTANCE_M = 0.55;
+export const ISLAND_ELIGIBLE_CATEGORIES = new Set<KitchenModule["category"]>(["lower", "tower", "corner"]);
+
+export function isFreestandingPosition(
+  x: number, z: number, roomWidthM: number, roomDepthM: number, wasIsland: boolean,
+): boolean {
+  const distanceToNearestWall = Math.min(x, roomWidthM - x, z, roomDepthM - z);
+  return wasIsland
+    ? distanceToNearestWall >= ISLAND_RELEASE_DISTANCE_M
+    : distanceToNearestWall > ISLAND_ENTER_DISTANCE_M;
+}
+
 // A specific model's price takes over from the generic per-material rate —
 // same idea as an exterior texture overriding a flat color, just for cost too.
 function resolveCountertopCost(o: ModuleOptions): { label: string; cost: number } {
@@ -1282,25 +1302,27 @@ function buildSampleKitchenIsla(): KitchenDraft {
   add("armario_2_puertas", 285, 30, { dimensions: { width: 90, height: BRIDGE_HEIGHT, depth: BRIDGE_DEPTH }, options: bridgeOptions });
   add("armario_2_puertas", 445, 30, { dimensions: { width: 90, height: BRIDGE_HEIGHT, depth: BRIDGE_DEPTH }, options: bridgeOptions });
 
-  // Freestanding island — two real lower cabinets joined edge-to-edge,
-  // clear of both wall runs, roughly centered on the open floor to the
-  // south-east of the L (room is 580×380, so this sits well over 1.5m from
-  // every wall — well past the 0.85m island-mode threshold). rotation: 90 is
-  // deliberately NOT the nearest-wall pick (that would be the south wall,
-  // rotation 180) — demonstrates that a real drag-placed island holds
-  // whatever rotation it's given instead of snapping to face a wall.
-  // Doors on the front, a small open back (2 shelves, no panel) facing the
-  // walkway on the other side — the same snapToNeighbor/addCountertop
-  // machinery that joins wall-run cabinets joins these two into one
-  // continuous countertop with no extra code (see design spec). Cajones is
-  // 100cm wide (catalog default) and puertas is 90cm, so the flush boundary
-  // at x=360 puts cajones' center at 310 (260–360) and puertas' center stays
-  // at 405 (360–450) — a 190cm-wide island run, not 180cm.
-  add("gabinete_bajo_cajones", 310, 220, {
+  // Freestanding island — two real lower cabinets joined edge-to-edge along Z
+  // (their WIDTH axis at rotation 90 — see moduleBox/clampModuleToRoom in
+  // KitchenAssemblyScene.tsx: at rotation 90/270, width runs along Z and
+  // depth runs along X, the opposite of rotation 0/180), clear of both wall
+  // runs, centered at x=360 (shared, since both share the same 60cm depth ->
+  // same X half-extent). cajones (100cm wide) spans z:120-220, puertas
+  // (90cm wide) spans z:220-310, flush at z=220 -> one continuous 190cm run.
+  // Centers are >=1.15m from every wall (well past the 0.85m island-mode
+  // threshold in both cases). rotation: 90 is deliberately NOT the
+  // nearest-wall pick (that would be the south wall, rotation 180) —
+  // demonstrates that a real drag-placed island holds whatever rotation
+  // it's given instead of snapping to face a wall. Doors on the front, a
+  // small open back (2 shelves, no panel) facing the walkway on the other
+  // side — the same snapToNeighbor/addCountertop machinery that joins
+  // wall-run cabinets joins these two into one continuous countertop with
+  // no extra code.
+  add("gabinete_bajo_cajones", 360, 170, {
     rotation: 90,
     options: { islandMode: true, backPanelMaterial: "alacena", backShelves: 2 },
   });
-  add("gabinete_bajo_puertas", 405, 220, {
+  add("gabinete_bajo_puertas", 360, 265, {
     rotation: 90,
     options: { islandMode: true, backPanelMaterial: "alacena", backShelves: 2 },
   });

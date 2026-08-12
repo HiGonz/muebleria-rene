@@ -456,14 +456,14 @@ export function ModuleInspector() {
               )}
             </Section>
 
-            {(type === "desayunador" || type === "librero_giratorio_espejo" || opt.islandMode) && (
+            {(type === "desayunador" || type === "librero_giratorio_espejo" || opt.islandMode || opt.backPanelMaterial === "puertas" || opt.backPanelMaterial === "alacena") && (
               <Section label="Panel trasero">
                 <div className="grid grid-cols-2 gap-3">
                   <FieldGroup label="Material">
                     <SelectInput
                       value={opt.backPanelMaterial ?? "interior"}
                       onChange={(v) => updateOpt("backPanelMaterial", v)}
-                      options={type === "librero_giratorio_espejo" ? BACK_PANEL_OPTIONS : BACK_PANEL_OPTIONS.filter((o) => o.value !== "espejo")}
+                      options={type === "librero_giratorio_espejo" ? BACK_PANEL_OPTIONS.filter((o) => o.value !== "puertas" && o.value !== "alacena") : BACK_PANEL_OPTIONS.filter((o) => o.value !== "espejo")}
                     />
                   </FieldGroup>
                   {(type === "desayunador" || opt.islandMode) && (
