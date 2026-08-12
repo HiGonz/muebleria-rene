@@ -1282,9 +1282,25 @@ function buildSampleKitchenIsla(): KitchenDraft {
   add("armario_2_puertas", 285, 30, { dimensions: { width: 90, height: BRIDGE_HEIGHT, depth: BRIDGE_DEPTH }, options: bridgeOptions });
   add("armario_2_puertas", 445, 30, { dimensions: { width: 90, height: BRIDGE_HEIGHT, depth: BRIDGE_DEPTH }, options: bridgeOptions });
 
-  // Freestanding island — clear of both wall runs, roughly centered on the
-  // open floor to the south-east of the L.
-  add("isla_central", 360, 220);
+  // Freestanding island — two real lower cabinets joined edge-to-edge,
+  // clear of both wall runs, roughly centered on the open floor to the
+  // south-east of the L (room is 580×380, so this sits ~2m+ from every
+  // wall — well past the 0.85m island-mode threshold). rotation: 90 is
+  // deliberately NOT the nearest-wall pick (that would be the south wall,
+  // rotation 180) — demonstrates that a real drag-placed island holds
+  // whatever rotation it's given instead of snapping to face a wall.
+  // Doors on the front, a small open back (2 shelves, no panel) facing the
+  // walkway on the other side — the same snapToNeighbor/addCountertop
+  // machinery that joins wall-run cabinets joins these two into one
+  // continuous countertop with no extra code (see design spec).
+  add("gabinete_bajo_cajones", 315, 220, {
+    rotation: 90,
+    options: { islandMode: true, backPanelMaterial: "alacena", backShelves: 2 },
+  });
+  add("gabinete_bajo_puertas", 405, 220, {
+    rotation: 90,
+    options: { islandMode: true, backPanelMaterial: "alacena", backShelves: 2 },
+  });
 
   return {
     clientName: "Familia Rodríguez",
