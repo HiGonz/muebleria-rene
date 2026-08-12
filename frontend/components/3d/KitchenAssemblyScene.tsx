@@ -2419,6 +2419,16 @@ function AssemblyContent({
           const islandEligible = ISLAND_ELIGIBLE_CATEGORIES.has(mod.category);
           const islandMode = islandEligible && isFreestandingPosition(x, z, roomWidthM, roomDepthM, liveIslandMode);
           liveIslandMode = islandMode;
+          // The only feedback island mode gets otherwise is a frozen rotation
+          // and a hidden inspector section — neither is obvious mid-drag, so
+          // a transition (and only a transition, not every drop) gets an
+          // explicit toast.
+          if (islandMode !== (mod.options.islandMode ?? false)) {
+            toast(
+              islandMode ? `"${mod.label}" ahora es isla` : `"${mod.label}" ya no es isla`,
+              { description: islandMode ? "Gira libre y puedes configurar su cara trasera en el inspector." : "Volvió a orientarse hacia la pared más cercana.", duration: 2200 },
+            );
+          }
           const rotation = moveMode.fixed ? mod.rotation : islandMode ? liveRotation : nearestWallRotation(x, z, roomWidthM, roomDepthM, liveRotation);
           // Re-flushes against whichever wall `rotation` ended up facing —
           // matters when the drag crossed a corner and switched walls.
@@ -2711,6 +2721,7 @@ export function KitchenAssemblyScene({
                       title={mod.label}
                     >
                       {CATEGORY_ICONS[mod.category]} {mod.label}
+                      {mod.options.islandMode && " 🏝️"}
                     </span>
                     <span className="flex shrink-0 items-center gap-0.5">
                       <button

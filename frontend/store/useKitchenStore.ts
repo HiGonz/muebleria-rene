@@ -2,6 +2,7 @@
 
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { toast } from "sonner";
 import { buildNewModule, buildSampleKitchen, calculateKitchenMaterials, getCountertopModel, findFreeSpotNear, isFreestandingPosition, ISLAND_ELIGIBLE_CATEGORIES } from "@/services/kitchenData";
 import type { SampleKitchenVariant } from "@/services/kitchenData";
 import type {
@@ -289,6 +290,15 @@ export const useKitchenStore = create<KitchenStore>()(
           const islandMode = ISLAND_ELIGIBLE_CATEGORIES.has(mod.category)
             ? isFreestandingPosition(x / 100, z / 100, s.draft.roomWidth / 100, s.draft.roomDepth / 100, mod.options.islandMode ?? false)
             : mod.options.islandMode;
+          // Same transition-only toast as the drag path (KitchenAssemblyScene.tsx)
+          // — nudging is the other way islandMode can flip, and it gets zero
+          // other feedback (frozen rotation, hidden inspector section).
+          if (islandMode !== (mod.options.islandMode ?? false)) {
+            toast(
+              islandMode ? `"${mod.label}" ahora es isla` : `"${mod.label}" ya no es isla`,
+              { description: islandMode ? "Gira libre y puedes configurar su cara trasera en el inspector." : "Volvió a orientarse hacia la pared más cercana.", duration: 2200 },
+            );
+          }
           return {
             draft: {
               ...s.draft,
