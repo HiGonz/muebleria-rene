@@ -34,6 +34,8 @@ const BACK_PANEL_OPTIONS: { value: NonNullable<ModOptions["backPanelMaterial"]>;
   { value: "interior", label: "Interior (oculto contra el muro)" },
   { value: "exterior", label: "Exterior (acabado)" },
   { value: "lambrin", label: "Lambrín" },
+  { value: "puertas", label: "Puertas" },
+  { value: "alacena", label: "Alacena abierta" },
   { value: "espejo", label: "Espejo" },
 ];
 
@@ -454,22 +456,38 @@ export function ModuleInspector() {
               )}
             </Section>
 
-            {(type === "desayunador" || type === "librero_giratorio_espejo") && (
+            {(type === "desayunador" || type === "librero_giratorio_espejo" || opt.islandMode) && (
               <Section label="Panel trasero">
                 <div className="grid grid-cols-2 gap-3">
                   <FieldGroup label="Material">
-                    <SelectInput value={opt.backPanelMaterial ?? "interior"} onChange={(v) => updateOpt("backPanelMaterial", v)} options={BACK_PANEL_OPTIONS} />
+                    <SelectInput
+                      value={opt.backPanelMaterial ?? "interior"}
+                      onChange={(v) => updateOpt("backPanelMaterial", v)}
+                      options={type === "librero_giratorio_espejo" ? BACK_PANEL_OPTIONS : BACK_PANEL_OPTIONS.filter((o) => o.value !== "espejo")}
+                    />
                   </FieldGroup>
-                  {type === "desayunador" && (
+                  {(type === "desayunador" || opt.islandMode) && (
                     <FieldGroup label="Vuelo extra de cubierta">
-                      <NumInput value={opt.barOverhangCm ?? 30} onChange={(v) => updateOpt("barOverhangCm", v)} min={0} max={60} unit="cm" />
+                      <NumInput value={opt.barOverhangCm ?? (type === "desayunador" ? 30 : 0)} onChange={(v) => updateOpt("barOverhangCm", v)} min={0} max={60} unit="cm" />
+                    </FieldGroup>
+                  )}
+                  {opt.backPanelMaterial === "puertas" && (
+                    <FieldGroup label="Núm. puertas traseras">
+                      <NumInput value={opt.backDoors ?? 0} onChange={(v) => updateOpt("backDoors", v)} min={0} max={6} />
+                    </FieldGroup>
+                  )}
+                  {opt.backPanelMaterial === "alacena" && (
+                    <FieldGroup label="Entrepaños traseros">
+                      <NumInput value={opt.backShelves ?? 0} onChange={(v) => updateOpt("backShelves", v)} min={0} max={10} />
                     </FieldGroup>
                   )}
                 </div>
                 <p className="mt-2 text-[10px] text-warmgray/70">
                   {type === "desayunador"
                     ? "El respaldo queda expuesto hacia el lado del banquillo (no contra un muro), por eso lleva un acabado en vez de tablero liso. La cubierta vuela este tanto extra sobre ese lado."
-                    : "El respaldo lleva un espejo en vez de tablero — visible por el lado opuesto a los estantes."}
+                    : type === "librero_giratorio_espejo"
+                    ? "El respaldo lleva un espejo en vez de tablero — visible por el lado opuesto a los estantes."
+                    : "Este mueble está en modo isla (lejos de cualquier muro): el respaldo queda expuesto hacia el cuarto. Puedes dejarlo con un acabado plano, ponerle sus propias puertas, o abrirlo tipo alacena."}
                 </p>
               </Section>
             )}
