@@ -881,16 +881,6 @@ export const MODULE_CATALOG: ModuleCatalogEntry[] = [
     configurableFields: ["height", "width", "depth", "countertopMaterial", "countertopThickness", "edgeProfile", "boardMaterial", "color"],
   },
   {
-    type: "isla_central",
-    category: "countertop",
-    label: "Isla central",
-    description: "Módulo central independiente con muebles a los cuatro lados",
-    icon: "🏝️",
-    defaultDimensions: { height: 90, width: 180, depth: 90 },
-    defaultOptions: { drawers: 4, doors: 4, shelves: 1, countertopMaterial: "Cuarzo engineered", includesCountertop: true },
-    configurableFields: ["height", "width", "depth", "drawers", "doors", "shelves", "countertopMaterial", "edgeProfile", "boardMaterial", "color"],
-  },
-  {
     type: "peninsula",
     category: "countertop",
     label: "Península",

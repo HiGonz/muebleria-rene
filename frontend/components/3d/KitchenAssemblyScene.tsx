@@ -639,7 +639,7 @@ function CountertopMesh({ mod, wireframe, drag }: { mod: KitchenModule; wirefram
   const bodyMap = getWoodTexture(mod.options.exteriorTexture);
   const bodyRoughness = getWoodRoughness(mod.options.exteriorTexture);
 
-  const isIsland = mod.type === "isla_central" || mod.type === "peninsula" || mod.type === "barra_desayunadora";
+  const isIsland = mod.type === "peninsula" || mod.type === "barra_desayunadora";
   const bodyH = isIsland ? y - ctH : 0;
   // Bullnose radius equals the slab thickness — its top half rounds over the
   // countertop itself, its bottom half keeps curving past the underside to
@@ -1812,7 +1812,7 @@ function baseY(mod: KitchenModule): number {
   // "estufa" is a floor-standing range now (its own height reaches the
   // cooktop), unlike "parrilla"/"microondas" which still sit on a counter.
   if (mod.type === "parrilla" || mod.type === "microondas") return 0.87;
-  if (mod.category === "countertop" && !["isla_central", "peninsula", "barra_desayunadora"].includes(mod.type)) return 0.87;
+  if (mod.category === "countertop" && !["peninsula", "barra_desayunadora"].includes(mod.type)) return 0.87;
   return 0;
 }
 

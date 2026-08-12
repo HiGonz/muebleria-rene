@@ -2051,7 +2051,7 @@ export function shiftColor(hex: string, amount: number): string {
   return `#${clamp(r + d).toString(16).padStart(2, "0")}${clamp(g + d).toString(16).padStart(2, "0")}${clamp(b + d).toString(16).padStart(2, "0")}`;
 }
 
-// ─── Countertop preview (cubierta, isla_central, peninsula, barra, cubierta_tarja) ─
+// ─── Countertop preview (cubierta, peninsula, barra, cubierta_tarja) ─
 // CabinetMesh assumes a cabinet — carcass, doors, drawers — which doesn't
 // apply to a standalone countertop. Rendering one through it anyway used to
 // mostly work by accident (the carcass's "interior board" color was a neutral
@@ -2081,7 +2081,7 @@ function CountertopPreviewMesh({ module, wireframe = false }: { module: KitchenM
   const ctRoughness = ctTextureId ? getWoodRoughness(ctTextureId) : 0.35;
   const ctMetalness = ctTextureId ? 0.04 : 0.08;
 
-  const isIsland = module.type === "isla_central" || module.type === "peninsula" || module.type === "barra_desayunadora";
+  const isIsland = module.type === "peninsula" || module.type === "barra_desayunadora";
   const bodyColor = module.options.exteriorColor || module.options.color || "#d4c5b0";
   const bodyMap = getWoodTexture(module.options.exteriorTexture);
   const bodyRoughness = getWoodRoughness(module.options.exteriorTexture);
