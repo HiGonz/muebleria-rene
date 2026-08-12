@@ -481,6 +481,11 @@ export function FaceEditor({ module, onChange }: FaceEditorProps) {
             checked={activeDoor.hingeLeft}
             onChange={(v) => updateDoor(activeDoor.id, { hingeLeft: v })}
           />
+          <CheckRow
+            label="Frente de cristal"
+            checked={Boolean(activeDoor.glass)}
+            onChange={(v) => updateDoor(activeDoor.id, { glass: v })}
+          />
         </ElementEditForm>
       )}
     </div>

@@ -75,7 +75,7 @@ export function SelectionToolbar({
   onStepChange: (step: number) => void;
   onNudge: (direction: NudgeDirection) => void;
 }) {
-  const canMoveHeight = module.category === "upper" || module.type === "gabinete_superior_esquinero_puertas";
+  const canMoveHeight = module.category === "upper" || module.type === "esquinero_triangular" || module.type === "esquinero_triangular_puerta" || module.type === "gabinete_pared_esquinero_puertas";
 
   return (
     <div className="pointer-events-none fixed left-3 top-1/2 z-30 -translate-y-1/2">

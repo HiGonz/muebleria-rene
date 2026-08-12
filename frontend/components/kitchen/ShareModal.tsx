@@ -84,7 +84,7 @@ export function ShareModal({ kitchenProjectId, onClose }: ShareModalProps) {
           ) : url ? (
             <>
               <div className="flex items-center gap-2 rounded-xl border border-ivory/10 bg-ivory/4 px-3 py-2.5">
-                <span className="flex-1 truncate text-xs text-ivory/80">{url}</span>
+                <span className="selectable-text flex-1 truncate text-xs text-ivory/80">{url}</span>
                 <button
                   onClick={copy}
                   aria-label="Copiar enlace"

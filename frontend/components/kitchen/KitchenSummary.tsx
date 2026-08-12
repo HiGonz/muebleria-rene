@@ -403,7 +403,7 @@ export function KitchenSummary() {
               <div className="border-t border-ivory/10 pt-2">
                 <div className="flex items-baseline justify-between">
                   <span className="font-display text-base font-semibold text-ivory">Total estimado</span>
-                  <span className="text-xl font-bold text-sage">{fmt(summary.total)}</span>
+                  <span className="selectable-text text-xl font-bold text-sage">{fmt(summary.total)}</span>
                 </div>
               </div>
             </div>

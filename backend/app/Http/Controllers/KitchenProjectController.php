@@ -47,7 +47,7 @@ class KitchenProjectController extends Controller
             'openings.*.sillHeight'    => 'required|numeric|min:0',
             'modules'        => 'nullable|array',
             'modules.*.module_type' => 'required|string|max:60',
-            'modules.*.category'    => ['required', Rule::in(['lower', 'upper', 'tower', 'corner', 'countertop', 'appliance', 'accessory'])],
+            'modules.*.category'    => ['required', Rule::in(['lower', 'upper', 'tower', 'corner', 'countertop', 'appliance', 'accessory', 'opening'])],
             'modules.*.label'       => 'required|string|max:120',
             'modules.*.height'      => 'required|integer|min:1|max:500',
             'modules.*.width'       => 'required|integer|min:1|max:500',
@@ -144,7 +144,7 @@ class KitchenProjectController extends Controller
         $validated = $request->validate([
             'modules'               => 'required|array',
             'modules.*.module_type' => 'required|string|max:60',
-            'modules.*.category'    => ['required', Rule::in(['lower', 'upper', 'tower', 'corner', 'countertop', 'appliance', 'accessory'])],
+            'modules.*.category'    => ['required', Rule::in(['lower', 'upper', 'tower', 'corner', 'countertop', 'appliance', 'accessory', 'opening'])],
             'modules.*.label'       => 'required|string|max:120',
             'modules.*.height'      => 'required|integer|min:1|max:500',
             'modules.*.width'       => 'required|integer|min:1|max:500',

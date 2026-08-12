@@ -6,17 +6,17 @@ import { buildNewModule, buildSampleKitchen, calculateKitchenMaterials, getCount
 import type { SampleKitchenVariant } from "@/services/kitchenData";
 import type {
   BoardMaterial, ExteriorTextureId, HardwareFinish, KitchenDraft, KitchenModule, KitchenModuleType,
-  ModuleCategory, ModuleOptions, OpeningType, WallOpening, WallSide,
+  ModuleCategory, ModuleOptions, OpeningType, WallOpening, WallSide, ZocaloMaterial,
 } from "@/types/kitchen";
 
 // The fields that make up the room's shared finish — kept in sync across
-// every module (see applyExteriorToAll/applyHardwareToAll/applyCountertopToAll
-// below, wired up from ModuleInspector so any per-module edit fans out to the
-// whole kitchen). A brand-new module picks these up from whatever's already
-// in the room instead of falling back to the catalog's own hardcoded
-// defaults, so it never shows up mismatched.
+// every module (see applyExteriorToAll/applyHardwareToAll/applyCountertopToAll/
+// applyZocaloMaterialToAll below, wired up from ModuleInspector so any
+// per-module edit fans out to the whole kitchen). A brand-new module picks
+// these up from whatever's already in the room instead of falling back to
+// the catalog's own hardcoded defaults, so it never shows up mismatched.
 const GLOBAL_MATERIAL_FIELDS = [
-  "exteriorMaterial", "exteriorTexture", "hardwareFinish",
+  "exteriorMaterial", "exteriorTexture", "hardwareFinish", "zocaloMaterial",
   "countertopModel", "countertopMaterial", "countertopColor", "countertopTexture",
 ] as const satisfies readonly (keyof ModuleOptions)[];
 
@@ -94,7 +94,11 @@ interface KitchenStore {
   placeAccessoryInNiche: (nicheId: string, accessoryType: KitchenModuleType) => void;
   removeModule: (id: string) => void;
   updateModule: (id: string, patch: Partial<Pick<KitchenModule, "label" | "dimensions" | "options" | "x" | "z" | "rotation">>) => void;
-  updateModulePosition: (id: string, x: number, z: number, rotation?: KitchenModule["rotation"]) => void;
+  // mountHeightCm, when given, also commits a wall-mounted module's new
+  // installation height in the same update — dragging it up/down along its
+  // wall (see AssemblyContent's handleDragStart) resolves x/z/rotation and
+  // mountHeight together in one gesture, so they land in one history entry.
+  updateModulePosition: (id: string, x: number, z: number, rotation?: KitchenModule["rotation"], mountHeightCm?: number) => void;
   nudgeModule: (id: string, dx: number, dz: number, dMountHeight: number) => void;
   rotateModule: (id: string) => void;
   duplicateModule: (id: string) => void;
@@ -106,6 +110,7 @@ interface KitchenStore {
   applyExteriorToAll: (material: BoardMaterial, texture: ExteriorTextureId) => number;
   applyCountertopToAll: (modelId: string, color: string, texture: ExteriorTextureId | "ninguna") => number;
   applyHardwareToAll: (finish: HardwareFinish) => number;
+  applyZocaloMaterialToAll: (material: ZocaloMaterial) => number;
   // Dimensions — floor cabinets get a uniform box height; wall cabinets get a
   // uniform mount height (distance from the floor) *and* a uniform box height,
   // so both their bottom and top edges line up across the run. Towers are
@@ -230,7 +235,7 @@ export const useKitchenStore = create<KitchenStore>()(
           },
         })),
 
-      updateModulePosition: (id, x, z, rotation) =>
+      updateModulePosition: (id, x, z, rotation, mountHeightCm) =>
         set((s) => {
           const current = s.draft.modules.find((m) => m.id === id);
           if (current?.options.locked) return {};
@@ -243,7 +248,14 @@ export const useKitchenStore = create<KitchenStore>()(
             moveHistory: history,
             draft: {
               ...s.draft,
-              modules: s.draft.modules.map((m) => (m.id === id ? { ...m, x, z, rotation: rotation ?? m.rotation } : m)),
+              modules: s.draft.modules.map((m) =>
+                m.id === id
+                  ? {
+                      ...m, x, z, rotation: rotation ?? m.rotation,
+                      options: mountHeightCm !== undefined ? { ...m.options, mountHeight: mountHeightCm } : m.options,
+                    }
+                  : m
+              ),
             },
           };
         }),
@@ -352,6 +364,27 @@ export const useKitchenStore = create<KitchenStore>()(
             ...s.draft,
             modules: s.draft.modules.map((m) =>
               isCabinet(m) ? { ...m, options: { ...m.options, hardwareFinish: finish } } : m
+            ),
+          },
+        }));
+        return affected;
+      },
+
+      // Matches the "does this module actually render/cost a zócalo" check
+      // in calculateKitchenMaterials (kitchenData.ts) — upper cabinets carry
+      // hasToeKick:true by default even though they never show one, so
+      // they're excluded here too.
+      applyZocaloMaterialToAll: (material) => {
+        const hasZocalo = (m: KitchenModule) => {
+          const isUpperForToeKick = m.category === "upper" || m.type === "esquinero_triangular" || m.type === "esquinero_triangular_puerta" || m.type === "gabinete_pared_esquinero_puertas";
+          return !isUpperForToeKick && m.options.hasToeKick;
+        };
+        const affected = get().draft.modules.filter(hasZocalo).length;
+        set((s) => ({
+          draft: {
+            ...s.draft,
+            modules: s.draft.modules.map((m) =>
+              hasZocalo(m) ? { ...m, options: { ...m.options, zocaloMaterial: material } } : m
             ),
           },
         }));

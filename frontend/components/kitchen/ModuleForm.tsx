@@ -263,7 +263,6 @@ export function ModuleForm({ module, onChange }: Props) {
               <NumInput value={opt.mountHeight} onChange={(v) => updateOpt("mountHeight", v)} min={100} max={220} unit="cm" />
             </FieldGroup>
             <Toggle checked={opt.hasUnderLight} onChange={(v) => updateOpt("hasUnderLight", v)} label="Luz inferior LED" />
-            {type === "esquinero_superior" && <CornerFields opt={opt} updateOpt={updateOpt} />}
           </div>
         </div>
       )}
@@ -346,7 +345,7 @@ export function ModuleForm({ module, onChange }: Props) {
           </div>
         </div>
       )}
-      {isAccessory && type === "campana_extractora" && (
+      {isAccessory && (type === "campana_extractora" || type === "campana_extractora_compacta") && (
         <div>
           <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-zinc-500">Campana</p>
           <div className="grid grid-cols-2 gap-3">
@@ -456,25 +455,6 @@ function SinkFields({ opt, updateOpt, full }: { opt: ModOptions; updateOpt: (k: 
           <NumInput value={opt.sinkHoles} onChange={(v) => updateOpt("sinkHoles", v)} min={1} max={4} />
         </FieldGroup>
       </div>
-    </div>
-  );
-}
-
-function CornerFields({ opt, updateOpt }: { opt: ModOptions; updateOpt: (k: keyof ModOptions, v: unknown) => void }) {
-  return (
-    <div className="mt-3">
-      <FieldGroup label="Solución de esquina">
-        <SelectInput
-          value={opt.cornerType}
-          onChange={(v) => updateOpt("cornerType", v)}
-          options={[
-            { value: "magic_corner", label: "Magic Corner" },
-            { value: "lazy_susan", label: "Lazy Susan" },
-            { value: "diagonal", label: "Diagonal / chaflán" },
-            { value: "dead_corner", label: "Esquina ciega" },
-          ]}
-        />
-      </FieldGroup>
     </div>
   );
 }

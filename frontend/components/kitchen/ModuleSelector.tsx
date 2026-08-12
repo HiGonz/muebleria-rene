@@ -16,16 +16,27 @@ import type { KitchenModuleType, ModuleCatalogEntry } from "@/types/kitchen";
 //
 // Matching by ModuleCategory alone isn't precise enough for two groups:
 // the catalog's "appliance" category is actually built-in niches/cutouts
-// (nicho_refrigerador, espacio_lavavajillas, etc.), while the free-standing
+// (espacio_lavavajillas, espacio_cava_vinos, etc.), while the free-standing
 // appliances themselves (tarja, estufa, refrigerador...) are tagged
 // "accessory" alongside unrelated hardware/panels/organizers. So
 // "Electrodoméstico" and "Otros" list their member types explicitly to
 // split that category correctly instead of taking it whole.
 const APPLIANCE_ITEM_TYPES: KitchenModuleType[] = [
-  "tarja", "parrilla", "estufa", "refrigerador", "microondas", "lavavajillas", "campana_extractora",
+  "tarja", "parrilla", "estufa", "refrigerador", "microondas", "lavavajillas", "campana_extractora", "campana_extractora_compacta",
 ];
 const OTHER_ACCESSORY_TYPES: KitchenModuleType[] = [
   "herrajes", "panel_lateral", "panel_remate", "panel_decorativo", "organizador_especias", "cubertero", "especiero_aluminio",
+];
+// Category "upper" but not part of the generic configurable-cabinet catalog
+// (see the 2026-08 Armario de pared cleanup) — each solves something
+// specific (range-hood housing, task lighting, a microwave cutout, a fixed
+// door/cubby split, a wine grid) that doesn't reduce to "box with doors and
+// shelves", so they're parked in their own browsing group instead of mixed
+// in with the configurable ones. Still category "upper" in the real data
+// model (unchanged wall-mount/placement behavior) — this only affects
+// which tab they show up under here.
+const UNCATEGORIZED_UPPER_TYPES: KitchenModuleType[] = [
+  "campanero", "corona_luz", "gabinete_microondas", "aereo_hueco_inferior", "cava_vinos",
 ];
 
 interface SelectorGroup {
@@ -37,12 +48,14 @@ interface SelectorGroup {
 
 const SELECTOR_GROUPS: SelectorGroup[] = [
   { id: "armario_bajo", label: "Armario Bajo", icon: "🗄️", match: (e) => e.category === "lower" },
-  { id: "armario_pared", label: "Armario de pared", icon: "📦", match: (e) => e.category === "upper" },
+  { id: "armario_pared", label: "Armario de pared", icon: "📦", match: (e) => e.category === "upper" && !UNCATEGORIZED_UPPER_TYPES.includes(e.type) },
   { id: "armario_esquina", label: "Armario de Esquina", icon: "📐", match: (e) => e.category === "corner" },
   { id: "armarios_altos", label: "Armarios altos", icon: "🏗️", match: (e) => e.category === "tower" },
   { id: "electrodomestico", label: "Electrodoméstico", icon: "⚡", match: (e) => e.category === "appliance" || APPLIANCE_ITEM_TYPES.includes(e.type) },
   { id: "mesas_sillas", label: "Mesas y sillas", icon: "🍽️", match: () => false },
   { id: "otros", label: "Otros", icon: "🔩", match: (e) => e.category === "countertop" || OTHER_ACCESSORY_TYPES.includes(e.type) },
+  { id: "puertas_ventanas", label: "Puertas y ventanas", icon: "🚪", match: (e) => e.category === "opening" },
+  { id: "sin_categoria", label: "Sin categoría", icon: "❔", match: (e) => UNCATEGORIZED_UPPER_TYPES.includes(e.type) },
 ];
 
 export function ModuleSelector() {
@@ -61,7 +74,7 @@ export function ModuleSelector() {
   return (
     <div className="flex h-full flex-col">
       {/* Header */}
-      <div className="flex items-center justify-between px-5 py-4 border-b border-ivory/8">
+      <div className="flex items-center justify-between px-3 py-2 md:px-5 md:py-4 border-b border-ivory/8">
         <div className="flex items-center gap-1.5">
           {group && (
             <button

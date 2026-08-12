@@ -7,10 +7,15 @@ import { useKitchenStore } from "@/store/useKitchenStore";
 import { Input } from "@/components/ui/input";
 import { BOARD_COSTS, COUNTERTOP_MODELS } from "@/services/kitchenData";
 import { WOOD_TEXTURES } from "@/components/3d/woodTextures";
-import type { BoardMaterial, ExteriorTextureId, HardwareFinish } from "@/types/kitchen";
+import type { BoardMaterial, ExteriorTextureId, HardwareFinish, ZocaloMaterial } from "@/types/kitchen";
 
 const BOARD_OPTIONS = Object.keys(BOARD_COSTS) as BoardMaterial[];
 const HARDWARE_OPTIONS: HardwareFinish[] = ["Acero inoxidable", "Negro mate", "Dorado", "Bronce", "Cromo", "Sin jaladores"];
+const ZOCALO_OPTIONS: { value: ZocaloMaterial; label: string }[] = [
+  { value: "Exterior", label: "Tablero exterior (cortado a medida)" },
+  { value: "Interior", label: "Tablero interior (cortado a medida)" },
+  { value: "Aluminio", label: "Aluminio (tira de 3m)" },
+];
 
 function CountertopModelPicker({ value, onChange }: { value: string | undefined; onChange: (id: string) => void }) {
   return (
@@ -111,12 +116,14 @@ function ApplyButton({ onClick }: { onClick: () => number }) {
 // independent groups (exterior board, cubierta) so a shop can sync just one
 // of them without touching the other.
 export function GlobalMaterialsModal({ onClose }: { onClose: () => void }) {
-  const { applyExteriorToAll, applyCountertopToAll, applyHardwareToAll } = useKitchenStore();
+  const { applyExteriorToAll, applyCountertopToAll, applyHardwareToAll, applyZocaloMaterialToAll } = useKitchenStore();
 
   const [exteriorMaterial, setExteriorMaterial] = useState<BoardMaterial>("MDF 18mm");
   const [exteriorTexture, setExteriorTexture] = useState<ExteriorTextureId>("blanco_liso");
 
   const [hardwareFinish, setHardwareFinish] = useState<HardwareFinish>("Acero inoxidable");
+
+  const [zocaloMaterial, setZocaloMaterial] = useState<ZocaloMaterial>("Exterior");
 
   const [countertopModelId, setCountertopModelId] = useState(COUNTERTOP_MODELS[0].id);
   const [countertopColor, setCountertopColor] = useState(COUNTERTOP_MODELS[0].color);
@@ -191,6 +198,27 @@ export function GlobalMaterialsModal({ onClose }: { onClose: () => void }) {
               <TexturePicker value={countertopTexture} onChange={setCountertopTexture} allowNone />
             </div>
             <ApplyButton onClick={() => applyCountertopToAll(countertopModelId, countertopColor, countertopTexture)} />
+          </div>
+
+          <div className="border-t border-ivory/8" />
+
+          {/* ── Zócalo ──────────────────────────────────────────────────── */}
+          <div className="space-y-3">
+            <p className="text-xs font-semibold uppercase tracking-widest text-warmgray">Zócalo</p>
+            <p className="text-[11px] text-warmgray/70">Tira base de todo mueble bajo con zoclo.</p>
+            <div className="space-y-1">
+              <label className="block text-xs font-medium text-warmgray uppercase tracking-wider">Material</label>
+              <select
+                value={zocaloMaterial}
+                onChange={(e) => setZocaloMaterial(e.target.value as ZocaloMaterial)}
+                className="h-10 w-full rounded-xl border border-ivory/10 bg-ivory/5 px-3 text-sm text-ivory"
+              >
+                {ZOCALO_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value} className="bg-surface">{o.label}</option>
+                ))}
+              </select>
+            </div>
+            <ApplyButton onClick={() => applyZocaloMaterialToAll(zocaloMaterial)} />
           </div>
 
           <div className="border-t border-ivory/8" />

@@ -6,7 +6,8 @@ export type ModuleCategory =
   | "corner"      // Esquineros — variantes de esquina de muebles existentes
   | "countertop"  // Encimeras y superficies
   | "appliance"   // Espacios para electrodomésticos
-  | "accessory";  // Accesorios y complementos
+  | "accessory"   // Accesorios y complementos
+  | "opening";    // Puertas y ventanas decorativas — nunca colisionan con nada
 
 // ─── Module Types ──────────────────────────────────────────────────────────────
 export type LowerModuleType =
@@ -27,22 +28,50 @@ export type LowerModuleType =
   | "base_refrigerador"
   | "desayunador";
 
-// Esquineros reuse a base module's own options/materials/hardware logic
-// unchanged — only the carcass/countertop/shelf geometry grows a blind
-// fondo×fondo extension. See CornerBlindCabinetMesh in ModulePreview3D.tsx.
+// gabinete_bajo_esquinero_puertas reuses a base lower cabinet's own options/
+// materials/hardware logic unchanged — only the carcass/countertop/shelf
+// geometry grows a blind fondo×fondo extension. See CornerBlindCabinetMesh
+// in ModulePreview3D.tsx — reused as-is for the wall-mounted version below
+// (gabinete_pared_esquinero_puertas), same blind-extension shape just
+// mounted at height instead of on the floor. The triangular esquineros are
+// a different shape entirely — a true triangular footprint, not a blind
+// extension — see EsquineroTriangularMesh.
 export type CornerModuleType =
   | "gabinete_bajo_esquinero_puertas"
-  | "gabinete_superior_esquinero_puertas";
+  | "gabinete_pared_esquinero_puertas"
+  | "esquinero_triangular"
+  | "esquinero_triangular_puerta";
 
+// Armario de pared catalog — reorganized into a small set of highly
+// configurable base models instead of one near-duplicate model per
+// combination (2026-08 cleanup). armario_abierto is the base for every
+// door/shelf variation below it (doors:0/1/2, doorGlass, shelves are all
+// just options on the same generic cabinet mesh — see CabinetMesh/
+// getEffectiveDoors); armario_alto_* additionally use
+// options.useDetailedLayout + doorDefs to stack two doors (or one, for
+// media puerta) around the fixed mid-height shelf instead of the normal
+// side-by-side door split. campanero/corona_luz/gabinete_microondas/
+// aereo_hueco_inferior/cava_vinos are unrelated special-purpose pieces that
+// don't fit that generic "box with doors/shelves" model at all — kept as
+// their own dedicated meshes, just parked in a separate catalog browser
+// group (see ModuleSelector.tsx) instead of mixed in with the generic ones.
 export type UpperModuleType =
-  | "alacena_aerea"
-  | "gabinete_superior"
-  | "esquinero_superior"
+  | "armario_abierto"
+  | "armario_1_puerta"
+  | "armario_1_puerta_cristal"
+  | "armario_2_puertas"
+  | "armario_2_puertas_cristal"
+  | "armario_alto_2_puertas"
+  | "armario_alto_2_puertas_cristal"
+  | "armario_alto_combinado"
+  | "armario_alto_combinado_invertido"
+  | "armario_alto_media_puerta"
+  | "nicho_abierto"
+  | "nicho_puerta"
+  | "nicho_puerta_cristal"
   | "campanero"
-  | "alacena_cristal"
-  | "despensero_alto"
-  | "gabinete_microondas"
   | "corona_luz"
+  | "gabinete_microondas"
   | "aereo_hueco_inferior"
   | "cava_vinos";
 
@@ -63,9 +92,6 @@ export type CountertopModuleType =
   | "cubierta_parrilla";
 
 export type ApplianceModuleType =
-  | "nicho_refrigerador"
-  | "nicho_microondas"
-  | "nicho_horno"
   | "espacio_lavavajillas"
   | "espacio_centro_bebidas"
   | "espacio_cava_vinos";
@@ -78,6 +104,7 @@ export type AccessoryModuleType =
   | "microondas"
   | "lavavajillas"
   | "campana_extractora"
+  | "campana_extractora_compacta"
   | "herrajes"
   | "panel_lateral"
   | "panel_remate"
@@ -85,6 +112,16 @@ export type AccessoryModuleType =
   | "organizador_especias"
   | "cubertero"
   | "especiero_aluminio";
+
+// Purely decorative — the shape of a door/window, not a real functional
+// wall opening (that's WallOpening/RoomOpeningsEditor, cut directly into a
+// wall). These are ordinary freestanding modules like any other (own x/z/
+// rotation, show up in the module list, draggable, deletable) except they
+// never collide with anything — see placementBand in
+// KitchenAssemblyScene.tsx, which returns null for category "opening" (no
+// band means no collision check at all), letting one sit flush against or
+// overlapping any other module or wall opening.
+export type OpeningModuleType = "puerta_decorativa" | "ventana_decorativa";
 
 // Pull-out accessories that live INSIDE a cabinet, behind one specific door —
 // not freestanding modules of their own. Picked per-door via
@@ -99,7 +136,8 @@ export type KitchenModuleType =
   | CornerModuleType
   | CountertopModuleType
   | ApplianceModuleType
-  | AccessoryModuleType;
+  | AccessoryModuleType
+  | OpeningModuleType;
 
 // ─── Materials ─────────────────────────────────────────────────────────────────
 export type BoardMaterial =
@@ -149,8 +187,8 @@ export type SidePanelMode = "ninguno" | "interior" | "exterior" | "lambrin";
  *  toward the seating side, so it can be finished in exterior board or lambrín
  *  instead, and a librero giratorio's back carries a mirror ("espejo"). */
 export type BackPanelMode = "interior" | "exterior" | "lambrin" | "espejo";
-/** Toe-kick (zócalo) trim material — MDF cut to size, or aluminum strip stock sold in 3m pieces. */
-export type ZocaloMaterial = "MDF" | "Aluminio";
+/** Toe-kick (zócalo) trim material — interior or exterior board cut to size (see boardMaterial/exteriorMaterial for which specific board), or aluminum strip stock sold in 3m pieces. */
+export type ZocaloMaterial = "Interior" | "Exterior" | "Aluminio";
 
 // ─── Module Dimensions ─────────────────────────────────────────────────────────
 export interface ModuleDimensions {
@@ -205,6 +243,10 @@ export interface DoorDef {
   // hinge's more limited angle. Populated from ModuleOptions.doorHingeType,
   // index-aligned with door order, same convention as doorHingeSides.
   wideAngle?: boolean;
+  // Frame + inset transparent glass panel instead of a solid face.
+  // Populated from ModuleOptions.doorGlass, index-aligned with door order,
+  // same convention as doorHingeSides. See DoorPanel.
+  glass?: boolean;
 }
 
 // ─── Module Options ────────────────────────────────────────────────────────────
@@ -315,6 +357,11 @@ export interface ModuleOptions {
   // standard hinge's more limited angle — independent of which side it's
   // on. Undefined/missing = "normal".
   doorHingeType?: ("normal" | "chapulina")[];
+  // Per-door glass front (index-aligned with door order, same convention as
+  // doorHingeSides). Renders a solid frame (the door's usual board/material)
+  // with an inset transparent glass panel instead of a solid face — see
+  // DoorPanel. Undefined/missing = solid door.
+  doorGlass?: boolean[];
   // Per-door pull-out accessory (index-aligned with the auto-generated door
   // order, same convention as doorHingeSides). null/undefined = no accessory
   // behind that door.
@@ -347,6 +394,13 @@ export interface ModuleOptions {
   lightStripWidth?: number;   // cm, front-to-back width of the flat LED strip (lightMode "tira")
   bulbCount?: number;         // how many flat round bulbs (lightMode "foquitos")
   lightColor?: string;        // emissive color, e.g. warm white
+  // Corona de luz only — it isn't a real cabinet against the wall, it's a
+  // visor mounted on top of and forward of the upper cabinets below, so its
+  // stored x/z (still flush-to-wall, same as any other aéreo, for dragging/
+  // snapping) isn't where it should actually render. This shifts the
+  // rendered mesh forward (cm, away from the wall) from that anchor —
+  // 0 renders flush, same as before this option existed.
+  wallOffset?: number;
   // Back panel — see BackPanelMode. Defaults to "interior" (plain board,
   // hidden against the wall) for every module except desayunador.
   backPanelMaterial?: BackPanelMode;

@@ -2,11 +2,22 @@
 
 import { Canvas, useFrame } from "@react-three/fiber";
 import { OrbitControls, MeshReflectorMaterial } from "@react-three/drei";
-import { useEffect, useRef, useState, type ReactNode } from "react";
-import { MathUtils, type Group, type Texture } from "three";
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
+import { MathUtils, Shape, Vector2, type Group, type Texture } from "three";
 import type { KitchenModule, DrawerDef, DoorDef, HardwareFinish, PullOutAccessoryType } from "@/types/kitchen";
 import { getWoodTexture, getWoodRoughness } from "./woodTextures";
 import { useContextRecovery } from "./useContextRecovery";
+
+// True while the module currently being rendered is armed in "Mover" mode
+// (see moveMode in KitchenAssemblyScene.tsx) — provided per-module by
+// ModulePlacement there, consumed here by every door/drawer-front's own
+// onPointerDown. Those normally stopPropagation so a click on the door
+// front toggles it open/closed instead of also starting a whole-module
+// drag; but a click-drag on the door should still MOVE the module once
+// "Mover" is armed for it, same as clicking anywhere else on the carcass —
+// otherwise dragging only worked when the pointer happened to land on a
+// panel that wasn't a door.
+export const ModuleMoveArmedContext = createContext(false);
 
 // ─── Board thickness (meters) ─────────────────────────────────────────────────
 const T = 0.018;
@@ -17,6 +28,15 @@ const DOOR_OPEN_ANGLE = Math.PI * 0.42; // ~76°
 // back against the cabinet's own side, which isn't how it actually sits).
 const WIDE_DOOR_OPEN_ANGLE = (170 * Math.PI) / 180;
 const DAMP_SPEED = 7;
+// Visible border width around a glass door's inset pane — the solid door
+// board still shows this much on every edge, reading as the frame around
+// the "cristal incrustado" instead of the glass filling the whole face.
+const GLASS_FRAME_MARGIN = 0.035;
+// A light teal-blue tint, not full opacity — see the glass-panel comment
+// in DoorPanel for the balance this is going for (visibly a different
+// material from the frame, but still actually see-through, not a mirror).
+const GLASS_PANEL_COLOR = "#5b8b93";
+const GLASS_PANEL_OPACITY = 0.28;
 
 function setGrabCursor(hover: boolean) {
   if (typeof document !== "undefined") document.body.style.cursor = hover ? "pointer" : "auto";
@@ -52,7 +72,7 @@ export function getEffectiveDrawers(mod: KitchenModule): DrawerDef[] {
   if (!count) return [];
   // Wall cabinets have no toe-kick and no mounting-rail reveal at the top —
   // their fronts run floor-to-ceiling of the box itself, not just the base.
-  const isUpper = mod.category === "upper" || mod.type === "gabinete_superior_esquinero_puertas";
+  const isUpper = mod.category === "upper" || mod.type === "esquinero_triangular" || mod.type === "esquinero_triangular_puerta" || mod.type === "gabinete_pared_esquinero_puertas";
   const toeKick = !isUpper && mod.options.hasToeKick ? mod.options.toeKickHeight : 0;
   const ctThick = mod.options.includesCountertop ? mod.options.countertopThickness : 0;
   const topMargin = isUpper ? 0 : TOP_FACE_MARGIN_CM;
@@ -83,7 +103,7 @@ export function getEffectiveDoors(mod: KitchenModule): DoorDef[] {
   if (!count) return [];
   // Wall cabinets have no toe-kick and no mounting-rail reveal at the top —
   // their fronts run floor-to-ceiling of the box itself, not just the base.
-  const isUpper = mod.category === "upper" || mod.type === "gabinete_superior_esquinero_puertas";
+  const isUpper = mod.category === "upper" || mod.type === "esquinero_triangular" || mod.type === "esquinero_triangular_puerta" || mod.type === "gabinete_pared_esquinero_puertas";
   const toeKick = !isUpper && mod.options.hasToeKick ? mod.options.toeKickHeight : 0;
   const ctThick = mod.options.includesCountertop ? mod.options.countertopThickness : 0;
   const topMargin = isUpper ? 0 : TOP_FACE_MARGIN_CM;
@@ -108,6 +128,7 @@ export function getEffectiveDoors(mod: KitchenModule): DoorDef[] {
       pullOutAccessory: mod.options.doorAccessories?.[i] ?? null,
       pullOut: mod.options.doorPullOut?.[i] ?? false,
       wideAngle: mod.options.doorHingeType?.[i] === "chapulina",
+      glass: mod.options.doorGlass?.[i] ?? false,
     };
   });
 }
@@ -800,6 +821,7 @@ function DoorPanel({
   door: DoorDef; W: number; D: number; toeKick: number; color: string;
   map?: Texture | null; roughness?: number; hardware?: HardwareFinish; wireframe?: boolean; onSelect?: () => void;
 }) {
+  const moveArmed = useContext(ModuleMoveArmedContext);
   const iW = W - T * 2;
   const dW = (door.widthPct / 100) * iW - 0.003;
   const dH = door.heightCm / 100 - 0.003;
@@ -879,23 +901,54 @@ function DoorPanel({
             ate the drag-to-orbit gesture starting from a door. */}
         <mesh
           position={[localX, localY, 0]}
-          castShadow
-          receiveShadow
-          onPointerDown={(e) => e.stopPropagation()}
+          castShadow={!door.glass}
+          receiveShadow={!door.glass}
+          onPointerDown={(e) => { if (!moveArmed) e.stopPropagation(); }}
           onContextMenu={(e) => { e.stopPropagation(); e.nativeEvent.preventDefault(); setOpen((v) => !v); onSelect?.(); }}
           onDoubleClick={(e) => { e.stopPropagation(); e.nativeEvent.preventDefault(); setOpen((v) => !v); onSelect?.(); }}
           onPointerOver={(e) => { e.stopPropagation(); setGrabCursor(true); }}
           onPointerOut={() => setGrabCursor(false)}
         >
           <boxGeometry args={[dW, dH, 0.019]} />
-          <meshStandardMaterial
-            key={mapKey(map)}
-            color={map ? "#ffffff" : shiftColor(color, 0.04)}
-            map={map ?? undefined}
-            roughness={roughness ?? 0.62}
-            wireframe={wireframe}
-          />
+          {/* Glass front: this mesh (not a smaller inset panel layered over a
+              still-solid door) IS the door face when door.glass — a solid
+              board behind a "glass" panel would still block the view into
+              the cabinet no matter how transparent the panel looked. The
+              frame is the thin opaque strips below, added on top of the
+              edges only, so the whole middle stays actually see-through. */}
+          {door.glass ? (
+            <meshPhysicalMaterial
+              color={GLASS_PANEL_COLOR}
+              transparent
+              opacity={GLASS_PANEL_OPACITY}
+              roughness={0.08}
+              metalness={0}
+              transmission={wireframe ? 0 : 0.75}
+              thickness={0.02}
+              ior={1.5}
+              clearcoat={0.15}
+              clearcoatRoughness={0.25}
+              wireframe={wireframe}
+              side={2}
+            />
+          ) : (
+            <meshStandardMaterial
+              key={mapKey(map)}
+              color={map ? "#ffffff" : shiftColor(color, 0.04)}
+              map={map ?? undefined}
+              roughness={roughness ?? 0.62}
+              wireframe={wireframe}
+            />
+          )}
         </mesh>
+        {door.glass && !wireframe && (
+          <>
+            <Box pos={[localX, localY + dH / 2 - GLASS_FRAME_MARGIN / 2, 0.0105]} size={[dW, GLASS_FRAME_MARGIN, 0.006]} color={map ? "#ffffff" : shiftColor(color, 0.04)} map={map} roughness={roughness ?? 0.62} />
+            <Box pos={[localX, localY - dH / 2 + GLASS_FRAME_MARGIN / 2, 0.0105]} size={[dW, GLASS_FRAME_MARGIN, 0.006]} color={map ? "#ffffff" : shiftColor(color, 0.04)} map={map} roughness={roughness ?? 0.62} />
+            <Box pos={[localX - dW / 2 + GLASS_FRAME_MARGIN / 2, localY, 0.0105]} size={[GLASS_FRAME_MARGIN, dH, 0.006]} color={map ? "#ffffff" : shiftColor(color, 0.04)} map={map} roughness={roughness ?? 0.62} />
+            <Box pos={[localX + dW / 2 - GLASS_FRAME_MARGIN / 2, localY, 0.0105]} size={[GLASS_FRAME_MARGIN, dH, 0.006]} color={map ? "#ffffff" : shiftColor(color, 0.04)} map={map} roughness={roughness ?? 0.62} />
+          </>
+        )}
         {!wireframe && (
           <>
             {/* Concealed cup hinges — mounted on the door's back face at the
@@ -948,6 +1001,7 @@ function PullOutLarderDoor({
   // sliding door instead of the module's own fixed shelves, when set.
   accessory?: PullOutAccessoryType | null;
 }) {
+  const moveArmed = useContext(ModuleMoveArmedContext);
   const iW = W - T * 2;
   const dW = (door.widthPct / 100) * iW - 0.003;
   const dH = door.heightCm / 100 - 0.003;
@@ -992,7 +1046,7 @@ function PullOutLarderDoor({
       <mesh
         castShadow
         receiveShadow
-        onPointerDown={(e) => e.stopPropagation()}
+        onPointerDown={(e) => { if (!moveArmed) e.stopPropagation(); }}
         onContextMenu={(e) => { e.stopPropagation(); e.nativeEvent.preventDefault(); setOpen((v) => !v); onSelect?.(); }}
         onDoubleClick={(e) => { e.stopPropagation(); e.nativeEvent.preventDefault(); setOpen((v) => !v); onSelect?.(); }}
         onPointerOver={(e) => { e.stopPropagation(); setGrabCursor(true); }}
@@ -1208,7 +1262,7 @@ function CajonHuecoSuperiorMesh({ module, wireframe = false, onSelect }: {
         <SideFiller side="right" W={W} H={H} D={D} color={exteriorColor} map={exteriorMap} roughness={exteriorRoughness} wireframe={wireframe} />
       )}
       {toeKick > 0 && (
-        <ToeKick W={W} D={D} height={toeKick} color={exteriorColor} map={exteriorMap} roughness={exteriorRoughness} aluminum={module.options.zocaloMaterial === "Aluminio"} wireframe={wireframe} />
+        <ToeKick W={W} D={D} height={toeKick} color={module.options.zocaloMaterial === "Interior" ? color : exteriorColor} map={module.options.zocaloMaterial === "Interior" ? null : exteriorMap} roughness={module.options.zocaloMaterial === "Interior" ? undefined : exteriorRoughness} aluminum={module.options.zocaloMaterial === "Aluminio"} wireframe={wireframe} />
       )}
       {ctThick > 0 && (
         <Countertop
@@ -1239,6 +1293,7 @@ const LIBRERO_CLEARANCE = 0.08;
 function LibreroGiratorioMesh({ module, wireframe = false, onSelect }: {
   module: KitchenModule; wireframe?: boolean; onSelect?: () => void;
 }) {
+  const moveArmed = useContext(ModuleMoveArmedContext);
   const W = module.dimensions.width / 100;
   const D = module.dimensions.depth / 100;
   const H = module.dimensions.height / 100;
@@ -1278,7 +1333,7 @@ function LibreroGiratorioMesh({ module, wireframe = false, onSelect }: {
         {/* Invisible hit target — click anywhere on the unit to spin it. */}
         <mesh
           visible={false}
-          onPointerDown={(e) => e.stopPropagation()}
+          onPointerDown={(e) => { if (!moveArmed) e.stopPropagation(); }}
           onContextMenu={(e) => { e.stopPropagation(); e.nativeEvent.preventDefault(); setOpen((v) => !v); onSelect?.(); }}
           onDoubleClick={(e) => { e.stopPropagation(); e.nativeEvent.preventDefault(); setOpen((v) => !v); onSelect?.(); }}
           onPointerOver={(e) => { e.stopPropagation(); setGrabCursor(true); }}
@@ -1485,7 +1540,7 @@ function CornerBlindCabinetMesh({ module, wireframe = false, onSelect }: {
         />
       )}
       {toeKick > 0 && (
-        <ToeKick W={Wt} D={D} height={toeKick} color={exteriorColor} map={exteriorMap} roughness={exteriorRoughness} aluminum={module.options.zocaloMaterial === "Aluminio"} wireframe={wireframe} />
+        <ToeKick W={Wt} D={D} height={toeKick} color={module.options.zocaloMaterial === "Interior" ? color : exteriorColor} map={module.options.zocaloMaterial === "Interior" ? null : exteriorMap} roughness={module.options.zocaloMaterial === "Interior" ? undefined : exteriorRoughness} aluminum={module.options.zocaloMaterial === "Aluminio"} wireframe={wireframe} />
       )}
       {shelves > 0 && (
         <Shelves W={Wt} H={H} D={D} count={shelves} toeKick={toeKick} ctThick={ctThick} color={color} wireframe={wireframe} />
@@ -1548,6 +1603,191 @@ function CornerBlindCabinetMesh({ module, wireframe = false, onSelect }: {
   );
 }
 
+// ─── Triangular corner wall cabinet ────────────────────────────────────────
+// Right-triangle footprint instead of a rectangular carcass — width and
+// depth are the two legs running along each wall, meeting at the room's
+// actual corner (the right-angle vertex); the hypotenuse is the open (or
+// door-covered) diagonal front. Placement/collision still treats it as a
+// plain width×depth rectangle (its bounding box, same as any other module —
+// no special-casing needed there, unlike the blind-extension corner
+// cabinets), only the visible geometry is triangular.
+//
+// Vertices in local XZ (before the cornerBlindSide mirror below):
+//   A = (-W/2, -D/2)  the right-angle corner, against both walls
+//   B = ( W/2, -D/2)  along the back wall from A
+//   C = (-W/2,  D/2)  along the side wall from A
+// B and C average to local (0,0) — the hypotenuse's midpoint lands exactly
+// on the module's own center, which is what makes the door's position math
+// below simple.
+function triangleFootprintShape(w: number, d: number): Shape {
+  const shape = new Shape();
+  shape.moveTo(-w / 2, -d / 2);
+  shape.lineTo(w / 2, -d / 2);
+  shape.lineTo(-w / 2, d / 2);
+  shape.closePath();
+  return shape;
+}
+
+// A single door spanning the diagonal hypotenuse front. Reuses DoorPanel's
+// hinge/animation approach (pivot group + damped rotation, right-click/
+// double-click to toggle) but can't reuse DoorPanel itself — that assumes a
+// door facing straight along +Z, and this one sits at whatever angle the
+// hypotenuse happens to be. Wrapping everything in an outer group already
+// positioned/rotated to match the hypotenuse's own line means the pivot
+// math inside is the same local-frame arithmetic as a normal door.
+function TriangleCornerDoor({
+  W, D, H, color, map, roughness, hardware = "Acero inoxidable", wireframe = false, onSelect, glass = false, hingeLeft = true,
+}: {
+  W: number; D: number; H: number; color: string; map?: Texture | null; roughness?: number;
+  hardware?: HardwareFinish; wireframe?: boolean; onSelect?: () => void; glass?: boolean; hingeLeft?: boolean;
+}) {
+  const moveArmed = useContext(ModuleMoveArmedContext);
+  const L = Math.hypot(W, D);
+  const dW = L - 0.02;
+  const dH = H - 0.04;
+  // Rotates the outer group's local +X axis to line up with the hypotenuse
+  // direction B→C = (-W, D) — same rotation-matrix convention used
+  // elsewhere in this app (see wallDimAnchors in KitchenAssemblyScene.tsx).
+  const angle = Math.atan2(-D, -W);
+  // Outward unit normal (perpendicular to B→C, pointing away from vertex A
+  // and out into the room) — proud offset direction for the door, same
+  // role D/2 plays for a normal front-facing door.
+  const nx = D / L;
+  const nz = W / L;
+  const proud = T / 2 + 0.012;
+
+  const hx = hingeLeft ? -dW / 2 + 0.012 : dW / 2 - 0.012;
+  const localX = -hx;
+  const handleLocalX = hingeLeft ? localX + dW / 2 - 0.04 : localX - dW / 2 + 0.04;
+  const handleLook = hardware === "Sin jaladores" ? null : HARDWARE_LOOKS[hardware];
+  const hingeCount = dH >= 1 ? 3 : 2;
+  const hingeInset = Math.min(dH * 0.42, 0.1);
+  const hingeOffsets = hingeCount === 3 ? [dH / 2 - hingeInset, 0, -dH / 2 + hingeInset] : [dH / 2 - hingeInset, -dH / 2 + hingeInset];
+
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    setOpen(false);
+  }, [hingeLeft]);
+  const pivotRef = useRef<Group>(null);
+  const target = open ? (hingeLeft ? -DOOR_OPEN_ANGLE : DOOR_OPEN_ANGLE) : 0;
+  useFrame((_, delta) => {
+    if (pivotRef.current) pivotRef.current.rotation.y = MathUtils.damp(pivotRef.current.rotation.y, target, DAMP_SPEED, delta);
+  });
+
+  return (
+    <group position={[nx * proud, H / 2, nz * proud]} rotation={[0, angle, 0]}>
+      <group ref={pivotRef} position={[hx, 0, 0]}>
+        <mesh
+          position={[localX, 0, 0]}
+          castShadow={!glass}
+          receiveShadow={!glass}
+          onPointerDown={(e) => { if (!moveArmed) e.stopPropagation(); }}
+          onContextMenu={(e) => { e.stopPropagation(); e.nativeEvent.preventDefault(); setOpen((v) => !v); onSelect?.(); }}
+          onDoubleClick={(e) => { e.stopPropagation(); e.nativeEvent.preventDefault(); setOpen((v) => !v); onSelect?.(); }}
+          onPointerOver={(e) => { e.stopPropagation(); setGrabCursor(true); }}
+          onPointerOut={() => setGrabCursor(false)}
+        >
+          <boxGeometry args={[dW, dH, 0.019]} />
+          {/* Same "glass IS the face, frame is a thin overlay" construction
+              as DoorPanel — a solid board behind the glass would block the
+              view through no matter how transparent the panel looked. */}
+          {glass ? (
+            <meshPhysicalMaterial
+              color={GLASS_PANEL_COLOR} transparent opacity={GLASS_PANEL_OPACITY} roughness={0.08} metalness={0}
+              transmission={wireframe ? 0 : 0.75} thickness={0.02} ior={1.5} clearcoat={0.15} clearcoatRoughness={0.25}
+              wireframe={wireframe} side={2}
+            />
+          ) : (
+            <meshStandardMaterial key={mapKey(map)} color={map ? "#ffffff" : shiftColor(color, 0.04)} map={map ?? undefined} roughness={roughness ?? 0.62} wireframe={wireframe} />
+          )}
+        </mesh>
+        {glass && !wireframe && (
+          <>
+            <Box pos={[localX, dH / 2 - GLASS_FRAME_MARGIN / 2, 0.0105]} size={[dW, GLASS_FRAME_MARGIN, 0.006]} color={map ? "#ffffff" : shiftColor(color, 0.04)} map={map} roughness={roughness ?? 0.62} />
+            <Box pos={[localX, -dH / 2 + GLASS_FRAME_MARGIN / 2, 0.0105]} size={[dW, GLASS_FRAME_MARGIN, 0.006]} color={map ? "#ffffff" : shiftColor(color, 0.04)} map={map} roughness={roughness ?? 0.62} />
+            <Box pos={[localX - dW / 2 + GLASS_FRAME_MARGIN / 2, 0, 0.0105]} size={[GLASS_FRAME_MARGIN, dH, 0.006]} color={map ? "#ffffff" : shiftColor(color, 0.04)} map={map} roughness={roughness ?? 0.62} />
+            <Box pos={[localX + dW / 2 - GLASS_FRAME_MARGIN / 2, 0, 0.0105]} size={[GLASS_FRAME_MARGIN, dH, 0.006]} color={map ? "#ffffff" : shiftColor(color, 0.04)} map={map} roughness={roughness ?? 0.62} />
+          </>
+        )}
+        {!wireframe && (
+          <>
+            {hingeOffsets.map((ho, i) => (
+              <Box key={i} pos={[0, ho, -0.013]} size={[0.014, 0.032, 0.006]} color="#888" roughness={0.4} metalness={0.4} />
+            ))}
+            {handleLook && (
+              <Box pos={[handleLocalX, 0, 0.012]} size={[0.008, dH * 0.22, 0.006]} color={handleLook.color} roughness={handleLook.roughness} metalness={handleLook.metalness} />
+            )}
+          </>
+        )}
+      </group>
+    </group>
+  );
+}
+
+function EsquineroTriangularMesh({ module, wireframe = false, onSelect }: {
+  module: KitchenModule; wireframe?: boolean; onSelect?: () => void;
+}) {
+  const W = module.dimensions.width / 100;
+  const H = module.dimensions.height / 100;
+  const D = module.dimensions.depth / 100;
+  const color = module.options.color || "#d4c5b0";
+  const exteriorColor = module.options.exteriorColor || color;
+  const exteriorMap = getWoodTexture(module.options.exteriorTexture);
+  const exteriorRoughness = getWoodRoughness(module.options.exteriorTexture);
+  const darkColor = shiftColor(color, -0.12);
+  const shelfColor = shiftColor(color, -0.04);
+  // Same technique CornerBlindCabinetMesh uses to flip which wall the right
+  // angle sits against — mirror the whole group on X, let Three.js handle
+  // winding/lighting for the negative-determinant transform.
+  const mirrored = module.options.cornerBlindSide === "derecha";
+  const shelves = module.options.shelves || 0;
+  const hasDoor = (module.options.doors || 0) > 0;
+  const footprintShape = triangleFootprintShape(W, D);
+  // Shelves/top/bottom inset from the two leg panels by one board thickness
+  // each — not a true polygon offset of the hypotenuse too, but close
+  // enough to read correctly and far simpler than exact edge offsetting.
+  const innerShape = triangleFootprintShape(Math.max(W - T * 2, 0.02), Math.max(D - T * 2, 0.02));
+
+  return (
+    <group scale={mirrored ? [-1, 1, 1] : [1, 1, 1]}>
+      {/* Leg panel against the back wall */}
+      <Box pos={[0, H / 2, -D / 2 + T / 2]} size={[W, H, T]} color={darkColor} roughness={0.85} wireframe={wireframe} />
+      {/* Leg panel against the side wall */}
+      <Box pos={[-W / 2 + T / 2, H / 2, 0]} size={[T, H, D]} color={darkColor} roughness={0.85} wireframe={wireframe} />
+      {/* Bottom + top — triangular panels, built flat via ExtrudeGeometry
+          (rotated to lie in the horizontal plane) since the footprint isn't
+          axis-aligned on the hypotenuse side. */}
+      <mesh position={[0, T, 0]} rotation={[Math.PI / 2, 0, 0]} castShadow receiveShadow>
+        <extrudeGeometry args={[footprintShape, { depth: T, bevelEnabled: false }]} />
+        <meshStandardMaterial color={color} wireframe={wireframe} />
+      </mesh>
+      <mesh position={[0, H, 0]} rotation={[Math.PI / 2, 0, 0]} castShadow receiveShadow>
+        <extrudeGeometry args={[footprintShape, { depth: T, bevelEnabled: false }]} />
+        <meshStandardMaterial color={color} wireframe={wireframe} />
+      </mesh>
+      {/* Shelves — evenly spaced between floor and top panel, same spacing
+          math as the rectangular Shelves component. */}
+      {Array.from({ length: shelves }, (_, i) => {
+        const y = T + (H - 2 * T) * (i + 1) / (shelves + 1);
+        return (
+          <mesh key={i} position={[0, y, 0]} rotation={[Math.PI / 2, 0, 0]} castShadow receiveShadow>
+            <extrudeGeometry args={[innerShape, { depth: T, bevelEnabled: false }]} />
+            <meshStandardMaterial color={shelfColor} wireframe={wireframe} />
+          </mesh>
+        );
+      })}
+      {hasDoor && (
+        <TriangleCornerDoor
+          W={W} D={D} H={H} color={exteriorColor} map={exteriorMap} roughness={exteriorRoughness}
+          hardware={module.options.hardwareFinish} wireframe={wireframe} onSelect={onSelect}
+          glass={module.options.doorGlass?.[0] ?? false}
+          hingeLeft={(module.options.doorHingeSides?.[0] ?? "izquierda") === "izquierda"}
+        />
+      )}
+    </group>
+  );
+}
+
 // ─── Full Cabinet — shared by ModulePreview3D and KitchenAssemblyScene ────────
 export function CabinetMesh({ module, wireframe = false, onSelect }: {
   module: KitchenModule; wireframe?: boolean; onSelect?: () => void;
@@ -1557,7 +1797,7 @@ export function CabinetMesh({ module, wireframe = false, onSelect }: {
   const D = module.dimensions.depth / 100;
   // Wall cabinets never get a toe-kick strip — it'd render as a stray trim
   // box floating near the bottom of the box, up on the wall.
-  const isUpper = module.category === "upper" || module.type === "gabinete_superior_esquinero_puertas";
+  const isUpper = module.category === "upper" || module.type === "esquinero_triangular" || module.type === "esquinero_triangular_puerta";
   const toeKick = !isUpper && module.options.hasToeKick ? module.options.toeKickHeight / 100 : 0;
   const ctThick = module.options.includesCountertop ? module.options.countertopThickness / 100 : 0;
   const ctOverhang = (module.options.countertopOverhang || 2) / 100;
@@ -1651,11 +1891,18 @@ export function CabinetMesh({ module, wireframe = false, onSelect }: {
     return <LibreroGiratorioMesh module={module} wireframe={wireframe} onSelect={onSelect} />;
   }
 
-  // Blind corner cabinet — same options/doors/shelves as any lower/upper
-  // cabinet, just a wider carcass with a blind extension; see
-  // CornerBlindCabinetMesh (shared by both the floor and wall variants).
-  if (module.type === "gabinete_bajo_esquinero_puertas" || module.type === "gabinete_superior_esquinero_puertas") {
+  // Blind corner cabinet — same options/doors/shelves as any lower cabinet,
+  // just a wider carcass with a blind extension; see CornerBlindCabinetMesh.
+  // gabinete_pared_esquinero_puertas is the same mesh mounted at height
+  // instead of on the floor (ModulePlacement handles the mountY offset).
+  if (module.type === "gabinete_bajo_esquinero_puertas" || module.type === "gabinete_pared_esquinero_puertas") {
     return <CornerBlindCabinetMesh module={module} wireframe={wireframe} onSelect={onSelect} />;
+  }
+
+  // Triangular corner wall cabinet — its own dedicated mesh, see
+  // EsquineroTriangularMesh above.
+  if (module.type === "esquinero_triangular") {
+    return <EsquineroTriangularMesh module={module} wireframe={wireframe} onSelect={onSelect} />;
   }
 
   return (
@@ -1693,7 +1940,7 @@ export function CabinetMesh({ module, wireframe = false, onSelect }: {
         />
       )}
       {toeKick > 0 && (
-        <ToeKick W={W} D={D} height={toeKick} color={exteriorColor} map={exteriorMap} roughness={exteriorRoughness} aluminum={module.options.zocaloMaterial === "Aluminio"} wireframe={wireframe} />
+        <ToeKick W={W} D={D} height={toeKick} color={module.options.zocaloMaterial === "Interior" ? color : exteriorColor} map={module.options.zocaloMaterial === "Interior" ? null : exteriorMap} roughness={module.options.zocaloMaterial === "Interior" ? undefined : exteriorRoughness} aluminum={module.options.zocaloMaterial === "Aluminio"} wireframe={wireframe} />
       )}
       {/* A plain pull-out door (no accessory of its own) takes the module's
           fixed shelves with it — see PullOutLarderDoor — so they're skipped
@@ -1857,6 +2104,20 @@ function AccessoryPreviewMesh({ module, wireframe = false }: { module: KitchenMo
     );
   }
 
+  if (module.type === "campana_extractora_compacta") {
+    return (
+      <group position={[0, H / 2, 0]}>
+        <Box pos={[0, 0, 0]} size={[W, H, D]} color="#1c1c1c" wireframe={wireframe} />
+        {!wireframe && (
+          <mesh position={[0, -H / 2 + 0.004, D / 2 - 0.015]}>
+            <boxGeometry args={[W * 0.85, 0.006, 0.012]} />
+            <meshStandardMaterial color="#e8e8e8" emissive="#fff6df" emissiveIntensity={0.5} />
+          </mesh>
+        )}
+      </group>
+    );
+  }
+
   if (module.type === "panel_lateral" || module.type === "panel_remate" || module.type === "panel_decorativo") {
     return <Box pos={[0, H / 2, 0]} size={[0.018, H, D]} color={color} wireframe={wireframe} />;
   }
@@ -1896,6 +2157,93 @@ function AppliancePreviewMesh({ module, wireframe = false }: { module: KitchenMo
   );
 }
 
+// Simplified stand-ins for DecorativeDoorMesh/DecorativeWindowMesh in
+// KitchenAssemblyScene.tsx (can't import those here — that file already
+// imports FROM this one, see CabinetMesh/shiftColor/mapKey above, so the
+// reverse would be a circular import). Same visual idea, just the version
+// that fits this file's simpler W/H/D-local preview convention.
+function OpeningPreviewMesh({ module, wireframe = false }: { module: KitchenModule; wireframe?: boolean }) {
+  const W = module.dimensions.width / 100;
+  const H = module.dimensions.height / 100;
+  const D = module.dimensions.depth / 100;
+
+  if (module.type === "ventana_decorativa") {
+    const frameColor = module.options.color || "#f2efe9";
+    const margin = 0.06;
+    const glassW = Math.max(W - margin * 2, 0.1);
+    const glassH = Math.max(H - margin * 2, 0.1);
+    return (
+      <group position={[0, H / 2, 0]}>
+        <Box pos={[-W / 2 + margin / 2, 0, 0]} size={[margin, H, D]} color={frameColor} wireframe={wireframe} />
+        <Box pos={[W / 2 - margin / 2, 0, 0]} size={[margin, H, D]} color={frameColor} wireframe={wireframe} />
+        <Box pos={[0, H / 2 - margin / 2, 0]} size={[W, margin, D]} color={frameColor} wireframe={wireframe} />
+        <Box pos={[0, -H / 2 + margin / 2, 0]} size={[W, margin, D]} color={frameColor} wireframe={wireframe} />
+        {!wireframe && (
+          <>
+            <Box pos={[0, 0, D / 2 - 0.004]} size={[0.025, glassH, 0.01]} color={frameColor} />
+            <Box pos={[0, 0, D / 2 - 0.004]} size={[glassW, 0.025, 0.01]} color={frameColor} />
+            <group position={[0, 0, -D / 4]}>
+              <mesh>
+                <planeGeometry args={[glassW + 0.02, glassH + 0.02]} />
+                <meshBasicMaterial color="#a9d6f0" />
+              </mesh>
+              <mesh position={[glassW * 0.28, glassH * 0.28, 0.002]}>
+                <circleGeometry args={[glassH * 0.12, 24]} />
+                <meshBasicMaterial color="#fff3b0" />
+              </mesh>
+              <mesh position={[0, -glassH * 0.32, 0.002]}>
+                <planeGeometry args={[glassW + 0.02, glassH * 0.36]} />
+                <meshBasicMaterial color="#7cb87a" />
+              </mesh>
+              {Array.from({ length: 9 }, (_, i) => (
+                <mesh key={i} position={[-glassW / 2 + (glassW * (i + 0.5)) / 9 + Math.sin(i * 12.9) * 0.03, -glassH * 0.32 + Math.cos(i * 5.7) * 0.02, 0.004]}>
+                  <circleGeometry args={[glassH * 0.025, 10]} />
+                  <meshBasicMaterial color={["#f4a6c1", "#f7e07a", "#ffffff", "#f2a65a"][i % 4]} />
+                </mesh>
+              ))}
+            </group>
+            <mesh>
+              <planeGeometry args={[glassW, glassH]} />
+              <meshPhysicalMaterial color="#5b8b93" transparent opacity={0.22} roughness={0.05} metalness={0} transmission={0.85} thickness={0.02} ior={1.5} clearcoat={0.2} clearcoatRoughness={0.15} side={2} />
+            </mesh>
+            <mesh position={[glassW * 0.08, glassH * 0.05, 0.006]} rotation={[0, 0, Math.PI / 5]}>
+              <planeGeometry args={[glassW * 0.22, glassH * 1.3]} />
+              <meshBasicMaterial color="#ffffff" transparent opacity={0.16} depthWrite={false} />
+            </mesh>
+          </>
+        )}
+      </group>
+    );
+  }
+
+  // puerta_decorativa
+  const color = module.options.color || "#8b6142";
+  const frameColor = shiftColor(color, 0.15);
+  const panelColor = shiftColor(color, -0.06);
+  const panelMargin = 0.06;
+  const panelGapY = 0.05;
+  const panelH = (H - panelGapY * 3) / 2;
+  return (
+    <group position={[0, H / 2, 0]}>
+      <Box pos={[0, 0, 0]} size={[W, H, D]} color={color} roughness={0.55} wireframe={wireframe} />
+      {!wireframe && (
+        <>
+          {[1, -1].map((sign) => (
+            <Box key={sign} pos={[0, sign * (panelGapY / 2 + panelH / 2), D / 2 - 0.006]} size={[W - panelMargin * 2, panelH, 0.01]} color={panelColor} />
+          ))}
+          <Box pos={[-W / 2 + 0.02, 0, D / 2 + 0.002]} size={[0.04, H, 0.012]} color={frameColor} />
+          <Box pos={[W / 2 - 0.02, 0, D / 2 + 0.002]} size={[0.04, H, 0.012]} color={frameColor} />
+          <Box pos={[0, H / 2 - 0.02, D / 2 + 0.002]} size={[W, 0.04, 0.012]} color={frameColor} />
+          <mesh position={[W / 2 - 0.08, -0.02, D / 2 + 0.02]} rotation={[Math.PI / 2, 0, 0]}>
+            <cylinderGeometry args={[0.018, 0.018, 0.03, 16]} />
+            <meshStandardMaterial color="#d4af37" metalness={0.8} roughness={0.25} />
+          </mesh>
+        </>
+      )}
+    </group>
+  );
+}
+
 // ─── Preview router — picks the right mesh for a module's category ───────────
 // Shared by the live inspector preview (below) and the off-screen catalog
 // thumbnail generator, so both ever only need to know "give me a preview of
@@ -1905,6 +2253,7 @@ export function PreviewMesh({ module, wireframe = false }: { module: KitchenModu
     case "countertop": return <CountertopPreviewMesh module={module} wireframe={wireframe} />;
     case "accessory":  return <AccessoryPreviewMesh module={module} wireframe={wireframe} />;
     case "appliance":  return <AppliancePreviewMesh module={module} wireframe={wireframe} />;
+    case "opening":    return <OpeningPreviewMesh module={module} wireframe={wireframe} />;
     default:           return <CabinetMesh module={module} wireframe={wireframe} />;
   }
 }

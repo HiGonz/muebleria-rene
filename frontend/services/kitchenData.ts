@@ -16,6 +16,7 @@ import type {
   PullOutAccessoryType,
 } from "@/types/kitchen";
 import { packSheets, STANDARD_SHEET_WIDTH_CM, STANDARD_SHEET_HEIGHT_CM, type CutPiece } from "./sheetPacking";
+import { solveCuttingStock, splicedCover, STOCK_LENGTHS_FT, type CutSegment, type StockPiece } from "./cuttingStock";
 
 // No front — drawer or door — reaches all the way up to the countertop
 // underside: a structural rail/apron above the top-most one leaves room for
@@ -152,6 +153,7 @@ export const DEFAULT_OPTIONS: ModuleOptions = {
   leftFrontSidePanel: "ninguno",
   doorHingeSides: [],
   doorHingeType: [],
+  doorGlass: [],
   doorAccessories: [],
   doorPullOut: [],
   useDetailedLayout: false,
@@ -160,7 +162,8 @@ export const DEFAULT_OPTIONS: ModuleOptions = {
   countertopTexture: "ninguna",
   backPanelMaterial: "interior",
   barOverhangCm: 0,
-  zocaloMaterial: "MDF",
+  zocaloMaterial: "Exterior",
+  wallOffset: 0,
 };
 
 // ─── Material Costs (MXN per unit) ────────────────────────────────────────────
@@ -426,7 +429,7 @@ export const MODULE_CATALOG: ModuleCatalogEntry[] = [
     label: "Botellero extraíble",
     description: "Accesorio interior extraíble para botellas — la puerta se jala como cajón (sobre rieles) y lleva las repisas consigo, en vez de una puerta abatible normal",
     icon: "🍷",
-    defaultDimensions: { height: 90, width: 30, depth: 55 },
+    defaultDimensions: { height: 90, width: 30, depth: 60 },
     defaultOptions: { drawers: 0, doors: 1, shelves: 1, doorStyle: "Lisa", doorPullOut: [true] },
     configurableFields: ["height", "width", "depth", "doors", "boardMaterial", "color"],
   },
@@ -456,7 +459,7 @@ export const MODULE_CATALOG: ModuleCatalogEntry[] = [
     label: "Mueble para refrigerador (base)",
     description: "Base elevada y nichos laterales para refrigerador",
     icon: "🧊",
-    defaultDimensions: { height: 190, width: 90, depth: 65 },
+    defaultDimensions: { height: 190, width: 90, depth: 60 },
     defaultOptions: { drawers: 0, doors: 0, shelves: 0, includesCountertop: false },
     configurableFields: ["height", "width", "depth", "boardMaterial", "color"],
   },
@@ -474,54 +477,105 @@ export const MODULE_CATALOG: ModuleCatalogEntry[] = [
     description: "Gabinete bajo con puertas al que se le agrega una extensión ciega de fondo×fondo hacia la izquierda para ocupar la esquina — mismas puertas, repisas y herrajes que el gabinete bajo estándar",
     icon: "📐",
     defaultDimensions: { height: 90, width: 100, depth: 60 },
-    defaultOptions: { drawers: 0, doors: 2, shelves: 1, doorStyle: "Lisa" },
-    configurableFields: ["height", "width", "depth", "doors", "shelves", "doorStyle", "includesCountertop", "countertopMaterial", "hardwareFinish", "boardMaterial", "color"],
+    defaultOptions: { drawers: 0, doors: 1, shelves: 1, doorStyle: "Lisa", doorHingeType: ["chapulina"] },
+    configurableFields: ["height", "width", "depth", "doors", "shelves", "doorStyle", "doorGlass", "includesCountertop", "countertopMaterial", "hardwareFinish", "boardMaterial", "color"],
   },
-  // Same blind-corner geometry as the base version above, mounted on the
-  // wall like any other aéreo — hasToeKick/includesCountertop are pinned off
-  // since CornerBlindCabinetMesh (unlike the generic cabinet mesh) doesn't
-  // gate those on category itself, only on these options.
+  // Wall-mounted twin of the floor blind-corner cabinet directly above —
+  // same CornerBlindCabinetMesh geometry (blind fondo×fondo extension, not
+  // the triangular footprint the esquinero_triangular pair below uses),
+  // just mounted at height like any other aéreo instead of sitting on the
+  // floor. No countertop/toe-kick concept up here.
   {
-    type: "gabinete_superior_esquinero_puertas",
+    type: "gabinete_pared_esquinero_puertas",
     category: "corner",
-    label: "Gabinete Superior Esquinero con Puertas",
-    description: "Gabinete aéreo con puertas al que se le agrega una extensión ciega de fondo×fondo hacia la izquierda para ocupar la esquina — mismas puertas, repisas y herrajes que el gabinete superior estándar",
+    label: "Gabinete Pared Esquinero con Puertas",
+    description: "Armario de pared con puertas al que se le agrega una extensión ciega de fondo×fondo hacia la izquierda para ocupar la esquina — mismas puertas y repisas que el gabinete de esquina bajo, montado en la pared",
     icon: "📐",
-    defaultDimensions: { height: 70, width: 90, depth: 30 },
-    defaultOptions: { drawers: 0, doors: 2, shelves: 1, doorStyle: "Lisa", mountHeight: 144, hasToeKick: false, includesCountertop: false },
-    configurableFields: ["height", "width", "depth", "doors", "shelves", "doorStyle", "mountHeight", "hasUnderLight", "hardwareFinish", "boardMaterial", "color"],
+    defaultDimensions: { height: 70, width: 60, depth: 30 },
+    defaultOptions: { drawers: 0, doors: 1, shelves: 1, doorStyle: "Lisa", doorHingeType: ["chapulina"], mountHeight: 144, hasToeKick: false, includesCountertop: false },
+    configurableFields: ["height", "width", "depth", "doors", "shelves", "doorStyle", "doorGlass", "mountHeight", "hardwareFinish", "boardMaterial", "color"],
+  },
+  // Triangular corner wall cabinet — true triangular footprint (width/depth
+  // are the two legs against each wall), not a blind rectangular extension
+  // like the floor version above. See EsquineroTriangularMesh. Two catalog
+  // entries sharing that same mesh (doors:0 vs doors:1) so both are
+  // separately reachable from the catalog browser, same pattern as
+  // armario_1_puerta vs armario_abierto below.
+  {
+    type: "esquinero_triangular",
+    category: "corner",
+    label: "Esquinero aéreo triangular",
+    description: "Armario de esquina aéreo con planta triangular — las repisas siguen la misma forma; sin puerta, frente abierto",
+    icon: "📐",
+    defaultDimensions: { height: 70, width: 60, depth: 60 },
+    defaultOptions: { drawers: 0, doors: 0, shelves: 1, mountHeight: 144, hasToeKick: false, includesCountertop: false },
+    configurableFields: ["height", "width", "depth", "shelves", "mountHeight", "cornerBlindSide", "hardwareFinish", "boardMaterial", "color"],
+  },
+  {
+    type: "esquinero_triangular_puerta",
+    category: "corner",
+    label: "Esquinero aéreo triangular con puerta",
+    description: "Mismo esquinero triangular, con una puerta abatible que respeta la geometría del frente diagonal",
+    icon: "📐",
+    defaultDimensions: { height: 70, width: 60, depth: 60 },
+    defaultOptions: { drawers: 0, doors: 1, shelves: 1, mountHeight: 144, hasToeKick: false, includesCountertop: false },
+    configurableFields: ["height", "width", "depth", "shelves", "doorGlass", "mountHeight", "cornerBlindSide", "hardwareFinish", "boardMaterial", "color"],
   },
 
   // ── MUEBLES ALTOS ──────────────────────────────────────────────────────────
+  // Armario abierto: the base model for every plain wall cabinet below it.
+  // No doors by default — add them (doors:1/2), pick a hinge side, mark any
+  // of them glass (doorGlass), all through options on this exact same
+  // module. Nothing here is a separate model per combination.
   {
-    type: "alacena_aerea",
+    type: "armario_abierto",
     category: "upper",
-    label: "Alacena aérea",
-    description: "Gabinete aéreo estándar con repisas y puertas",
+    label: "Armario abierto",
+    description: "Armario aéreo sin puertas, repisas configurables — agrega puertas (una o dos, normales o de cristal) desde las opciones del mueble",
     icon: "🗂️",
-    defaultDimensions: { height: 70, width: 100, depth: 30 },
-    defaultOptions: { drawers: 0, doors: 2, shelves: 1, mountHeight: 144, doorStyle: "Lisa" },
-    configurableFields: ["height", "width", "depth", "shelves", "doors", "doorStyle", "mountHeight", "hasUnderLight", "boardMaterial", "color"],
+    defaultDimensions: { height: 70, width: 40, depth: 30 },
+    defaultOptions: { drawers: 0, doors: 0, shelves: 1, mountHeight: 144 },
+    configurableFields: ["height", "width", "depth", "shelves", "doors", "doorGlass", "mountHeight", "hasUnderLight", "boardMaterial", "color"],
   },
   {
-    type: "gabinete_superior",
+    type: "armario_1_puerta",
     category: "upper",
-    label: "Gabinete superior",
-    description: "Gabinete aéreo de mayor capacidad",
-    icon: "📦",
-    defaultDimensions: { height: 70, width: 100, depth: 30 },
-    defaultOptions: { drawers: 0, doors: 2, shelves: 1, mountHeight: 144, doorStyle: "Lisa" },
-    configurableFields: ["height", "width", "depth", "shelves", "doors", "doorStyle", "mountHeight", "hasUnderLight", "hardwareFinish", "boardMaterial", "color"],
+    label: "Armario una puerta",
+    description: "Armario aéreo con una repisa central y una puerta que cubre todo el frente",
+    icon: "🚪",
+    defaultDimensions: { height: 70, width: 60, depth: 30 },
+    defaultOptions: { drawers: 0, doors: 1, shelves: 1, mountHeight: 144 },
+    configurableFields: ["height", "width", "depth", "shelves", "mountHeight", "hasUnderLight", "hardwareFinish", "boardMaterial", "color"],
   },
   {
-    type: "esquinero_superior",
+    type: "armario_1_puerta_cristal",
     category: "upper",
-    label: "Esquinero superior",
-    description: "Solución de esquina aérea con puertas angulares o abatibles",
-    icon: "📐",
+    label: "Armario una puerta de cristal",
+    description: "Mismo armario de una puerta — la puerta es un marco con panel de cristal en vez de tablero sólido",
+    icon: "🪟",
+    defaultDimensions: { height: 70, width: 60, depth: 30 },
+    defaultOptions: { drawers: 0, doors: 1, shelves: 1, mountHeight: 144, doorGlass: [true] },
+    configurableFields: ["height", "width", "depth", "shelves", "mountHeight", "hasUnderLight", "hardwareFinish", "boardMaterial", "color"],
+  },
+  {
+    type: "armario_2_puertas",
+    category: "upper",
+    label: "Armario doble puerta",
+    description: "Armario aéreo con una repisa central y dos puertas abatibles",
+    icon: "🗄️",
     defaultDimensions: { height: 70, width: 90, depth: 30 },
-    defaultOptions: { drawers: 0, doors: 2, shelves: 1, mountHeight: 144, cornerType: "diagonal" },
-    configurableFields: ["height", "width", "depth", "shelves", "cornerType", "mountHeight", "boardMaterial", "color"],
+    defaultOptions: { drawers: 0, doors: 2, shelves: 1, mountHeight: 144 },
+    configurableFields: ["height", "width", "depth", "shelves", "mountHeight", "hasUnderLight", "hardwareFinish", "boardMaterial", "color"],
+  },
+  {
+    type: "armario_2_puertas_cristal",
+    category: "upper",
+    label: "Armario doble puerta de cristal",
+    description: "Mismo armario doble puerta — ambas puertas son marco con panel de cristal",
+    icon: "🪟",
+    defaultDimensions: { height: 70, width: 90, depth: 30 },
+    defaultOptions: { drawers: 0, doors: 2, shelves: 1, mountHeight: 144, doorGlass: [true, true] },
+    configurableFields: ["height", "width", "depth", "shelves", "mountHeight", "hasUnderLight", "hardwareFinish", "boardMaterial", "color"],
   },
   {
     type: "campanero",
@@ -533,25 +587,128 @@ export const MODULE_CATALOG: ModuleCatalogEntry[] = [
     defaultOptions: { drawers: 0, doors: 0, shelves: 0, mountHeight: 144 },
     configurableFields: ["height", "width", "depth", "mountHeight", "boardMaterial", "color"],
   },
+  // Armarios altos: fixed 90cm-tall cabinets with one shelf exactly at the
+  // midpoint (shelves:1 already lands there — Shelves spaces evenly, and
+  // one shelf's only slot IS the center) splitting the interior into two
+  // compartments, each with its own door instead of the normal side-by-side
+  // split. That needs each door's own vertical zone (fromBottomCm/heightCm),
+  // which the auto-generator (getEffectiveDoors) doesn't produce on its own
+  // — these use the existing useDetailedLayout + doorDefs escape hatch
+  // instead (already built for FaceEditor's manual door placement; this is
+  // just the same mechanism supplying the layout as a catalog default).
+  // Every variant below is the exact same doorDefs shape — only which
+  // door(s) get glass: true (or are omitted, for media puerta) changes.
   {
-    type: "alacena_cristal",
+    type: "armario_alto_2_puertas",
     category: "upper",
-    label: "Alacena con puertas de cristal",
-    description: "Gabinete aéreo con puertas de vidrio para exhibición",
-    icon: "🪟",
-    defaultDimensions: { height: 70, width: 100, depth: 30 },
-    defaultOptions: { drawers: 0, doors: 2, shelves: 1, mountHeight: 144, doorStyle: "Vidrio transparente" },
-    configurableFields: ["height", "width", "depth", "shelves", "doors", "doorStyle", "mountHeight", "hasUnderLight", "boardMaterial", "color"],
+    label: "Armario alto doble puerta",
+    description: "Armario aéreo alto de 90cm con repisa al centro y una puerta independiente arriba y abajo",
+    icon: "🗄️",
+    defaultDimensions: { height: 90, width: 40, depth: 30 },
+    defaultOptions: {
+      drawers: 0, doors: 2, shelves: 1, mountHeight: 144, useDetailedLayout: true,
+      doorDefs: [
+        { id: "puerta-inf", label: "Puerta inferior", widthPct: 100, offsetPct: 0, fromBottomCm: 0, heightCm: 44.7, hingeLeft: true, doorStyle: "Lisa" },
+        { id: "puerta-sup", label: "Puerta superior", widthPct: 100, offsetPct: 0, fromBottomCm: 45.3, heightCm: 44.7, hingeLeft: true, doorStyle: "Lisa" },
+      ],
+    },
+    configurableFields: ["mountHeight", "hasUnderLight", "hardwareFinish", "boardMaterial", "color"],
   },
   {
-    type: "despensero_alto",
+    type: "armario_alto_2_puertas_cristal",
     category: "upper",
-    label: "Despensero alto",
-    description: "Mueble aéreo alto con múltiples repisas para despensa",
-    icon: "🥫",
-    defaultDimensions: { height: 70, width: 45, depth: 30 },
-    defaultOptions: { drawers: 0, doors: 2, shelves: 1, mountHeight: 144, doorStyle: "Lisa" },
-    configurableFields: ["height", "width", "depth", "shelves", "doors", "doorStyle", "mountHeight", "boardMaterial", "color"],
+    label: "Armario alto doble puerta de cristal",
+    description: "Mismo armario alto de dos puertas — ambas de cristal",
+    icon: "🪟",
+    defaultDimensions: { height: 90, width: 40, depth: 30 },
+    defaultOptions: {
+      drawers: 0, doors: 2, shelves: 1, mountHeight: 144, useDetailedLayout: true,
+      doorDefs: [
+        { id: "puerta-inf", label: "Puerta inferior", widthPct: 100, offsetPct: 0, fromBottomCm: 0, heightCm: 44.7, hingeLeft: true, doorStyle: "Lisa", glass: true },
+        { id: "puerta-sup", label: "Puerta superior", widthPct: 100, offsetPct: 0, fromBottomCm: 45.3, heightCm: 44.7, hingeLeft: true, doorStyle: "Lisa", glass: true },
+      ],
+    },
+    configurableFields: ["mountHeight", "hasUnderLight", "hardwareFinish", "boardMaterial", "color"],
+  },
+  {
+    type: "armario_alto_combinado",
+    category: "upper",
+    label: "Armario alto combinado",
+    description: "Mismo armario alto de dos puertas — puerta superior de cristal, inferior normal",
+    icon: "🪟",
+    defaultDimensions: { height: 90, width: 40, depth: 30 },
+    defaultOptions: {
+      drawers: 0, doors: 2, shelves: 1, mountHeight: 144, useDetailedLayout: true,
+      doorDefs: [
+        { id: "puerta-inf", label: "Puerta inferior", widthPct: 100, offsetPct: 0, fromBottomCm: 0, heightCm: 44.7, hingeLeft: true, doorStyle: "Lisa" },
+        { id: "puerta-sup", label: "Puerta superior", widthPct: 100, offsetPct: 0, fromBottomCm: 45.3, heightCm: 44.7, hingeLeft: true, doorStyle: "Lisa", glass: true },
+      ],
+    },
+    configurableFields: ["mountHeight", "hasUnderLight", "hardwareFinish", "boardMaterial", "color"],
+  },
+  {
+    type: "armario_alto_combinado_invertido",
+    category: "upper",
+    label: "Armario alto combinado invertido",
+    description: "Mismo armario alto de dos puertas — puerta inferior de cristal, superior normal",
+    icon: "🪟",
+    defaultDimensions: { height: 90, width: 40, depth: 30 },
+    defaultOptions: {
+      drawers: 0, doors: 2, shelves: 1, mountHeight: 144, useDetailedLayout: true,
+      doorDefs: [
+        { id: "puerta-inf", label: "Puerta inferior", widthPct: 100, offsetPct: 0, fromBottomCm: 0, heightCm: 44.7, hingeLeft: true, doorStyle: "Lisa", glass: true },
+        { id: "puerta-sup", label: "Puerta superior", widthPct: 100, offsetPct: 0, fromBottomCm: 45.3, heightCm: 44.7, hingeLeft: true, doorStyle: "Lisa" },
+      ],
+    },
+    configurableFields: ["mountHeight", "hasUnderLight", "hardwareFinish", "boardMaterial", "color"],
+  },
+  {
+    type: "armario_alto_media_puerta",
+    category: "upper",
+    label: "Armario alto media puerta",
+    description: "Mismo armario alto — solo existe la puerta superior; la mitad inferior queda completamente abierta",
+    icon: "🗄️",
+    defaultDimensions: { height: 90, width: 40, depth: 30 },
+    defaultOptions: {
+      drawers: 0, doors: 1, shelves: 1, mountHeight: 144, useDetailedLayout: true,
+      doorDefs: [
+        { id: "puerta-sup", label: "Puerta superior", widthPct: 100, offsetPct: 0, fromBottomCm: 45.3, heightCm: 44.7, hingeLeft: true, doorStyle: "Lisa" },
+      ],
+    },
+    configurableFields: ["mountHeight", "hasUnderLight", "hardwareFinish", "boardMaterial", "color"],
+  },
+  // Nichos: an open display niche, near-square front — same base mesh as
+  // armario_abierto, just a different preset (smaller, no shelf by
+  // default, meant for decoration/display rather than storage).
+  {
+    type: "nicho_abierto",
+    category: "upper",
+    label: "Nicho abierto",
+    description: "Nicho aéreo abierto, sin puertas ni repisas — un solo hueco amplio para decoración o elementos visibles",
+    icon: "🖼️",
+    defaultDimensions: { height: 40, width: 40, depth: 30 },
+    defaultOptions: { drawers: 0, doors: 0, shelves: 0, mountHeight: 144 },
+    configurableFields: ["height", "width", "depth", "mountHeight", "hasUnderLight", "boardMaterial", "color"],
+  },
+  {
+    type: "nicho_puerta",
+    category: "upper",
+    label: "Nicho con puerta",
+    description: "Mismo nicho abierto, con una puerta completa cubriendo el frente",
+    icon: "🖼️",
+    defaultDimensions: { height: 40, width: 40, depth: 30 },
+    defaultOptions: { drawers: 0, doors: 1, shelves: 0, mountHeight: 144 },
+    configurableFields: ["height", "width", "depth", "mountHeight", "hardwareFinish", "boardMaterial", "color"],
+  },
+  {
+    type: "nicho_puerta_cristal",
+    category: "upper",
+    label: "Nicho con puerta de cristal",
+    description: "Mismo nicho, con puerta de cristal en vez de tablero sólido",
+    icon: "🪟",
+    defaultDimensions: { height: 40, width: 40, depth: 30 },
+    defaultOptions: { drawers: 0, doors: 1, shelves: 0, mountHeight: 144, doorGlass: [true] },
+    configurableFields: ["height", "width", "depth", "mountHeight", "hardwareFinish", "boardMaterial", "color"],
   },
   {
     type: "gabinete_microondas",
@@ -577,9 +734,9 @@ export const MODULE_CATALOG: ModuleCatalogEntry[] = [
     defaultOptions: {
       drawers: 0, doors: 0, shelves: 0, mountHeight: 214, hasToeKick: false, includesCountertop: false,
       leftSidePanel: "ninguno", rightSidePanel: "ninguno",
-      lightMode: "tira", lightStripWidth: 3, bulbCount: 6, lightColor: "#fff2d0",
+      lightMode: "tira", lightStripWidth: 3, bulbCount: 6, lightColor: "#fff2d0", wallOffset: 30,
     },
-    configurableFields: ["height", "width", "mountHeight", "lightMode", "lightStripWidth", "bulbCount", "lightColor", "leftSidePanel", "rightSidePanel"],
+    configurableFields: ["height", "width", "mountHeight", "lightMode", "lightStripWidth", "bulbCount", "lightColor", "leftSidePanel", "rightSidePanel", "wallOffset"],
   },
   // Two doors cover only the top zone; the bottom is left fully open (no
   // door) with one shelf splitting it into two display cubbies — see
@@ -743,36 +900,6 @@ export const MODULE_CATALOG: ModuleCatalogEntry[] = [
 
   // ── ESPACIOS ELECTRODOMÉSTICOS ─────────────────────────────────────────────
   {
-    type: "nicho_refrigerador",
-    category: "appliance",
-    label: "Nicho para refrigerador",
-    description: "Espacio libre con acabados laterales y superior para refrigerador",
-    icon: "🧊",
-    defaultDimensions: { height: 190, width: 90, depth: 70 },
-    defaultOptions: { applianceWidth: 90, applianceHeight: 185, hasVentilation: true },
-    configurableFields: ["height", "width", "depth", "applianceWidth", "applianceHeight", "hasVentilation", "boardMaterial", "color"],
-  },
-  {
-    type: "nicho_microondas",
-    category: "appliance",
-    label: "Nicho para microondas",
-    description: "Hueco empotrado a media altura para microondas",
-    icon: "📡",
-    defaultDimensions: { height: 45, width: 60, depth: 40 },
-    defaultOptions: { applianceWidth: 55, applianceHeight: 38, hasVentilation: true },
-    configurableFields: ["height", "width", "depth", "applianceWidth", "applianceHeight", "boardMaterial", "color"],
-  },
-  {
-    type: "nicho_horno",
-    category: "appliance",
-    label: "Nicho para horno",
-    description: "Nicho empotrable para horno con extracción de calor",
-    icon: "🥧",
-    defaultDimensions: { height: 65, width: 60, depth: 60 },
-    defaultOptions: { applianceWidth: 60, applianceHeight: 60, hasVentilation: true },
-    configurableFields: ["height", "width", "depth", "applianceWidth", "applianceHeight", "hasVentilation", "boardMaterial", "color"],
-  },
-  {
     type: "espacio_lavavajillas",
     category: "appliance",
     label: "Espacio para lavavajillas",
@@ -871,8 +998,22 @@ export const MODULE_CATALOG: ModuleCatalogEntry[] = [
     description: "Campana de cocina con sistema de extracción de humos",
     icon: "💨",
     defaultDimensions: { height: 50, width: 60, depth: 50 },
-    defaultOptions: { hoodType: "Decorativa", hoodWidth: 60 },
-    configurableFields: ["height", "width", "depth", "hoodType", "hoodWidth"],
+    defaultOptions: { hoodType: "Decorativa", hoodWidth: 60, mountHeight: 144 },
+    configurableFields: ["height", "width", "depth", "mountHeight", "hoodType", "hoodWidth"],
+  },
+  // Slim, minimalist alternative to the chimney-style hood above — a flat
+  // low-profile slab (no duct/chimney piece) meant to tuck under a gabinete
+  // superior or mount bare against the wall, for small kitchens where a
+  // bulky decorative hood is too much visual weight.
+  {
+    type: "campana_extractora_compacta",
+    category: "accessory",
+    label: "Campana extractora compacta",
+    description: "Campana de perfil bajo, sin chimenea — se instala bajo un gabinete superior o directo al muro",
+    icon: "🌬️",
+    defaultDimensions: { height: 7, width: 60, depth: 30 },
+    defaultOptions: { hoodType: "De pared", hoodWidth: 60, mountHeight: 150 },
+    configurableFields: ["height", "width", "depth", "mountHeight", "hoodType", "hoodWidth"],
   },
   {
     type: "herrajes",
@@ -943,6 +1084,33 @@ export const MODULE_CATALOG: ModuleCatalogEntry[] = [
     defaultDimensions: { height: 25, width: 60, depth: 12 },
     defaultOptions: {},
     configurableFields: ["height", "width"],
+  },
+
+  // ── PUERTAS Y VENTANAS ─────────────────────────────────────────────────────
+  // Purely decorative — the shape of a door/window as an ordinary
+  // freestanding module (see OpeningModuleType in types/kitchen.ts), not a
+  // real cut wall opening. Never collide with anything (category "opening"
+  // has no placementBand), so one can sit flush against or overlap any
+  // other module or a real WallOpening without issue.
+  {
+    type: "puerta_decorativa",
+    category: "opening",
+    label: "Puerta",
+    description: "Puerta decorativa de piso a techo — no es un hueco real en el muro, es un mueble con forma de puerta que se coloca sobre cualquier superficie",
+    icon: "🚪",
+    defaultDimensions: { height: 200, width: 80, depth: 5 },
+    defaultOptions: { color: "#8b6142" },
+    configurableFields: ["height", "width", "color"],
+  },
+  {
+    type: "ventana_decorativa",
+    category: "opening",
+    label: "Ventana",
+    description: "Ventana decorativa con marco, cristal y vista simulada hacia afuera — no es un hueco real en el muro, es un mueble con forma de ventana",
+    icon: "🪟",
+    defaultDimensions: { height: 120, width: 100, depth: 5 },
+    defaultOptions: { color: "#f2efe9", mountHeight: 90 },
+    configurableFields: ["height", "width", "mountHeight", "color"],
   },
 ];
 
@@ -1017,7 +1185,7 @@ function addLShapeBaseCabinetry(add: AddModuleFn) {
   add("lavavajillas", 30, 150, { rotation: 90, dimensions: { width: 60 } });
   add("refrigerador", 35, 225, { rotation: 90 });
   add("torre_horno_microondas", 30, 300, { rotation: 90 });
-  add("alacena_aerea", 15, 90, { rotation: 90, dimensions: { width: 60 } });
+  add("armario_2_puertas", 15, 90, { rotation: 90, dimensions: { width: 60 } });
 }
 
 const L_SHAPE_OPENINGS: WallOpening[] = [
@@ -1037,10 +1205,10 @@ function buildSampleKitchenNormal(): KitchenDraft {
 
   // Upper corner + row 1 (mountHeight 144, tops out at 214) — a gap is left
   // over the sink for the window, and none above the stove/hood or the tower.
-  add("gabinete_superior_esquinero_puertas", 75, 15, { dimensions: { width: 120 } });
-  add("alacena_aerea", 195, 15, { dimensions: { width: 90 } });
-  add("gabinete_superior", 445, 15, { dimensions: { width: 90 } });
-  add("despensero_alto", 512.5, 15);
+  add("esquinero_triangular_puerta", 75, 15, { dimensions: { width: 90, depth: 90 } });
+  add("armario_2_puertas", 195, 15, { dimensions: { width: 90 } });
+  add("armario_2_puertas", 445, 15, { dimensions: { width: 90 } });
+  add("armario_1_puerta", 512.5, 15, { dimensions: { width: 45 } });
 
   // Row 2 — stacked directly above row 1 at the SAME depth (z=15, 30cm),
   // reaching up toward the 280cm ceiling. Unlike the "isla" variant's bridge,
@@ -1048,10 +1216,10 @@ function buildSampleKitchenNormal(): KitchenDraft {
   const ROW2_MOUNT = 214;
   const ROW2_HEIGHT = 64; // top lands at 278, just under the ceiling
   const row2Options = { mountHeight: ROW2_MOUNT };
-  add("gabinete_superior_esquinero_puertas", 75, 15, { dimensions: { width: 120, height: ROW2_HEIGHT }, options: row2Options });
-  add("alacena_aerea", 195, 15, { dimensions: { width: 90, height: ROW2_HEIGHT }, options: row2Options });
-  add("gabinete_superior", 445, 15, { dimensions: { width: 90, height: ROW2_HEIGHT }, options: row2Options });
-  add("despensero_alto", 512.5, 15, { dimensions: { height: ROW2_HEIGHT }, options: row2Options });
+  add("esquinero_triangular_puerta", 75, 15, { dimensions: { width: 90, depth: 90, height: ROW2_HEIGHT }, options: row2Options });
+  add("armario_2_puertas", 195, 15, { dimensions: { width: 90, height: ROW2_HEIGHT }, options: row2Options });
+  add("armario_2_puertas", 445, 15, { dimensions: { width: 90, height: ROW2_HEIGHT }, options: row2Options });
+  add("armario_1_puerta", 512.5, 15, { dimensions: { width: 45, height: ROW2_HEIGHT }, options: row2Options });
 
   return {
     clientName: "Familia Rodríguez",
@@ -1077,10 +1245,10 @@ function buildSampleKitchenIsla(): KitchenDraft {
 
   // Upper corner + row 1 (mountHeight 144, tops out at 214) — a gap is left
   // over the sink for the window, and none above the stove/hood or the tower.
-  add("gabinete_superior_esquinero_puertas", 75, 15, { dimensions: { width: 120 } });
-  add("alacena_aerea", 195, 15, { dimensions: { width: 90 } });
-  add("gabinete_superior", 445, 15, { dimensions: { width: 90 } });
-  add("despensero_alto", 512.5, 15);
+  add("esquinero_triangular_puerta", 75, 15, { dimensions: { width: 90, depth: 90 } });
+  add("armario_2_puertas", 195, 15, { dimensions: { width: 90 } });
+  add("armario_2_puertas", 445, 15, { dimensions: { width: 90 } });
+  add("armario_1_puerta", 512.5, 15, { dimensions: { width: 45 } });
 
   // The "puente" — a second row of upper cabinets bridging above the first,
   // starting right where row 1 tops out (214) and reaching to 274, just
@@ -1096,10 +1264,10 @@ function buildSampleKitchenIsla(): KitchenDraft {
   const BRIDGE_HEIGHT = 60;
   const BRIDGE_DEPTH = 60;
   const bridgeOptions = { mountHeight: BRIDGE_MOUNT, doors: 1, doorHingeSides: ["arriba" as const] };
-  add("gabinete_superior_esquinero_puertas", 75, 30, { dimensions: { width: 90, height: BRIDGE_HEIGHT, depth: BRIDGE_DEPTH }, options: bridgeOptions });
-  add("alacena_aerea", 195, 30, { dimensions: { width: 90, height: BRIDGE_HEIGHT, depth: BRIDGE_DEPTH }, options: bridgeOptions });
-  add("gabinete_superior", 285, 30, { dimensions: { width: 90, height: BRIDGE_HEIGHT, depth: BRIDGE_DEPTH }, options: bridgeOptions });
-  add("gabinete_superior", 445, 30, { dimensions: { width: 90, height: BRIDGE_HEIGHT, depth: BRIDGE_DEPTH }, options: bridgeOptions });
+  add("esquinero_triangular_puerta", 75, 30, { dimensions: { width: 90, height: BRIDGE_HEIGHT, depth: BRIDGE_DEPTH }, options: { mountHeight: BRIDGE_MOUNT } });
+  add("armario_2_puertas", 195, 30, { dimensions: { width: 90, height: BRIDGE_HEIGHT, depth: BRIDGE_DEPTH }, options: bridgeOptions });
+  add("armario_2_puertas", 285, 30, { dimensions: { width: 90, height: BRIDGE_HEIGHT, depth: BRIDGE_DEPTH }, options: bridgeOptions });
+  add("armario_2_puertas", 445, 30, { dimensions: { width: 90, height: BRIDGE_HEIGHT, depth: BRIDGE_DEPTH }, options: bridgeOptions });
 
   // Freestanding island — clear of both wall runs, roughly centered on the
   // open floor to the south-east of the L.
@@ -1143,9 +1311,9 @@ function buildSampleKitchenCorona(): KitchenDraft {
   // Single row of upper cabinets (mountHeight 144, tops out at 214) — none
   // above the sink (window instead), the stove/hood (duct clearance), or the
   // tower (already tall on its own).
-  add("despensero_alto", 22.5, 15);
-  add("alacena_aerea", 90, 15);
-  add("alacena_aerea", 340, 15);
+  add("armario_1_puerta", 22.5, 15, { dimensions: { width: 45 } });
+  add("armario_2_puertas", 90, 15);
+  add("armario_2_puertas", 340, 15);
 
   // Corona de luz — one continuous crown across the FULL wall width, mounted
   // flush on top of the upper row (mountHeight 214, its catalog default) at
@@ -1189,10 +1357,8 @@ export function buildSampleKitchen(variant: SampleKitchenVariant = 1): KitchenDr
 // that accessory's own catalog type, for the ModuleInspector's "Colocar
 // aquí" shortcut (see useKitchenStore's placeAccessoryInNiche). Left out
 // where there's no matching standalone accessory in the catalog yet
-// (nicho_horno, espacio_centro_bebidas, espacio_cava_vinos).
+// (espacio_centro_bebidas, espacio_cava_vinos).
 export const NICHE_ACCESSORY_MATCH: Partial<Record<KitchenModuleType, KitchenModuleType>> = {
-  nicho_refrigerador: "refrigerador",
-  nicho_microondas: "microondas",
   espacio_lavavajillas: "lavavajillas",
 };
 
@@ -1225,13 +1391,42 @@ export function buildNewModule(type: KitchenModuleType, x = 0, z = 0, rotation: 
 // candidate shape. Countertop/accessory aren't checked for the same reason
 // they aren't checked there: they're overlays by design.
 function placementBandFor(mod: Pick<KitchenModule, "category" | "type">): "floor" | "wall" | null {
-  const isWallMounted = mod.category === "upper" || mod.type === "gabinete_superior_esquinero_puertas";
+  const isWallMounted = mod.category === "upper" || mod.type === "esquinero_triangular" || mod.type === "esquinero_triangular_puerta" || mod.type === "gabinete_pared_esquinero_puertas";
   if (isWallMounted) return "wall";
   if (mod.category === "lower" || mod.category === "tower" || mod.category === "corner" || mod.category === "appliance") return "floor";
   return null;
 }
 
-const BLIND_CORNER_TYPES = new Set<KitchenModuleType>(["gabinete_bajo_esquinero_puertas", "gabinete_superior_esquinero_puertas"]);
+// Both blind-corner types (floor and wall) use a blind-extension footprint
+// (width + depth widening) — the triangular esquineros' plain width×depth
+// bounding box already matches their footprint exactly, no widening needed.
+const BLIND_CORNER_TYPES = new Set<KitchenModuleType>(["gabinete_bajo_esquinero_puertas", "gabinete_pared_esquinero_puertas"]);
+
+// Which wall a blind-corner cabinet's countertop needs to turn INTO at a
+// 45° diagonal miter — the wall its blind extension physically reaches
+// toward, 90° from the cabinet's own wall in whichever direction
+// cornerBlindSide picks (mirrored = "derecha" flips it to the other side —
+// same convention CornerBlindCabinetMesh's own mesh uses).
+export function cornerPerpendicularRotation(mod: Pick<KitchenModule, "rotation" | "options">): KitchenModule["rotation"] {
+  const mirrored = mod.options.cornerBlindSide === "derecha";
+  return ((mod.rotation + (mirrored ? 270 : 90)) % 360) as KitchenModule["rotation"];
+}
+
+// World-space center of a blind-corner cabinet's own extension block — the
+// D×D (depth×depth) slice of its widened Wt=width+depth carcass that sits
+// on whichever side cornerBlindSide picks, D/2 in from that carcass's outer
+// edge (matching CornerBlindCabinetMesh's own local geometry). Used to place
+// the diagonal-miter countertop segment this extension needs on the
+// PERPENDICULAR wall (see cornerPerpendicularRotation and the
+// includesCountertop call site) at the position along that wall where the
+// two runs actually meet, instead of guessing from room dimensions.
+export function cornerExtensionWorldCenterCm(mod: Pick<KitchenModule, "x" | "z" | "rotation" | "dimensions" | "options">): { x: number; z: number } {
+  const Wt = mod.dimensions.width + mod.dimensions.depth;
+  const mirrored = mod.options.cornerBlindSide === "derecha";
+  const xLocal = mirrored ? Wt / 2 - mod.dimensions.depth / 2 : -Wt / 2 + mod.dimensions.depth / 2;
+  const theta = (mod.rotation * Math.PI) / 180;
+  return { x: mod.x + xLocal * Math.cos(theta), z: mod.z - xLocal * Math.sin(theta) };
+}
 
 function footprintHalfExtentsCm(mod: Pick<KitchenModule, "type" | "dimensions" | "rotation">): { halfW: number; halfD: number } {
   const footprintWidth = BLIND_CORNER_TYPES.has(mod.type) ? mod.dimensions.width + mod.dimensions.depth : mod.dimensions.width;
@@ -1287,6 +1482,7 @@ export const CATEGORY_LABELS: Record<ModuleCategory, string> = {
   countertop: "Encimeras",
   appliance: "Electrodomésticos",
   accessory: "Accesorios",
+  opening: "Puertas y ventanas",
 };
 
 export const CATEGORY_ICONS: Record<ModuleCategory, string> = {
@@ -1297,7 +1493,16 @@ export const CATEGORY_ICONS: Record<ModuleCategory, string> = {
   countertop: "🟫",
   appliance: "⚡",
   accessory: "🔩",
+  opening: "🚪",
 };
+
+// How close (meters) two countertop segments along the same wall need to be
+// to merge into one continuous run instead of a separate piece — see the
+// run-building pass inside calculateKitchenMaterials. Exported so the 3D
+// scene's ruler-gated run-outline overlay (KitchenAssemblyScene.tsx) can
+// detect runs the exact same way the quote does, instead of a second,
+// possibly-drifting copy of this number.
+export const WALL_GAP_TOLERANCE_M = 0.05;
 
 // ─── Material Calculator for Kitchen ──────────────────────────────────────────
 export function calculateKitchenMaterials(modules: KitchenModule[]): { lines: KitchenMaterialLine[]; summary: KitchenQuoteSummary } {
@@ -1379,17 +1584,27 @@ export function calculateKitchenMaterials(modules: KitchenModule[]): { lines: Ki
   interface CountertopSegment { alongWall: number; wallKey: string; rotation: KitchenModule["rotation"] | null; moduleLabel: string; widthM: number; label: string; pricePerM2: number }
   const countertopSegments: CountertopSegment[] = [];
   let freestandingCounter = 0;
-  const addCountertop = (label: string, widthM: number, pricePerM2: number, mod: KitchenModule, freestanding = false) => {
+  const addCountertop = (
+    label: string, widthM: number, pricePerM2: number, mod: KitchenModule, freestanding = false,
+    // Diagonal-miter corner extension only (see the includesCountertop call
+    // site below): contributes to the PERPENDICULAR wall's run instead of
+    // mod's own, at an explicit position/depth-plane rather than one derived
+    // from mod's own x/z — a blind-corner cabinet's OWN x/z describes its
+    // combined width+depth carcass's center, not where its extension block
+    // actually sits along the other wall.
+    cornerExtension?: { rotation: KitchenModule["rotation"]; alongWall: number; depthCoord: number },
+  ) => {
     if (widthM <= 0) return;
     // rotation picks which wall a run-forming (non-freestanding) segment is
     // against; the OTHER axis is that wall's fixed depth offset — two runs
     // at the same rotation but a different depth are different planes and
     // must never merge (rounded to mm to shrug off float noise).
-    const isEastWest = mod.rotation === 90 || mod.rotation === 270;
-    const depthCoord = isEastWest ? mod.x : mod.z; // cm — fine as an opaque grouping key
-    const alongWall = (isEastWest ? mod.z : mod.x) / 100; // → meters, to match widthM for the run-gap math below
-    const wallKey = freestanding ? `freestanding_${freestandingCounter++}` : `${mod.rotation}|${Math.round(depthCoord * 10)}`;
-    countertopSegments.push({ alongWall, wallKey, rotation: freestanding ? null : mod.rotation, moduleLabel: mod.label, widthM, label, pricePerM2 });
+    const rotation = freestanding ? null : (cornerExtension?.rotation ?? mod.rotation);
+    const isEastWest = rotation === 90 || rotation === 270;
+    const depthCoord = cornerExtension?.depthCoord ?? (isEastWest ? mod.x : mod.z); // cm — fine as an opaque grouping key
+    const alongWall = cornerExtension?.alongWall ?? (isEastWest ? mod.z : mod.x) / 100; // meters, to match widthM for the run-gap math below
+    const wallKey = freestanding ? `freestanding_${freestandingCounter++}` : `${rotation}|${Math.round(depthCoord * 10)}`;
+    countertopSegments.push({ alongWall, wallKey, rotation, moduleLabel: mod.label, widthM, label, pricePerM2 });
   };
 
   // Board panels are pooled per material across the WHOLE project — not per
@@ -1440,13 +1655,14 @@ export function calculateKitchenMaterials(modules: KitchenModule[]): { lines: Ki
     const { dimensions: d, options: o } = mod;
     const w = d.width / 100;
     const dp = d.depth / 100;
-    // gabinete_bajo_esquinero_puertas has no internal wall between the
-    // original cabinet and its blind extension (see CornerBlindCabinetMesh) —
-    // the top, bottom, back and shelves are each a single continuous board
-    // the full ancho+fondo wide, not two smaller boards joined at the seam.
-    // Doors and side panels still key off the original d.width/d.depth —
-    // only these structural, wall-to-wall panels grow to panelWidth.
-    const panelWidth = mod.type === "gabinete_bajo_esquinero_puertas" ? d.width + d.depth : d.width;
+    // Both blind-corner types (floor and wall) have no internal wall between
+    // the original cabinet and their blind extension (see
+    // CornerBlindCabinetMesh) — the top, bottom, back and shelves are each a
+    // single continuous board the full ancho+fondo wide, not two smaller
+    // boards joined at the seam. Doors and side panels still key off the
+    // original d.width/d.depth — only these structural, wall-to-wall panels
+    // grow to panelWidth.
+    const panelWidth = (mod.type === "gabinete_bajo_esquinero_puertas" || mod.type === "gabinete_pared_esquinero_puertas") ? d.width + d.depth : d.width;
 
     if (mod.category === "lower" || mod.category === "upper" || mod.category === "tower" || mod.category === "corner") {
       if (mod.type === "corona_luz") {
@@ -1610,9 +1826,10 @@ export function calculateKitchenMaterials(modules: KitchenModule[]): { lines: Ki
       // Upper cabinets carry hasToeKick:true in their options by default
       // (DEFAULT_OPTIONS) even though they never render one — same guard the
       // 3D mesh uses to suppress it there.
-      const isUpperForToeKick = mod.category === "upper" || mod.type === "gabinete_superior_esquinero_puertas";
+      const isUpperForToeKick = mod.category === "upper" || mod.type === "esquinero_triangular" || mod.type === "esquinero_triangular_puerta" || mod.type === "gabinete_pared_esquinero_puertas";
       if (!isUpperForToeKick && o.hasToeKick) {
         if (o.zocaloMaterial === "Aluminio") zocaloAluminioMeters += panelWidth / 100;
+        else if (o.zocaloMaterial === "Interior") addPiece("Interior", o.boardMaterial, panelWidth, o.toeKickHeight, "Zoclo");
         else addPiece("Exterior", o.exteriorMaterial, panelWidth, o.toeKickHeight, "Zoclo");
       }
 
@@ -1661,6 +1878,69 @@ export function calculateKitchenMaterials(modules: KitchenModule[]): { lines: Ki
     }
   }
 
+  // ── Diagonal-miter corner extension — a blind-corner cabinet's own wall
+  // already got +depth added above (panelWidth = width+depth), but the
+  // PERPENDICULAR run it forms an L with also needs to reach that same
+  // corner, or its slab falls short of where the 45° cut has to land. Runs
+  // after every addCountertop call above so every real segment already
+  // exists to attach to. Rather than injecting a free-floating segment and
+  // hoping the normal run-merge tolerance happens to pick it up, this finds
+  // the SPECIFIC neighboring module's segment on that wall and grows it
+  // directly — the extra fondo becomes part of THAT cabinet's own piece,
+  // not a separate line or cut. The match distance is deliberately far more
+  // generous than WALL_GAP_TOLERANCE_M: there's no auto-snap between a
+  // corner cabinet and its perpendicular neighbor (snapToNeighbor only
+  // matches modules on the same axis), so real placement can easily leave
+  // more than a few cm there — but there's realistically only ever one
+  // plausible L-partner near a given corner, so picking the nearest
+  // same-wall segment is safe even with a wide margin.
+  const CORNER_NEIGHBOR_MATCH_M = 1;
+  for (const mod of modules) {
+    if (!mod.options.includesCountertop || !BLIND_CORNER_TYPES.has(mod.type)) continue;
+    const perpRotation = cornerPerpendicularRotation(mod);
+    const perpIsEastWest = perpRotation === 90 || perpRotation === 270;
+    const center = cornerExtensionWorldCenterCm(mod);
+    const halfDepthM = mod.dimensions.depth / 200;
+    const centerAlongWallM = (perpIsEastWest ? center.z : center.x) / 100;
+    const cornerPointM = centerAlongWallM - halfDepthM; // where the two walls actually meet
+    const neighborEdgeM = centerAlongWallM + halfDepthM; // where a flush neighbor's slab should already start
+
+    let best: CountertopSegment | null = null;
+    let bestDist = Infinity;
+    for (const seg of countertopSegments) {
+      if (seg.rotation !== perpRotation) continue;
+      const segStart = seg.alongWall - seg.widthM / 2;
+      const segEnd = seg.alongWall + seg.widthM / 2;
+      const dist = Math.min(Math.abs(segStart - neighborEdgeM), Math.abs(segEnd - neighborEdgeM));
+      if (dist < bestDist) {
+        bestDist = dist;
+        best = seg;
+      }
+    }
+
+    if (best && bestDist <= CORNER_NEIGHBOR_MATCH_M) {
+      const segStart = best.alongWall - best.widthM / 2;
+      const segEnd = best.alongWall + best.widthM / 2;
+      let newStart = segStart;
+      let newEnd = segEnd;
+      if (Math.abs(segStart - neighborEdgeM) <= Math.abs(segEnd - neighborEdgeM)) {
+        newStart = Math.min(segStart, cornerPointM);
+      } else {
+        newEnd = Math.max(segEnd, cornerPointM);
+      }
+      best.widthM = newEnd - newStart;
+      best.alongWall = (newStart + newEnd) / 2;
+    } else {
+      // No real neighbor on that wall to attach to (e.g. this corner
+      // cabinet is standing alone) — the miter still needs SOME material,
+      // so it lands as its own small segment instead of silently vanishing.
+      const { label, cost } = resolveCountertopCost(mod.options);
+      addCountertop(label, mod.dimensions.depth / 100, cost, mod, false, {
+        rotation: perpRotation, alongWall: centerAlongWallM, depthCoord: mod.dimensions.depth / 2,
+      });
+    }
+  }
+
   // ── Edge banding — one consolidated line per profile; expandable into a
   // sub-line per module once more than one module uses that profile.
   const EDGE_UNIT_COST = 12;
@@ -1702,75 +1982,32 @@ export function calculateKitchenMaterials(modules: KitchenModule[]): { lines: Ki
     );
   }
 
-  // ── Countertops — sold by the shop only as 6' or 12' stock pieces (never
-  // cut-to-order or by the running meter), so the quote has to say exactly
-  // which whole pieces to buy, not just a raw length. A 12' piece is worth
-  // exactly two 6' ones, so the cheapest (and only relevant) choice is
-  // however many 6'-equivalents cover the needed length — whether those are
-  // bought as 6' pieces or paired up into 12' pieces doesn't change the
-  // total feet purchased (and so not the cost), only the piece count/seams,
-  // so pairing into 12' pieces whenever possible is preferred purely to
-  // minimize joints.
+  // ── Countertops — sold by the shop only as fixed stock lengths (never
+  // cut-to-order or by the running meter — see STOCK_LENGTHS_FT), so the
+  // quote has to say exactly which whole pieces to buy. Runs are first
+  // detected per (wall + depth-plane + material) below — walked in wall
+  // order and broken into a new run wherever there's a real gap
+  // (WALL_GAP_TOLERANCE_M), e.g. the open floor space left for a freestanding
+  // stove — then every run of the SAME material across the whole project
+  // (any wall) is priced together by solveCuttingStock, which is what lets
+  // two short runs on different walls share one physical piece. Freestanding
+  // pieces (islands/peninsulas) already got their own unique wallKey from
+  // addCountertop, so they never merge into a wall run, but can still share a
+  // stock piece with one at the pricing stage.
   //
-  // Stock is bought PER RUN, not pooled across the whole project: first
-  // group segments by (wall + depth-plane + material) — never merging across
-  // materials, since a material change is itself a seam — then within each
-  // group walk them in wall order and break into a new run wherever there's
-  // a real gap (WALL_GAP_TOLERANCE_M), e.g. the open floor space left for a
-  // freestanding stove. Freestanding pieces (islands/peninsulas) already got
-  // their own unique wallKey from addCountertop, so they never merge with
-  // anything and always land as a single-segment run.
+  // WALL_GAP_TOLERANCE_M is deliberately more forgiving than a "true" gap
+  // (like a stove cutout, tens of cm wide) — cabinets of different
+  // categories (e.g. an esquinero next to a straight lower cabinet) don't
+  // magnet-snap flush against each other the way same-category ones do (see
+  // cabinetsSnapCompatible in KitchenAssemblyScene.tsx), so two cabinets the
+  // designer clearly intended as one continuous run can still land a couple
+  // cm apart from freehand placement — that shouldn't read as a deliberate
+  // seam.
   const M_TO_FT = 1 / 0.3048;
-  // Stock countertop lengths the shop actually carries. Largest first so
-  // that, when two combinations tie on total waste, pickCountertopStock's
-  // tie-break (fewest pieces) also prefers fewer, longer pieces over more,
-  // shorter ones — same "reach for the big piece first" instinct the old
-  // 6'/12'-only version had.
-  const COUNTERTOP_STOCK_LENGTHS_FT = [12, 10, 8, 6, 4];
-  const WALL_GAP_TOLERANCE_M = 0.02;
   const WALL_LABELS: Record<number, string> = { 0: "Norte", 90: "Oeste", 180: "Sur", 270: "Este" };
   const fmtFt = (n: number) => {
     const rounded = Math.round(n * 10) / 10;
     return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
-  };
-
-  // Cheapest way to cover neededFt of countertop from COUNTERTOP_STOCK_LENGTHS_FT
-  // stock pieces: smallest total footage (that's what's billed) that's >=
-  // neededFt, breaking ties toward fewer pieces. Plain unbounded-coin-change
-  // DP over whole feet — stock lengths are all even, so every even total
-  // from 4' up is reachable and the search below never runs off the end of
-  // the table.
-  const pickCountertopStock = (neededFt: number): { totalFt: number; pieces: { length: number; count: number }[] } => {
-    // Tiny epsilon guards against a length that's meant to land exactly on a
-    // stock-length boundary reading as e.g. 12.0000001' from float
-    // conversion and rounding up to an extra, unnecessary piece.
-    const target = Math.ceil(neededFt - 1e-9);
-    const maxLen = Math.max(...COUNTERTOP_STOCK_LENGTHS_FT);
-    const maxSum = target + maxLen;
-    const minPieces = new Array(maxSum + 1).fill(Infinity);
-    const usedLength = new Array(maxSum + 1).fill(0);
-    minPieces[0] = 0;
-    for (let s = 1; s <= maxSum; s++) {
-      for (const len of COUNTERTOP_STOCK_LENGTHS_FT) {
-        if (len <= s && minPieces[s - len] + 1 < minPieces[s]) {
-          minPieces[s] = minPieces[s - len] + 1;
-          usedLength[s] = len;
-        }
-      }
-    }
-    let totalFt = Math.max(target, 0);
-    while (totalFt <= maxSum && !Number.isFinite(minPieces[totalFt])) totalFt++;
-    const countByLength = new Map<number, number>();
-    let remaining = totalFt;
-    while (remaining > 0) {
-      const len = usedLength[remaining];
-      countByLength.set(len, (countByLength.get(len) ?? 0) + 1);
-      remaining -= len;
-    }
-    const pieces = COUNTERTOP_STOCK_LENGTHS_FT
-      .filter((len) => countByLength.has(len))
-      .map((len) => ({ length: len, count: countByLength.get(len)! }));
-    return { totalFt, pieces };
   };
 
   const segmentsByGroup = new Map<string, CountertopSegment[]>();
@@ -1808,42 +2045,75 @@ export function calculateKitchenMaterials(modules: KitchenModule[]): { lines: Ki
   // depends on module iteration order and would number them arbitrarily.
   countertopRuns.sort((a, b) => (a.rotation ?? -1) - (b.rotation ?? -1) || a.startAlongWall - b.startAlongWall);
 
-  // A material name alone is ambiguous once it spans more than one run (two
-  // separate walls, or a wall run plus an island) — only then is a
-  // disambiguating suffix appended, so the common single-run case stays plain.
-  // Two runs can also share the SAME wall (split by a gap, e.g. the stove) —
-  // those need a running number on top of the wall name, not just the name
-  // twice, so "Norte" alone only appears when that wall has exactly one run.
-  const runsPerLabel = new Map<string, number>();
-  const runsPerLabelWall = new Map<string, number>();
+  // Every stock piece actually bought is shared across ALL of a material's
+  // runs — any wall, any island — since solveCuttingStock packs segments onto
+  // pieces without regard to which wall they came from. So runs are priced
+  // one MATERIAL at a time (not one run at a time like the old per-run
+  // round-up did), letting two short runs on different walls share a single
+  // stock piece instead of each buying — and wasting — their own.
+  const runsByLabel = new Map<string, CountertopRun[]>();
   for (const r of countertopRuns) {
-    runsPerLabel.set(r.label, (runsPerLabel.get(r.label) ?? 0) + 1);
-    runsPerLabelWall.set(`${r.label}|${r.rotation}`, (runsPerLabelWall.get(`${r.label}|${r.rotation}`) ?? 0) + 1);
+    const list = runsByLabel.get(r.label) ?? [];
+    list.push(r);
+    runsByLabel.set(r.label, list);
   }
-  const wallRunSeen = new Map<string, number>();
 
-  for (const { label, pricePerM2, meters, rotation, moduleLabel } of countertopRuns) {
-    const neededFt = meters * M_TO_FT;
-    const { totalFt, pieces: stockPieces } = pickCountertopStock(neededFt);
-    const wasteFt = totalFt - neededFt;
-    const pieces = stockPieces.map(({ length, count }) => `${count} ${count === 1 ? "pieza" : "piezas"} de ${length}'`);
-    const pricePerFt = pricePerM2 * STANDARD_COUNTERTOP_DEPTH_M * 0.3048; // $/m² · m(depth) = $/linear m → $/linear ft
-    let wallSuffix = "";
-    if ((runsPerLabel.get(label) ?? 0) > 1) {
-      if (rotation !== null) {
-        const wallKey = `${label}|${rotation}`;
-        if ((runsPerLabelWall.get(wallKey) ?? 0) > 1) {
-          const idx = (wallRunSeen.get(wallKey) ?? 0) + 1;
-          wallRunSeen.set(wallKey, idx);
-          wallSuffix = ` (${WALL_LABELS[rotation]} ${idx})`;
-        } else {
-          wallSuffix = ` (${WALL_LABELS[rotation]})`;
-        }
-      } else {
-        wallSuffix = ` (${moduleLabel})`;
-      }
+  const maxStockFt = Math.max(...STOCK_LENGTHS_FT);
+  for (const [label, runs] of runsByLabel) {
+    const pricePerFt = runs[0].pricePerM2 * STANDARD_COUNTERTOP_DEPTH_M * 0.3048; // $/m² · m(depth) = $/linear m → $/linear ft
+
+    // A material name alone is ambiguous once it spans more than one run (two
+    // walls, or a wall run plus an island) — only then does a run's piece
+    // breakdown need a location tag, and only a wall repeated within the same
+    // material needs a running number on top of that.
+    const baseLabelCounts = new Map<string, number>();
+    for (const r of runs) {
+      const base = r.rotation !== null ? WALL_LABELS[r.rotation] : r.moduleLabel;
+      baseLabelCounts.set(base, (baseLabelCounts.get(base) ?? 0) + 1);
     }
-    addLine(`Cubierta ${label}${wallSuffix} — ${pieces.join(" + ")} (sobran ${fmtFt(wasteFt)}')`, totalFt, "pies", parseFloat(pricePerFt.toFixed(2)), { category: "countertop" });
+    const baseLabelSeen = new Map<string, number>();
+    const runLabels = runs.map((r) => {
+      const base = r.rotation !== null ? WALL_LABELS[r.rotation] : r.moduleLabel;
+      if ((baseLabelCounts.get(base) ?? 0) <= 1) return base;
+      const idx = (baseLabelSeen.get(base) ?? 0) + 1;
+      baseLabelSeen.set(base, idx);
+      return `${base} ${idx}`;
+    });
+
+    // A run longer than the largest stock length can't be cut from a single
+    // piece — it has to be spliced from several (splicedCover) — so it's
+    // pulled out of the shared bin-packing pool the normal-length runs go
+    // through together via solveCuttingStock.
+    const pieces: StockPiece[] = [];
+    const normalSegments: CutSegment[] = [];
+    runs.forEach((r, i) => {
+      const lengthFt = r.meters * M_TO_FT;
+      if (lengthFt > maxStockFt + 1e-6) {
+        pieces.push(...splicedCover(lengthFt, pricePerFt, runLabels[i]).pieces);
+      } else {
+        normalSegments.push({ label: runLabels[i], lengthFt });
+      }
+    });
+    if (normalSegments.length > 0) {
+      pieces.push(...solveCuttingStock(normalSegments, pricePerFt).pieces);
+    }
+
+    const boughtFt = pieces.reduce((sum, p) => sum + p.length, 0);
+    const subLines = pieces.map((p) => {
+      const cut = p.segments.map((s) => `${s.label} (${fmtFt(s.lengthFt)}')`).join(", ");
+      const wasteNote = p.wasteFt > 0.05 ? ` · sobran ${fmtFt(p.wasteFt)}'` : "";
+      const cost = parseFloat((p.length * pricePerFt).toFixed(2));
+      return { label: `Pieza de ${p.length}' → ${cut}${wasteNote}`, quantity: 1, unit: "pza", unitCost: cost, subtotal: cost };
+    });
+    // Only worth a breakdown when it actually says something the header line
+    // doesn't: more than one physical piece bought, or a single piece
+    // stitched together from more than one run/wall.
+    const showBreakdown = pieces.length > 1 || (pieces[0]?.segments.length ?? 0) > 1;
+
+    addLine(`Cubierta ${label}`, boughtFt, "pies", parseFloat(pricePerFt.toFixed(2)), {
+      category: "countertop",
+      subLines: showBreakdown ? subLines : undefined,
+    });
   }
 
   // ── Hardware — grouped into one "Herrajes" line once there's more than one

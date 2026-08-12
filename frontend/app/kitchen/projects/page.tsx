@@ -7,6 +7,7 @@ import { AppShell } from "@/components/layout/AppShell";
 import { listKitchenProjects, updateKitchenProjectStatus, KITCHEN_PROJECT_STATUSES, type KitchenProjectStatus } from "@/services/api";
 import { formatDate } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { useKitchenStore } from "@/store/useKitchenStore";
 
 type KitchenProjectRow = Awaited<ReturnType<typeof listKitchenProjects>>[number];
 
@@ -21,6 +22,13 @@ const STATUS_COLORS: Record<string, string> = {
 
 export default function KitchenProjectsPage() {
   const [projects, setProjects] = useState<KitchenProjectRow[] | null>(null);
+  // The draft persists to localStorage across visits (so an accidental
+  // refresh mid-edit doesn't lose work) — which means plain navigation to
+  // /kitchen with no projectId shows whatever was last open instead of a
+  // blank project. Reset explicitly here, at the one place "start a new
+  // kitchen" is actually the intent, rather than on every bare /kitchen
+  // mount (which would also wipe an unsaved new draft on a page refresh).
+  const resetDraft = useKitchenStore((s) => s.resetDraft);
 
   useEffect(() => {
     listKitchenProjects().then(setProjects);
@@ -45,7 +53,7 @@ export default function KitchenProjectsPage() {
     <AppShell title="Proyectos de Cocina" subtitle="Diseños modulares de cocinas completas">
       <div className="mb-6 flex items-center justify-between">
         <p className="text-sm text-zinc-400">{projects ? `${projects.length} proyecto${projects.length !== 1 ? "s" : ""}` : "Cargando..."}</p>
-        <Link href="/kitchen">
+        <Link href="/kitchen" onClick={resetDraft}>
           <Button variant="primary">+ Nueva cocina</Button>
         </Link>
       </div>
@@ -57,7 +65,7 @@ export default function KitchenProjectsPage() {
             <h3 className="text-base font-semibold text-white">Sin proyectos de cocina</h3>
             <p className="mt-1 text-sm text-zinc-500">Empieza diseñando una cocina modular completa.</p>
           </div>
-          <Link href="/kitchen">
+          <Link href="/kitchen" onClick={resetDraft}>
             <Button variant="primary">Diseñar primera cocina</Button>
           </Link>
         </div>

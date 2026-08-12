@@ -60,6 +60,53 @@ textarea {
   background: rgba(193, 144, 79, 0.35);
 }
 
+/* App-wide text-selection guard. Buttons, tabs, cards, toolbars, labels,
+   icons — the whole UI chrome — used to let the browser's native
+   double-click/long-press/drag-select behavior kick in, which reads as a
+   bug ("the app is glitching") rather than a real text-selection gesture,
+   especially on mobile. Default-deny at the body level (user-select is an
+   inherited CSS property, so this covers every element unless something
+   more specific overrides it) instead of hunting down every button/card/
+   tab component individually — a global default is the only version of
+   this fix that can't regress when a new interactive component is added
+   later without remembering to opt it out by hand. The three real
+   exceptions — actual inputs, textareas, and anything explicitly marked
+   copyable — opt back in below; nothing else needs to.
+   -webkit-touch-callout: none also kills iOS's press-and-hold callout
+   (copy/lookup bubble) on the same elements; -webkit-tap-highlight-color
+   removes the gray/blue flash Android/iOS Chrome paints on tap, which reads
+   the same way — like the app hiccuped — even though it's not selection. */
+body {
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Opt back in: real text entry/editing... */
+input,
+textarea,
+[contenteditable="true"] {
+  -webkit-user-select: text;
+  -moz-user-select: text;
+  -ms-user-select: text;
+  user-select: text;
+  -webkit-touch-callout: default;
+}
+
+/* ...and specific read-only content someone would actually want to copy
+   (a quote total, a share link, a client's phone number) — opt a span/div
+   in explicitly with this class rather than loosening the default. */
+.selectable-text {
+  -webkit-user-select: text;
+  -moz-user-select: text;
+  -ms-user-select: text;
+  user-select: text;
+  -webkit-touch-callout: default;
+}
+
 .glass {
   background: linear-gradient(180deg, rgba(243, 234, 216, 0.06), rgba(243, 234, 216, 0.03));
   border: 1px solid var(--border);

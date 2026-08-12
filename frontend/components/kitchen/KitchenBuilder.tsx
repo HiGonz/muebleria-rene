@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { AnimatePresence, motion } from "framer-motion";
-import { Settings, Sparkles, Palette, Ruler, ChevronDown, Share2 } from "lucide-react";
+import { Settings, Sparkles, Palette, Ruler, ChevronDown, Share2, MoreVertical } from "lucide-react";
 import { toast } from "sonner";
 import type { SampleKitchenVariant } from "@/services/kitchenData";
 import { getKitchenProject, saveKitchenProject } from "@/services/api";
@@ -54,6 +54,12 @@ export function KitchenBuilder() {
   const [showSampleMenu, setShowSampleMenu] = useState(false);
   const [saving, setSaving] = useState(false);
   const sampleMenuRef = useRef<HTMLDivElement>(null);
+  // Everything the full desktop header shows inline (project name/client,
+  // Nuevo, Compartir, Habitación, Materiales, Alturas, Cocina de muestra,
+  // Guardar) collapses into this one menu below 768px — see the compact
+  // mobile header further down. Desktop (md:) is untouched.
+  const [showMobileMenu, setShowMobileMenu] = useState(false);
+  const mobileMenuRef = useRef<HTMLDivElement>(null);
 
   // Loading /kitchen?projectId=123 pulls that saved project from the backend
   // into the draft — only once per id, so it doesn't clobber edits in progress.
@@ -71,11 +77,26 @@ export function KitchenBuilder() {
   useEffect(() => {
     if (!showSampleMenu) return;
     const onClickOutside = (e: MouseEvent) => {
-      if (sampleMenuRef.current && !sampleMenuRef.current.contains(e.target as Node)) setShowSampleMenu(false);
+      // The sample-kitchen options render a second time inside the mobile
+      // menu (see the compact mobile header below) — its own dropdown lives
+      // in the desktop-only header, hidden on mobile, so a click on the
+      // mobile copy would otherwise always read as "outside" and
+      // self-close on mousedown before the click handler even runs.
+      const target = e.target as Node;
+      if ((sampleMenuRef.current?.contains(target)) || (mobileMenuRef.current?.contains(target))) return;
+      setShowSampleMenu(false);
     };
     document.addEventListener("mousedown", onClickOutside);
     return () => document.removeEventListener("mousedown", onClickOutside);
   }, [showSampleMenu]);
+  useEffect(() => {
+    if (!showMobileMenu) return;
+    const onClickOutside = (e: MouseEvent) => {
+      if (mobileMenuRef.current && !mobileMenuRef.current.contains(e.target as Node)) setShowMobileMenu(false);
+    };
+    document.addEventListener("mousedown", onClickOutside);
+    return () => document.removeEventListener("mousedown", onClickOutside);
+  }, [showMobileMenu]);
   // draft.editingModuleId is persisted, so it can point at a module that no
   // longer exists (deleted in another session, stale localStorage, etc). Treat
   // that the same as "not editing" everywhere, instead of trusting the raw id
@@ -95,10 +116,27 @@ export function KitchenBuilder() {
 
   const modulesCount = draft.modules.length;
 
+  // Shared by the desktop header's own Guardar button and the mobile
+  // overflow menu's — same action, same request in flight either way.
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const savedId = await saveKitchenProject(draft, projectId);
+      if (projectId === null) loadProject(savedId, draft);
+      toast.success("Cocina guardada.", {
+        action: { label: "Ver proyectos", onClick: () => router.push("/kitchen/projects") },
+      });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "No fue posible guardar la cocina.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <div className="flex h-screen flex-col bg-ink text-ivory overflow-hidden">
-      {/* ── Top Bar ─────────────────────────────────────────────────────────── */}
-      <header className="flex shrink-0 items-center justify-between gap-4 border-b border-ivory/8 px-5 py-3">
+      {/* ── Top Bar (desktop, ≥768px) ───────────────────────────────────────── */}
+      <header className="hidden md:flex shrink-0 items-center justify-between gap-4 border-b border-ivory/8 px-5 py-3">
         <div className="flex items-center gap-3 min-w-0">
           {/* Goes straight to the saved-projects list rather than
               router.back() — the builder has no sidebar of its own (it's
@@ -211,42 +249,123 @@ export function KitchenBuilder() {
               <span className="hidden sm:inline sm:ml-1.5">Compartir</span>
             </Button>
           )}
-          <Button
-            variant="primary"
-            className="h-8 px-3 text-xs"
-            disabled={saving}
-            onClick={async () => {
-              setSaving(true);
-              try {
-                const savedId = await saveKitchenProject(draft, projectId);
-                if (projectId === null) loadProject(savedId, draft);
-                toast.success("Cocina guardada.", {
-                  action: { label: "Ver proyectos", onClick: () => router.push("/kitchen/projects") },
-                });
-              } catch (error) {
-                toast.error(error instanceof Error ? error.message : "No fue posible guardar la cocina.");
-              } finally {
-                setSaving(false);
-              }
-            }}
-          >
+          <Button variant="primary" className="h-8 px-3 text-xs" disabled={saving} onClick={handleSave}>
             {saving ? "Guardando..." : "Guardar"}
           </Button>
         </div>
       </header>
 
-      {/* ── Mobile tabs ─────────────────────────────────────────────────────── */}
-      <div className="flex sm:hidden border-b border-ivory/8 bg-ivory/3">
-        {TABS.map((tab) => (
+      {/* ── Top bar (mobile, <768px) ─────────────────────────────────────────
+          One slim row replaces the desktop header + the old separate tab
+          strip below it — project name/client and every secondary action
+          (Nuevo, Compartir, Habitación, Materiales, Alturas, Cocina de
+          muestra, Guardar) move into the "⋮" menu so the 3D view and the
+          module panel get as much vertical space as possible. */}
+      <header className="flex md:hidden shrink-0 items-center gap-1.5 border-b border-ivory/8 px-2 h-11">
+        <button
+          onClick={() => router.push("/kitchen/projects")}
+          title="Ver proyectos de cocina guardados"
+          aria-label="Ver proyectos de cocina guardados"
+          className="shrink-0 rounded-lg p-1.5 text-warmgray hover:text-ivory transition-colors"
+        >
+          ←
+        </button>
+        <nav className="flex flex-1 min-w-0 items-center gap-0.5 rounded-lg border border-ivory/8 bg-ivory/4 p-0.5">
+          {TABS.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`flex-1 truncate rounded-md py-1.5 text-[11px] font-medium transition-colors ${
+                activeTab === tab.id ? "bg-brass text-ink" : "text-warmgray"
+              }`}
+            >
+              {tab.icon} {tab.label}
+            </button>
+          ))}
+        </nav>
+        <div className="relative shrink-0" ref={mobileMenuRef}>
           <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            className={`flex-1 py-2.5 text-xs font-medium transition-colors ${activeTab === tab.id ? "text-brass-soft border-b-2 border-brass" : "text-warmgray"}`}
+            onClick={() => setShowMobileMenu((v) => !v)}
+            title="Más opciones"
+            aria-label="Más opciones"
+            aria-haspopup="menu"
+            aria-expanded={showMobileMenu}
+            className="rounded-lg p-1.5 text-warmgray hover:text-ivory transition-colors"
           >
-            {tab.icon} {tab.label}
+            <MoreVertical size={18} />
           </button>
-        ))}
-      </div>
+          {showMobileMenu && (
+            <div
+              role="menu"
+              aria-label="Más opciones"
+              className="absolute right-0 top-full z-30 mt-1.5 w-64 overflow-hidden rounded-xl border border-ivory/12 bg-ink/95 p-1 shadow-[0_8px_24px_rgba(0,0,0,0.5)] backdrop-blur-md"
+            >
+              <div className="border-b border-ivory/8 px-3 py-2">
+                <p className="truncate text-xs font-semibold text-ivory">{draft.projectName || "Nueva cocina"}</p>
+                <p className="truncate text-[10px] text-warmgray">{draft.clientName || "Sin cliente"} · {modulesCount} módulo{modulesCount !== 1 ? "s" : ""}</p>
+              </div>
+              <button role="menuitem" onClick={() => { resetDraft(); setShowMobileMenu(false); }} className="mt-1 flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-xs text-ivory transition-colors hover:bg-ivory/8">
+                Nuevo
+              </button>
+              {projectId !== null && (
+                <button role="menuitem" onClick={() => { setShowShareModal(true); setShowMobileMenu(false); }} className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-xs text-ivory transition-colors hover:bg-ivory/8">
+                  <Share2 size={14} className="text-warmgray" /> Compartir
+                </button>
+              )}
+              <button role="menuitem" onClick={() => { setShowRoomSettings(true); setShowMobileMenu(false); }} className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-xs text-ivory transition-colors hover:bg-ivory/8">
+                <Settings size={14} className="text-warmgray" /> Habitación
+              </button>
+              <button role="menuitem" onClick={() => { setShowGlobalMaterials(true); setShowMobileMenu(false); }} className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-xs text-ivory transition-colors hover:bg-ivory/8">
+                <Palette size={14} className="text-warmgray" /> Materiales globales
+              </button>
+              <button role="menuitem" onClick={() => { setShowGlobalHeights(true); setShowMobileMenu(false); }} className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-xs text-ivory transition-colors hover:bg-ivory/8">
+                <Ruler size={14} className="text-warmgray" /> Alturas globales
+              </button>
+              <button
+                role="menuitem"
+                onClick={() => setShowSampleMenu((v) => !v)}
+                aria-expanded={showSampleMenu}
+                className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-xs text-ivory transition-colors hover:bg-ivory/8"
+              >
+                <Sparkles size={14} className="text-warmgray" /> Cocina de muestra
+                <ChevronDown size={12} className={`ml-auto text-warmgray transition-transform ${showSampleMenu ? "rotate-180" : ""}`} />
+              </button>
+              {/* showSampleMenu's own dropdown lives in the desktop header
+                  (hidden on mobile), so its options are repeated inline here
+                  instead of relying on that hidden panel. */}
+              {showSampleMenu && (
+                <div className="mb-1 space-y-0.5 rounded-lg bg-ivory/4 p-1">
+                  {SAMPLE_KITCHENS.map((k) => (
+                    <button
+                      key={k.variant}
+                      role="menuitem"
+                      onClick={() => {
+                        loadSampleKitchen(k.variant);
+                        setShowSampleMenu(false);
+                        setShowMobileMenu(false);
+                      }}
+                      className="flex w-full flex-col items-start gap-0.5 rounded-lg px-3 py-1.5 text-left transition-colors hover:bg-ivory/8"
+                    >
+                      <span className="text-xs font-medium text-ivory">{k.label}</span>
+                      <span className="text-[10px] text-warmgray">{k.hint}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+              <div className="mt-1 border-t border-ivory/8 pt-1">
+                <button
+                  role="menuitem"
+                  disabled={saving}
+                  onClick={() => { handleSave(); setShowMobileMenu(false); }}
+                  className="flex w-full items-center justify-center rounded-lg bg-brass px-3 py-2 text-xs font-semibold text-ink transition-colors hover:bg-brass-soft disabled:opacity-60"
+                >
+                  {saving ? "Guardando..." : "Guardar"}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </header>
 
       {/* ── Main content ────────────────────────────────────────────────────── */}
       <div className="flex flex-1 overflow-hidden">
@@ -260,7 +379,7 @@ export function KitchenBuilder() {
               roomDepth={draft.roomDepth}
               ceilingHeight={draft.ceilingHeight}
               openings={draft.openings}
-              onModuleMove={(id, x, z, rotation) => updateModulePosition(id, x, z, rotation)}
+              onModuleMove={(id, x, z, rotation, mountHeightCm) => updateModulePosition(id, x, z, rotation, mountHeightCm)}
               onModuleActivate={(id) => setEditingModule(id)}
               onModuleNudge={(id, dx, dz, dMountHeight) => nudgeModule(id, dx, dz, dMountHeight)}
               onModuleRemove={removeModule}

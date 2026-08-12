@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment } from "react";
+import { Fragment, useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import { Trash2, Copy, RotateCw, Lock, Unlock } from "lucide-react";
 import { useKitchenStore } from "@/store/useKitchenStore";
@@ -38,7 +38,8 @@ const BACK_PANEL_OPTIONS: { value: NonNullable<ModOptions["backPanelMaterial"]>;
 ];
 
 const ZOCALO_MATERIAL_OPTIONS: { value: NonNullable<ModOptions["zocaloMaterial"]>; label: string }[] = [
-  { value: "MDF", label: "MDF (cortado a medida)" },
+  { value: "Exterior", label: "Tablero exterior (cortado a medida)" },
+  { value: "Interior", label: "Tablero interior (cortado a medida)" },
   { value: "Aluminio", label: "Aluminio (tira de 3m)" },
 ];
 
@@ -104,7 +105,7 @@ const AUTO_DRAWER_HEIGHT_CM = 16;
 const MIN_DOOR_ZONE_CM = 40;
 function defaultDrawerZoneHeight(module: KitchenModule): number {
   const { dimensions: d, options: o, category, type } = module;
-  const isUpper = category === "upper" || type === "gabinete_superior_esquinero_puertas";
+  const isUpper = category === "upper" || type === "esquinero_triangular" || type === "esquinero_triangular_puerta" || type === "gabinete_pared_esquinero_puertas";
   const toeKick = !isUpper && o.hasToeKick ? o.toeKickHeight : 0;
   const ctThick = o.includesCountertop ? o.countertopThickness : 0;
   const topMargin = isUpper ? 0 : 6;
@@ -213,9 +214,21 @@ const BOARD_OPTIONS = (Object.keys(BOARD_COSTS) as BoardMaterial[]).map((k) => (
 export function ModuleInspector() {
   const {
     getEditingModule, updateModule, setEditingModule, removeModule, duplicateModule, rotateModule, toggleModuleLock,
-    applyExteriorToAll, applyHardwareToAll, applyCountertopToAll, placeAccessoryInNiche,
+    applyExteriorToAll, applyHardwareToAll, applyCountertopToAll, applyZocaloMaterialToAll, placeAccessoryInNiche,
   } = useKitchenStore();
   const module = getEditingModule();
+  // Delete used to live in the header right next to the "×" close button,
+  // where a mis-click permanently removed a module with no way back — moved
+  // to its own footer row, away from close, and now needs a second
+  // confirming click instead of firing immediately. Tracked by module id
+  // (not a plain boolean) so switching to a different module can't leave a
+  // stale "confirming" state armed on the wrong one.
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  useEffect(() => {
+    if (!confirmDeleteId) return;
+    const timer = setTimeout(() => setConfirmDeleteId(null), 4000);
+    return () => clearTimeout(timer);
+  }, [confirmDeleteId]);
 
   if (!module) return null;
 
@@ -226,17 +239,31 @@ export function ModuleInspector() {
   const updateDim = (key: keyof typeof dim, val: number) => updateModule(module.id, { dimensions: { ...dim, [key]: val } });
   const updateOpt = (key: keyof ModOptions, val: unknown) => updateModule(module.id, { options: { ...opt, [key]: val } as ModOptions });
 
-  // gabinete_superior_esquinero_puertas is category "corner" (so it groups
-  // under Esquineros in the catalog) but is wall-mounted like any other
-  // aéreo — treat it as isUpper, not isLower, for every field this drives
-  // (zócalo section, mountHeight, door-hinge options).
-  const isUpperCorner = type === "gabinete_superior_esquinero_puertas";
+  const isConfirmingDelete = confirmDeleteId === module.id;
+  const handleDeleteClick = () => {
+    if (isConfirmingDelete) {
+      removeModule(module.id);
+      setConfirmDeleteId(null);
+    } else {
+      setConfirmDeleteId(module.id);
+    }
+  };
+
+  // The triangular esquineros and the wall blind-corner cabinet are category
+  // "corner" (so they group under Esquineros in the catalog) but are
+  // wall-mounted like any other aéreo — treat them as isUpper, not isLower,
+  // for every field this drives (zócalo section, mountHeight, door-hinge
+  // options).
+  const isUpperCorner = type === "esquinero_triangular" || type === "esquinero_triangular_puerta" || type === "gabinete_pared_esquinero_puertas";
   const isLower = (category === "lower" || category === "corner") && !isUpperCorner;
   const isUpper = category === "upper" || isUpperCorner;
   const isTower = category === "tower";
   const isCountertop = category === "countertop";
   const isAppliance = category === "appliance";
   const isAccessory = category === "accessory";
+  // Decorative door/window — just a shape + color, no board material,
+  // doors/shelves, or countertop concept at all.
+  const isOpening = category === "opening";
   const isCajonera = type === "cajonera";
   // Corona de luz is a decorative light valance, not a storage cabinet — no
   // doors/drawers/countertop concept, so those generic sections are skipped
@@ -258,7 +285,7 @@ export function ModuleInspector() {
   return (
     <div className="flex h-full flex-col">
       {/* ── Header ──────────────────────────────────────────────────────── */}
-      <div className="flex shrink-0 items-center justify-between border-b border-ivory/8 px-5 py-4">
+      <div className="flex shrink-0 items-center justify-between border-b border-ivory/8 px-3 py-2 md:px-5 md:py-4">
         <p className="truncate font-display text-sm font-semibold text-ivory">{opt.locked && "🔒 "}{module.label}</p>
         <div className="flex shrink-0 items-center gap-1">
           <button
@@ -278,14 +305,6 @@ export function ModuleInspector() {
             className={`rounded-lg p-1.5 transition-colors ${opt.locked ? "text-brass-soft hover:bg-brass/15 hover:text-brass" : "text-warmgray hover:bg-ivory/8 hover:text-ivory"}`}
           >
             {opt.locked ? <Lock size={15} /> : <Unlock size={15} />}
-          </button>
-          <button
-            onClick={() => { removeModule(module.id); }}
-            title={opt.locked ? "Desbloquea el mueble para eliminarlo" : "Eliminar"}
-            disabled={opt.locked}
-            className="rounded-lg p-1.5 text-warmgray transition-colors hover:bg-terracotta/15 hover:text-terracotta disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent"
-          >
-            <Trash2 size={15} />
           </button>
           <button onClick={() => setEditingModule(null)} className="ml-1 text-xl leading-none text-warmgray hover:text-ivory transition-colors">&times;</button>
         </div>
@@ -326,11 +345,39 @@ export function ModuleInspector() {
             <FieldGroup label="Fondo">
               <NumInput value={dim.depth} onChange={(v) => updateDim("depth", v)} min={10} max={200} unit="cm" />
             </FieldGroup>
+            {isLightCrown && (
+              <FieldGroup label="Separación del muro">
+                <NumInput value={opt.wallOffset ?? 30} onChange={(v) => updateOpt("wallOffset", v)} min={0} max={60} unit="cm" />
+              </FieldGroup>
+            )}
           </div>
+          {isLightCrown && (
+            <p className="mt-2 text-[10px] text-warmgray/70">
+              La corona no va pegada al muro como un aéreo — es una visera. Ajusta la separación para que quede encima
+              y por delante de los muebles aéreos de abajo.
+            </p>
+          )}
         </Section>
 
+        {/* ── Puerta/ventana decorativa: just a color, no board material ──── */}
+        {isOpening && (
+          <Section label="Apariencia">
+            <FieldGroup label={type === "ventana_decorativa" ? "Color del marco" : "Color de la puerta"}>
+              <div className="flex gap-2">
+                <input
+                  type="color"
+                  value={opt.color || "#8b6142"}
+                  onChange={(e) => updateOpt("color", e.target.value)}
+                  className="h-10 w-14 cursor-pointer rounded-xl border border-ivory/10 bg-transparent p-1"
+                />
+                <Input value={opt.color || ""} onChange={(e) => updateOpt("color", e.target.value)} placeholder="#8b6142" className="font-mono text-sm" />
+              </div>
+            </FieldGroup>
+          </Section>
+        )}
+
         {/* ── Boards ────────────────────────────────────────────────────── */}
-        {!isCountertop && !isAppliance && !isAccessory && (
+        {!isCountertop && !isAppliance && !isAccessory && !isOpening && (
           <>
             <div className="rounded-xl border border-ivory/8 bg-ivory/3 px-3 py-2.5">
               <p className="text-[10px] font-semibold uppercase tracking-widest text-warmgray">Tablero interior</p>
@@ -540,6 +587,7 @@ export function ModuleInspector() {
                 const defaultSide = i % 2 === 0 ? "izquierda" : "derecha";
                 const current = opt.doorHingeSides?.[i] ?? defaultSide;
                 const currentType = opt.doorHingeType?.[i] ?? "normal";
+                const currentGlass = opt.doorGlass?.[i] ? "cristal" : "normal";
                 return (
                   <Fragment key={i}>
                     <FieldGroup label={`Puerta ${i + 1}`}>
@@ -562,6 +610,20 @@ export function ModuleInspector() {
                           updateOpt("doorHingeType", next);
                         }}
                         options={DOOR_HINGE_TYPE_OPTIONS}
+                      />
+                    </FieldGroup>
+                    <FieldGroup label={`Puerta ${i + 1}: frente`}>
+                      <SelectInput
+                        value={currentGlass}
+                        onChange={(v) => {
+                          const next = Array.from({ length: opt.doors }, (_, j) => opt.doorGlass?.[j] ?? false);
+                          next[i] = v === "cristal";
+                          updateOpt("doorGlass", next);
+                        }}
+                        options={[
+                          { value: "normal", label: "Tablero sólido" },
+                          { value: "cristal", label: "Cristal (marco + panel de vidrio)" },
+                        ]}
                       />
                     </FieldGroup>
                   </Fragment>
@@ -638,21 +700,39 @@ export function ModuleInspector() {
               )}
               {opt.hasToeKick && (
                 <FieldGroup label="Material del zoclo">
-                  <SelectInput value={opt.zocaloMaterial ?? "MDF"} onChange={(v) => updateOpt("zocaloMaterial", v)} options={ZOCALO_MATERIAL_OPTIONS} />
+                  <SelectInput value={opt.zocaloMaterial ?? "Exterior"} onChange={(v) => applyZocaloMaterialToAll(v)} options={ZOCALO_MATERIAL_OPTIONS} />
                 </FieldGroup>
               )}
             </div>
-            {opt.hasToeKick && opt.zocaloMaterial === "Aluminio" && (
-              <p className="mt-2 text-[10px] text-warmgray/70">Se compra en tiras de 3m — la cotización redondea al número de piezas necesarias.</p>
+            {opt.hasToeKick && (
+              <p className="mt-2 text-[10px] text-warmgray/70">
+                El material del zoclo se aplica a toda la cocina.
+                {opt.zocaloMaterial === "Aluminio" && " Se compra en tiras de 3m — la cotización redondea al número de piezas necesarias."}
+              </p>
             )}
           </Section>
         )}
 
         {/* ── Upper cabinet extras ──────────────────────────────────────── */}
-        {isUpper && (
+        {/* Campana extractora/compacta are category "accessory", not
+            "upper", but they're wall-mounted the same way (mountHeight
+            already drives their own mesh's vertical offset — see
+            KitchenAssemblyScene.tsx) and just never got a field to edit it
+            from. */}
+        {(isUpper || type === "campana_extractora" || type === "campana_extractora_compacta") && (
           <Section label="Instalación">
             <FieldGroup label="Altura de montaje">
               <NumInput value={opt.mountHeight} onChange={(v) => updateOpt("mountHeight", v)} min={100} max={220} unit="cm" />
+            </FieldGroup>
+          </Section>
+        )}
+
+        {/* ── Ventana: sill height — a door sits on the floor, but a window
+             needs its own mount height like an aéreo. ────────────────────── */}
+        {type === "ventana_decorativa" && (
+          <Section label="Instalación">
+            <FieldGroup label="Altura del alféizar">
+              <NumInput value={opt.mountHeight} onChange={(v) => updateOpt("mountHeight", v)} min={0} max={220} unit="cm" />
             </FieldGroup>
           </Section>
         )}
@@ -764,6 +844,38 @@ export function ModuleInspector() {
         <FieldGroup label="Observaciones">
           <Textarea value={opt.notes} onChange={(e) => updateOpt("notes", e.target.value)} rows={2} placeholder="Detalles especiales, acabados o instrucciones..." />
         </FieldGroup>
+      </div>
+
+      {/* ── Delete ────────────────────────────────────────────────────────
+          Deliberately its own row, separated from the header — was next to
+          the "×" close button and got mis-clicked as a delete. */}
+      <div className="shrink-0 border-t border-ivory/8 px-4 py-3">
+        {opt.locked ? (
+          <p className="text-center text-[11px] text-warmgray/50">Desbloquea el mueble para eliminarlo.</p>
+        ) : isConfirmingDelete ? (
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleDeleteClick}
+              className="flex-1 rounded-lg bg-terracotta/90 px-3 py-2 text-xs font-semibold text-ivory transition-colors hover:bg-terracotta"
+            >
+              Confirmar eliminación
+            </button>
+            <button
+              onClick={() => setConfirmDeleteId(null)}
+              className="rounded-lg border border-ivory/15 px-3 py-2 text-xs text-warmgray transition-colors hover:text-ivory"
+            >
+              Cancelar
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={handleDeleteClick}
+            className="flex w-full items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs text-warmgray transition-colors hover:bg-terracotta/15 hover:text-terracotta"
+          >
+            <Trash2 size={14} />
+            Eliminar mueble
+          </button>
+        )}
       </div>
     </div>
   );
