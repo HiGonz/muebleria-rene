@@ -86,7 +86,6 @@ export type TowerModuleType =
 export type CountertopModuleType =
   | "cubierta"
   | "barra_desayunadora"
-  | "isla_central"
   | "peninsula"
   | "cubierta_tarja"
   | "cubierta_parrilla";
@@ -186,7 +185,7 @@ export type SidePanelMode = "ninguno" | "interior" | "exterior" | "lambrin";
  *  a wall (plain interior board), but a desayunador/peninsula's back is exposed
  *  toward the seating side, so it can be finished in exterior board or lambrín
  *  instead, and a librero giratorio's back carries a mirror ("espejo"). */
-export type BackPanelMode = "interior" | "exterior" | "lambrin" | "espejo";
+export type BackPanelMode = "interior" | "exterior" | "lambrin" | "espejo" | "puertas" | "alacena";
 /** Toe-kick (zócalo) trim material — interior or exterior board cut to size (see boardMaterial/exteriorMaterial for which specific board), or aluminum strip stock sold in 3m pieces. */
 export type ZocaloMaterial = "Interior" | "Exterior" | "Aluminio";
 
@@ -409,6 +408,25 @@ export interface ModuleOptions {
   barOverhangCm?: number;
   // Zócalo accessory only — MDF cut to size, or aluminum strip (3m stock pieces).
   zocaloMaterial?: ZocaloMaterial;
+  // Freestanding "island" cabinet — computed automatically from drag position
+  // (see isFreestandingPosition in KitchenAssemblyScene.tsx) with hysteresis
+  // so it doesn't flicker right at the boundary, then persisted here the same
+  // way `rotation` itself is: computed live during drag, written once at
+  // drop, never recomputed at render time. Only lower/tower/corner cabinets
+  // are eligible. Gates: skipping nearestWallRotation, showing the back-face
+  // fields in the inspector, and the back-face rendering below.
+  islandMode?: boolean;
+  // Island cabinets only — count of doors on the BACK face (the side facing
+  // the room, not a wall), independent of the front `doors` count. Only
+  // meaningful when backPanelMaterial is "puertas". Simple count + the
+  // module's own doorStyle/exteriorMaterial/hardwareFinish — no per-door
+  // hinge/glass/accessory customization on the back (see design spec).
+  backDoors?: number;
+  // Island cabinets only — count of open shelves reachable from the BACK
+  // face when backPanelMaterial is "alacena" (the back panel is simply
+  // omitted in that mode, exposing the module's own shared shelf cavity —
+  // see CabinetMesh). Only meaningful when backPanelMaterial is "alacena".
+  backShelves?: number;
 }
 
 // ─── Kitchen Module ────────────────────────────────────────────────────────────
