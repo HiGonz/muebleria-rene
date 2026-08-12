@@ -84,6 +84,29 @@ function resolveDoors(mod: KitchenModule): DoorDef[] {
   });
 }
 
+// Island cabinets only — back-face doors for the cost/cut-list engine,
+// mirrors resolveDoors' shape but keyed off backDoors. No drawer-zone math
+// (the back face never has drawers) and no per-door hinge/pull-out
+// overrides — matches getBackDoors in ModulePreview3D.tsx, kept as a
+// separate copy for the same reason resolveDoors itself is (this file has
+// no dependency on the 3D/UI layer).
+function resolveBackDoors(mod: KitchenModule): DoorDef[] {
+  const { options: o, dimensions: d } = mod;
+  const count = o.backDoors || 0;
+  if (!count) return [];
+  const toeKick = o.hasToeKick ? o.toeKickHeight : 0;
+  const ctThick = o.includesCountertop ? o.countertopThickness : 0;
+  const usableH = Math.max(d.height - toeKick - ctThick - TOP_FACE_MARGIN_CM, 0);
+  const doorW = 100 / count;
+  return Array.from({ length: count }, (_, i) => ({
+    id: `auto-back-dr${i}`, label: `Puerta trasera ${i + 1}`,
+    widthPct: doorW, offsetPct: i * doorW,
+    fromBottomCm: 0, heightCm: usableH,
+    hingeLeft: i % 2 === 0,
+    doorStyle: o.doorStyle,
+  }));
+}
+
 function resolveDrawers(mod: KitchenModule): DrawerDef[] {
   const { options: o, dimensions: d } = mod;
   if (o.useDetailedLayout && o.drawerDefs?.length) return o.drawerDefs;
@@ -1743,10 +1766,15 @@ export function calculateKitchenMaterials(modules: KitchenModule[]): { lines: Ki
           if (backMode === "lambrin") addLambrin(panelWidth / 100, d.height / 100);
           else if (backMode === "espejo") addEspejo(panelWidth / 100, d.height / 100);
           else if (backMode === "exterior") addPiece("Exterior", o.exteriorMaterial, panelWidth, d.height, "Respaldo (acabado)");
-          else addPiece("Interior", o.boardMaterial, panelWidth, d.height, "Respaldo");
+          else if (backMode === "interior") addPiece("Interior", o.boardMaterial, panelWidth, d.height, "Respaldo");
+          // "puertas"/"alacena" have no flat back panel at all — puertas is
+          // costed via resolveBackDoors below (real door pieces + hinges),
+          // alacena is simply open (its only cost is the backShelves pieces
+          // below, alongside the front shelves line).
         }
       }
       for (let i = 0; i < o.shelves; i++) addPiece("Interior", o.boardMaterial, panelWidth, d.depth, "Repisas");
+      for (let i = 0; i < (o.backShelves || 0); i++) addPiece("Interior", o.boardMaterial, panelWidth, d.depth, "Repisas (traseras)");
 
       // Side panels — manual per-module choice: skip, route to interior/exterior
       // pool, or (lambrín) skip the board pools and pool linear stock instead.
@@ -1775,6 +1803,17 @@ export function calculateKitchenMaterials(modules: KitchenModule[]): { lines: Ki
       if (doors.length > 0) {
         const hingeCost = o.drawerSystem === "Soft-close" ? 65 : 35;
         addHardware("bisagra", "Bisagras", doors.length, "pares", hingeCost);
+      }
+      // Back doors (island cabinets, backPanelMaterial "puertas") — same
+      // exterior-board + hinge costing as the front, just keyed off
+      // resolveBackDoors/backDoors instead.
+      const backDoors = resolveBackDoors(mod);
+      for (const door of backDoors) {
+        addPiece("Exterior", o.exteriorMaterial, (door.widthPct / 100) * d.width, door.heightCm, "Puertas (traseras)");
+      }
+      if (backDoors.length > 0) {
+        const hingeCost = o.drawerSystem === "Soft-close" ? 65 : 35;
+        addHardware("bisagra", "Bisagras", backDoors.length, "pares", hingeCost);
       }
 
       // ── Drawers have a DOUBLE front: an inner structural front in interior board
