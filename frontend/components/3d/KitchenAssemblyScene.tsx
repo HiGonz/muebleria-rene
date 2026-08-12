@@ -2311,6 +2311,12 @@ function AssemblyContent({
     // corner, then only flips once the pointer clears the margin past it,
     // instead of clamping to the old wall's edge and jumping on release.
     let liveRotation: KitchenModule["rotation"] = mod.rotation;
+    // Tracks island-mode state across ticks the same way liveRotation does —
+    // isFreestandingPosition's hysteresis needs the CURRENT gesture's state
+    // as wasIsland, not the pre-drag stored value, or a continuous drag that
+    // crosses the enter threshold and then heads back never sees the
+    // (narrower) release threshold on the way back in.
+    let liveIslandMode = mod.options.islandMode ?? false;
     // Which other wall-mounted module's edge (if any) the height drag is
     // currently stuck to — see stickyHeightSnapCm. Persists across
     // handleMove ticks the same way liveRotation does, and handleUp reads
@@ -2392,7 +2398,8 @@ function AssemblyContent({
       // corner or the room's center. Armed "Dirección fija" skips all of
       // that instead — the module only ever translates.
       const islandEligible = ISLAND_ELIGIBLE_CATEGORIES.has(mod.category);
-      const islandMode = islandEligible && isFreestandingPosition(x, z, roomWidthM, roomDepthM, mod.options.islandMode ?? false);
+      const islandMode = islandEligible && isFreestandingPosition(x, z, roomWidthM, roomDepthM, liveIslandMode);
+      liveIslandMode = islandMode;
       const rotation = moveMode.fixed || islandMode ? mod.rotation : nearestWallRotation(x, z, roomWidthM, roomDepthM, liveRotation);
       liveRotation = rotation;
       if (isWallMounted(mod)) ({ x, z } = wallFlushXZ(mod, x, z, roomWidthM, roomDepthM, rotation));
@@ -2429,7 +2436,8 @@ function AssemblyContent({
           // "Dirección fija", which keeps the module's original rotation
           // throughout, same as handleMove above.
           const islandEligible = ISLAND_ELIGIBLE_CATEGORIES.has(mod.category);
-          const islandMode = islandEligible && isFreestandingPosition(x, z, roomWidthM, roomDepthM, mod.options.islandMode ?? false);
+          const islandMode = islandEligible && isFreestandingPosition(x, z, roomWidthM, roomDepthM, liveIslandMode);
+          liveIslandMode = islandMode;
           const rotation = moveMode.fixed || islandMode ? mod.rotation : nearestWallRotation(x, z, roomWidthM, roomDepthM, liveRotation);
           // Re-flushes against whichever wall `rotation` ended up facing —
           // matters when the drag crossed a corner and switched walls.
