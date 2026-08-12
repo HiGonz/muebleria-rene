@@ -290,6 +290,27 @@ export function countertopFrontEdgeCoord(mod: KitchenModule): number {
   }
 }
 
+// The countertop's own BACK edge — the mirror of countertopFrontEdgeCoord,
+// using barOverhangCm instead of countertopOverhang (0 for a normal cabinet
+// whose back sits flush against a wall or another module; the desayunador-
+// style bar overhang for a module whose back is exposed toward the room).
+// Only consumed by the island-mode branch of the ruler overlay
+// (KitchenAssemblyScene.tsx's CountertopRunFrame) to size and position its
+// outline from the run's REAL geometry instead of assuming — like every
+// other run — that it's flush against the wall its rotation happens to
+// match. Front and back together bound the run's actual physical footprint
+// on the depth axis, e.g. a run mixing a 30cm-deep cabinet (with a 30cm bar
+// overhang) and a 60cm-deep one both reach the same 62cm total depth.
+export function countertopBackEdgeCoord(mod: KitchenModule): number {
+  const reach = mod.dimensions.depth / 2 + (mod.options.barOverhangCm ?? 0);
+  switch (mod.rotation) {
+    case 0: return mod.z - reach;
+    case 180: return mod.z + reach;
+    case 90: return mod.x - reach;
+    case 270: return mod.x + reach;
+  }
+}
+
 // A specific model's price takes over from the generic per-material rate —
 // same idea as an exterior texture overriding a flat color, just for cost too.
 function resolveCountertopCost(o: ModuleOptions): { label: string; cost: number } {

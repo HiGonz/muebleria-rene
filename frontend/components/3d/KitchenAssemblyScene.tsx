@@ -12,7 +12,7 @@ import { Camera3DControls, type CameraAction } from "./Camera3DControls";
 import { SelectionToolbar, type NudgeDirection } from "./SelectionToolbar";
 import { getWoodTexture, getWoodRoughness } from "./woodTextures";
 import { useContextRecovery } from "./useContextRecovery";
-import { CATEGORY_ICONS, WALL_GAP_TOLERANCE_M, cornerPerpendicularRotation, cornerExtensionWorldCenterCm, isFreestandingPosition, ISLAND_ELIGIBLE_CATEGORIES, countertopFrontEdgeCoord } from "@/services/kitchenData";
+import { CATEGORY_ICONS, WALL_GAP_TOLERANCE_M, cornerPerpendicularRotation, cornerExtensionWorldCenterCm, isFreestandingPosition, ISLAND_ELIGIBLE_CATEGORIES, countertopFrontEdgeCoord, countertopBackEdgeCoord } from "@/services/kitchenData";
 import type { KitchenModule, WallOpening, WallSide } from "@/types/kitchen";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 
@@ -1235,17 +1235,29 @@ interface CountertopRunSpan {
   alongWallStartM: number;
   alongWallEndM: number;
   topY: number;
+  // Island runs (see isIsland below) have no wall to sit flush against —
+  // perpCenterM/perpDepthM carry the run's REAL bounding box on the depth
+  // axis (from the shared front edge to the deepest back edge among its
+  // modules), computed from the same countertopFrontEdgeCoord/
+  // countertopBackEdgeCoord pair addCountertop uses for run-merging, so
+  // CountertopRunFrame can draw the outline where the countertop actually
+  // is instead of assuming the wall its rotation happens to match.
+  isIsland: boolean;
+  perpCenterM: number;
+  perpDepthM: number;
 }
 
-// Wall-run countertop spans, purely for the ruler-gated blue outline below —
+// Countertop run spans, purely for the ruler-gated blue outline below —
 // mirrors the run-detection calculateKitchenMaterials does for pricing
-// (same WALL_GAP_TOLERANCE_M, same blind-corner-widened footprint), but
-// only computes geometry (no cost/label), and skips freestanding pieces
-// (islands/peninsulas) since those are always a single segment already —
-// there's no run-splitting bug for this overlay to ever need to reveal
-// there. Deliberately a light, independent re-derivation rather than a
-// shared call into the quote generator: the quote path also builds board
-// panels, hardware, etc., which would be wasted work on every render.
+// (same WALL_GAP_TOLERANCE_M, same blind-corner-widened footprint, same
+// front-edge grouping key), but only computes geometry (no cost/label).
+// Island-mode modules ARE included here (islandMode cabinets can merge
+// into a run with each other exactly like a wall run does — see
+// countertopFrontEdgeCoord) and get flagged isIsland so CountertopRunFrame
+// below draws them at their real position instead of assuming a wall.
+// Deliberately a light, independent re-derivation rather than a shared
+// call into the quote generator: the quote path also builds board panels,
+// hardware, etc., which would be wasted work on every render.
 // Same generous match distance kitchenData.ts's identical pass uses — see
 // CORNER_NEIGHBOR_MATCH_M there for why it's much wider than
 // WALL_GAP_TOLERANCE_M (no auto-snap exists between a corner cabinet and
@@ -1254,7 +1266,7 @@ interface CountertopRunSpan {
 const CORNER_NEIGHBOR_MATCH_M = 1;
 
 function computeCountertopRunSpans(modules: KitchenModule[]): CountertopRunSpan[] {
-  interface Seg { alongWall: number; widthM: number; wallKey: string; rotation: KitchenModule["rotation"]; topY: number }
+  interface Seg { alongWall: number; widthM: number; wallKey: string; rotation: KitchenModule["rotation"]; topY: number; isIsland: boolean; frontEdgeCm: number; backEdgeCm: number }
   const segs: Seg[] = [];
   for (const mod of modules) {
     if (!mod.options.includesCountertop) continue;
@@ -1264,9 +1276,13 @@ function computeCountertopRunSpans(modules: KitchenModule[]): CountertopRunSpan[
     // Front edge, not raw center — see countertopFrontEdgeCoord in
     // kitchenData.ts (mirrors addCountertop's identical grouping key so the
     // ruler overlay always agrees with what actually gets billed as one run).
-    const depthCoordCm = countertopFrontEdgeCoord(mod);
+    const frontEdgeCm = countertopFrontEdgeCoord(mod);
+    const backEdgeCm = countertopBackEdgeCoord(mod);
     const alongWall = (isEastWest ? mod.z : mod.x) / 100;
-    segs.push({ alongWall, widthM: footprintWidthM, wallKey: `${mod.rotation}|${Math.round(depthCoordCm * 10)}`, rotation: mod.rotation, topY: moduleTopY(mod) });
+    segs.push({
+      alongWall, widthM: footprintWidthM, wallKey: `${mod.rotation}|${Math.round(frontEdgeCm * 10)}`, rotation: mod.rotation, topY: moduleTopY(mod),
+      isIsland: !!mod.options.islandMode, frontEdgeCm, backEdgeCm,
+    });
   }
   // Diagonal-miter corner extension — see kitchenData.ts's identical pass
   // for the full rationale. Runs after every module's own segment already
@@ -1309,10 +1325,15 @@ function computeCountertopRunSpans(modules: KitchenModule[]): CountertopRunSpan[
       best.widthM = newEnd - newStart;
       best.alongWall = (newStart + newEnd) / 2;
     } else {
+      // Blind corner extensions are always against two perpendicular walls
+      // — never an island — so frontEdgeCm/backEdgeCm just bracket the
+      // extension's own depth around its center; isIsland stays false and
+      // CountertopRunFrame never reads these two fields for it.
       const perpDepthCoordCm = mod.dimensions.depth / 2;
       segs.push({
         alongWall: centerAlongWallM, widthM: mod.dimensions.depth / 100,
         wallKey: `${perpRotation}|${Math.round(perpDepthCoordCm * 10)}`, rotation: perpRotation, topY: moduleTopY(mod),
+        isIsland: false, frontEdgeCm: perpDepthCoordCm, backEdgeCm: perpDepthCoordCm,
       });
     }
   }
@@ -1329,11 +1350,21 @@ function computeCountertopRunSpans(modules: KitchenModule[]): CountertopRunSpan[
     let runEnd = -Infinity;
     const flush = () => {
       if (run.length === 0) return;
+      const isIsland = run.some((s) => s.isIsland);
+      // Real bounding box on the depth axis (front edge, shared by
+      // construction since it's the grouping key, through the deepest back
+      // edge among the run's modules) — only meaningful/used when isIsland.
+      const edgesCm = run.flatMap((s) => [s.frontEdgeCm, s.backEdgeCm]);
+      const perpMinM = Math.min(...edgesCm) / 100;
+      const perpMaxM = Math.max(...edgesCm) / 100;
       spans.push({
         rotation: run[0].rotation,
         alongWallStartM: run[0].alongWall - run[0].widthM / 2,
         alongWallEndM: run[run.length - 1].alongWall + run[run.length - 1].widthM / 2,
         topY: Math.max(...run.map((s) => s.topY)),
+        isIsland,
+        perpCenterM: (perpMinM + perpMaxM) / 2,
+        perpDepthM: Math.max(perpMaxM - perpMinM, 0.02),
       });
       run = [];
     };
@@ -1356,27 +1387,40 @@ function computeCountertopRunSpans(modules: KitchenModule[]): CountertopRunSpan[
 function CountertopRunFrame({ span, roomWidthM, roomDepthM }: { span: CountertopRunSpan; roomWidthM: number; roomDepthM: number }) {
   const lengthM = Math.max(span.alongWallEndM - span.alongWallStartM, 0.02);
   const centerAlong = (span.alongWallStartM + span.alongWallEndM) / 2;
-  const D = COUNTERTOP_RUN_DEPTH_M;
   const FRAME_THICKNESS_M = 0.02;
   let position: [number, number, number];
   let size: [number, number, number];
-  switch (span.rotation) {
-    case 90: // west wall, x = 0
-      position = [D / 2, span.topY + 0.005, centerAlong];
-      size = [D, FRAME_THICKNESS_M, lengthM];
-      break;
-    case 270: // east wall, x = roomWidthM
-      position = [roomWidthM - D / 2, span.topY + 0.005, centerAlong];
-      size = [D, FRAME_THICKNESS_M, lengthM];
-      break;
-    case 180: // south wall, z = roomDepthM
-      position = [centerAlong, span.topY + 0.005, roomDepthM - D / 2];
-      size = [lengthM, FRAME_THICKNESS_M, D];
-      break;
-    default: // 0 — north wall, z = 0
-      position = [centerAlong, span.topY + 0.005, D / 2];
-      size = [lengthM, FRAME_THICKNESS_M, D];
-      break;
+  if (span.isIsland) {
+    // No wall to sit flush against — draw at the run's own real bounding
+    // box (perpCenterM/perpDepthM) instead of assuming the wall its
+    // rotation happens to match, which is only true for an actual wall run.
+    const isEastWest = span.rotation === 90 || span.rotation === 270;
+    position = isEastWest
+      ? [span.perpCenterM, span.topY + 0.005, centerAlong]
+      : [centerAlong, span.topY + 0.005, span.perpCenterM];
+    size = isEastWest
+      ? [span.perpDepthM, FRAME_THICKNESS_M, lengthM]
+      : [lengthM, FRAME_THICKNESS_M, span.perpDepthM];
+  } else {
+    const D = COUNTERTOP_RUN_DEPTH_M;
+    switch (span.rotation) {
+      case 90: // west wall, x = 0
+        position = [D / 2, span.topY + 0.005, centerAlong];
+        size = [D, FRAME_THICKNESS_M, lengthM];
+        break;
+      case 270: // east wall, x = roomWidthM
+        position = [roomWidthM - D / 2, span.topY + 0.005, centerAlong];
+        size = [D, FRAME_THICKNESS_M, lengthM];
+        break;
+      case 180: // south wall, z = roomDepthM
+        position = [centerAlong, span.topY + 0.005, roomDepthM - D / 2];
+        size = [lengthM, FRAME_THICKNESS_M, D];
+        break;
+      default: // 0 — north wall, z = 0
+        position = [centerAlong, span.topY + 0.005, D / 2];
+        size = [lengthM, FRAME_THICKNESS_M, D];
+        break;
+    }
   }
   const geometry = useMemo(() => new THREE.EdgesGeometry(new THREE.BoxGeometry(...size)), size);
   useEffect(() => () => geometry.dispose(), [geometry]);
