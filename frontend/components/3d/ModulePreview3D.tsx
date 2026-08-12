@@ -133,6 +133,31 @@ export function getEffectiveDoors(mod: KitchenModule): DoorDef[] {
   });
 }
 
+// Back face (island cabinets only) — mirrors getEffectiveDoors' auto-layout
+// math, keyed off backDoors instead of doors. No detailed per-door layout
+// support for the back face (no useDetailedLayout equivalent) — see design
+// spec: back-face customization is deliberately simpler than the front.
+export function getBackDoors(mod: KitchenModule): DoorDef[] {
+  const count = mod.options.backDoors || 0;
+  if (!count) return [];
+  const isUpper = mod.category === "upper" || mod.type === "esquinero_triangular" || mod.type === "esquinero_triangular_puerta" || mod.type === "gabinete_pared_esquinero_puertas";
+  const toeKick = !isUpper && mod.options.hasToeKick ? mod.options.toeKickHeight : 0;
+  const ctThick = mod.options.includesCountertop ? mod.options.countertopThickness : 0;
+  const topMargin = isUpper ? 0 : TOP_FACE_MARGIN_CM;
+  const usableH = Math.max(mod.dimensions.height - toeKick - ctThick - topMargin, 0);
+  const doorW = 100 / count;
+  return Array.from({ length: count }, (_, i) => ({
+    id: `auto-back-dr${i}`,
+    label: `Puerta trasera ${i + 1}`,
+    widthPct: doorW,
+    offsetPct: i * doorW,
+    fromBottomCm: 0,
+    heightCm: usableH,
+    hingeLeft: i % 2 === 0,
+    doorStyle: mod.options.doorStyle,
+  }));
+}
+
 // Whether a material has a map at all changes which shader variant Three.js
 // compiles — mutating an *existing* material between "no map" and "map" (e.g.
 // a side panel switched to "exterior", or a countertop given a texture that
@@ -1816,6 +1841,11 @@ export function CabinetMesh({ module, wireframe = false, onSelect }: {
   // librero giratorio's back (mirror) need a different finish entirely.
   const backMode = module.options.backPanelMaterial ?? "interior";
   const hasCustomBack = module.type !== "bajo_tarja" && backMode !== "interior";
+  // "puertas"/"alacena" render real doors/open shelving instead of a flat
+  // finish panel (see the back-face JSX below) — this narrows hasCustomBack
+  // down to the cases that still want the flat Box.
+  const hasFlatCustomBack = hasCustomBack && backMode !== "puertas" && backMode !== "alacena";
+  const backDoors = getBackDoors(module);
   const hasSink =
     module.type === "bajo_tarja" ||
     module.type === "cubierta_tarja" ||
@@ -1910,7 +1940,7 @@ export function CabinetMesh({ module, wireframe = false, onSelect }: {
       {isStoveCabinet
         ? <StoveCarcass W={W} H={H} D={D} color={color} leftColor={leftColor} rightColor={rightColor} leftMap={leftMap} rightMap={rightMap} wireframe={wireframe} />
         : <Carcass W={W} H={H} D={D} color={color} leftColor={leftColor} rightColor={rightColor} leftMap={leftMap} rightMap={rightMap} hasTop={ctThick === 0} hasBack={module.type !== "bajo_tarja" && !hasCustomBack} wireframe={wireframe} />}
-      {hasCustomBack && (
+      {hasFlatCustomBack && (
         backMode === "lambrin" ? (
           <LambrinPanel pos={[0, H / 2, -D / 2 + T / 2]} faceW={W - T * 2} faceH={H - T * 2} horizontal outward={-1} color={exteriorColor} map={exteriorMap} roughness={exteriorRoughness} wireframe={wireframe} />
         ) : backMode === "espejo" ? (
@@ -1918,6 +1948,36 @@ export function CabinetMesh({ module, wireframe = false, onSelect }: {
         ) : (
           <Box pos={[0, H / 2, -D / 2 + T / 2]} size={[W - T * 2, H - T * 2, T]} color={exteriorColor} map={exteriorMap} roughness={exteriorRoughness} wireframe={wireframe} />
         )
+      )}
+      {/* Back doors — same DoorPanel component the front uses, wrapped in a
+          180°-Y-rotated group: DoorPanel always builds itself against local
+          +Z ("outward"), so the rotation alone turns that into world -Z
+          (away from the room-facing front, out the back) without needing a
+          mirrored variant of the component. The 180° flip also naturally
+          reverses which world side each hinge lands on, which is exactly
+          what a door mounted facing the opposite direction should do. */}
+      {backMode === "puertas" && backDoors.length > 0 && (
+        <group rotation={[0, Math.PI, 0]}>
+          {backDoors.map((d) => (
+            <DoorPanel
+              key={d.id} door={d} W={W} D={D} toeKick={toeKick} color={exteriorColor} map={exteriorMap} roughness={exteriorRoughness}
+              hardware={module.options.hardwareFinish} wireframe={wireframe} onSelect={onSelect}
+            />
+          ))}
+        </group>
+      )}
+      {/* Back "alacena" — the back panel is simply omitted (no Box above),
+          exposing the module's own shared shelf cavity from behind. Shelves
+          themselves are already rendered once below (module.options.shelves,
+          the same board count regardless of which face is open) — this is a
+          SEPARATE, independently-countable set for when the back specifically
+          wants its own shelf count rather than sharing the front's. If both
+          `shelves` and `backShelves` are set on the same module, both render
+          in the same cavity — a real design would normally only use one or
+          the other, so this is left as a v1 simplification rather than
+          reconciling the two into a single divider grid. */}
+      {backMode === "alacena" && (module.options.backShelves ?? 0) > 0 && (
+        <Shelves W={W} H={H} D={D} count={module.options.backShelves ?? 0} toeKick={toeKick} ctThick={ctThick} color={color} wireframe={wireframe} />
       )}
       {module.options.leftSidePanel === "lambrin" && (
         <LambrinPanel pos={[-W / 2 + T / 2, H / 2, 0]} faceW={D} faceH={H} horizontal={false} outward={-1} color={exteriorColor} map={exteriorMap} roughness={exteriorRoughness} wireframe={wireframe} />
