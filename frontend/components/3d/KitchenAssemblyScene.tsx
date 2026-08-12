@@ -12,7 +12,7 @@ import { Camera3DControls, type CameraAction } from "./Camera3DControls";
 import { SelectionToolbar, type NudgeDirection } from "./SelectionToolbar";
 import { getWoodTexture, getWoodRoughness } from "./woodTextures";
 import { useContextRecovery } from "./useContextRecovery";
-import { CATEGORY_ICONS, WALL_GAP_TOLERANCE_M, cornerPerpendicularRotation, cornerExtensionWorldCenterCm, isFreestandingPosition, ISLAND_ELIGIBLE_CATEGORIES } from "@/services/kitchenData";
+import { CATEGORY_ICONS, WALL_GAP_TOLERANCE_M, cornerPerpendicularRotation, cornerExtensionWorldCenterCm, isFreestandingPosition, ISLAND_ELIGIBLE_CATEGORIES, countertopFrontEdgeCoord } from "@/services/kitchenData";
 import type { KitchenModule, WallOpening, WallSide } from "@/types/kitchen";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 
@@ -1261,7 +1261,10 @@ function computeCountertopRunSpans(modules: KitchenModule[]): CountertopRunSpan[
     if (!(mod.category === "lower" || mod.category === "upper" || mod.category === "tower" || mod.category === "corner")) continue;
     const isEastWest = mod.rotation === 90 || mod.rotation === 270;
     const footprintWidthM = blindCornerFootprintWidth(mod) / 100;
-    const depthCoordCm = isEastWest ? mod.x : mod.z;
+    // Front edge, not raw center — see countertopFrontEdgeCoord in
+    // kitchenData.ts (mirrors addCountertop's identical grouping key so the
+    // ruler overlay always agrees with what actually gets billed as one run).
+    const depthCoordCm = countertopFrontEdgeCoord(mod);
     const alongWall = (isEastWest ? mod.z : mod.x) / 100;
     segs.push({ alongWall, widthM: footprintWidthM, wallKey: `${mod.rotation}|${Math.round(depthCoordCm * 10)}`, rotation: mod.rotation, topY: moduleTopY(mod) });
   }

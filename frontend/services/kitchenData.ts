@@ -265,6 +265,31 @@ export function isFreestandingPosition(
     : distanceToNearestWall > ISLAND_ENTER_DISTANCE_M;
 }
 
+// The countertop's own FRONT edge on the run's depth axis (cm, room-space) —
+// the run-grouping key both addCountertop (below) and
+// computeCountertopRunSpans (KitchenAssemblyScene.tsx's ruler overlay) use
+// instead of a module's raw x/z center. Two cabinets of DIFFERENT depths
+// that are front-aligned (e.g. a 30cm-deep island cabinet with a 30cm bar
+// overhang next to a 60cm-deep grill cabinet, both built out to the same
+// working edge) have different centers — offset by half their depth
+// difference — but the same front edge, so grouping by center alone
+// wrongly buckets them into separate "planes" and never merges their
+// countertops into one run, even though they form one continuous physical
+// slab. Grouping by front edge instead fixes that while leaving the common
+// case (every cabinet in a run sharing the same depth) unchanged, since a
+// constant depth/overhang just shifts every module's key by the same
+// amount. Rotation is always exactly one of 0/90/180/270 (axis-aligned),
+// so this is a plain per-case offset rather than a full rotation matrix.
+export function countertopFrontEdgeCoord(mod: KitchenModule): number {
+  const reach = mod.dimensions.depth / 2 + (mod.options.countertopOverhang ?? 2);
+  switch (mod.rotation) {
+    case 0: return mod.z + reach;
+    case 180: return mod.z - reach;
+    case 90: return mod.x + reach;
+    case 270: return mod.x - reach;
+  }
+}
+
 // A specific model's price takes over from the generic per-material rate —
 // same idea as an exterior texture overriding a flat color, just for cost too.
 function resolveCountertopCost(o: ModuleOptions): { label: string; cost: number } {
@@ -1651,11 +1676,17 @@ export function calculateKitchenMaterials(modules: KitchenModule[]): { lines: Ki
     if (widthM <= 0) return;
     // rotation picks which wall a run-forming (non-freestanding) segment is
     // against; the OTHER axis is that wall's fixed depth offset — two runs
-    // at the same rotation but a different depth are different planes and
-    // must never merge (rounded to mm to shrug off float noise).
+    // at the same rotation whose countertops sit at a different depth
+    // (different front-edge position) are different planes and must never
+    // merge (rounded to mm to shrug off float noise). depthCoord is the
+    // countertop's FRONT edge, not the module's raw center — see
+    // countertopFrontEdgeCoord — so cabinets of different depths that are
+    // front-aligned (e.g. a shallower island cabinet built out to match a
+    // deeper one) still land in the same plane instead of being split by
+    // half their depth difference.
     const rotation = freestanding ? null : (cornerExtension?.rotation ?? mod.rotation);
     const isEastWest = rotation === 90 || rotation === 270;
-    const depthCoord = cornerExtension?.depthCoord ?? (isEastWest ? mod.x : mod.z); // cm — fine as an opaque grouping key
+    const depthCoord = cornerExtension?.depthCoord ?? countertopFrontEdgeCoord(mod); // cm
     const alongWall = cornerExtension?.alongWall ?? (isEastWest ? mod.z : mod.x) / 100; // meters, to match widthM for the run-gap math below
     const wallKey = freestanding ? `freestanding_${freestandingCounter++}` : `${rotation}|${Math.round(depthCoord * 10)}`;
     countertopSegments.push({ alongWall, wallKey, rotation, moduleLabel: mod.label, widthM, label, pricePerM2 });
