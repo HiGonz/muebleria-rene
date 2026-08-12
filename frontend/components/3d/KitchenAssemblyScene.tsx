@@ -1151,6 +1151,25 @@ function nearestWallRotation(
   return bestRotation;
 }
 
+// A floor cabinet counts as a freestanding "island" once it's clearly away
+// from every wall — hysteresis (enter/release pair, same shape as
+// WALL_ROTATION_STICKY_MARGIN_M and the height-snap margins above) so the
+// state doesn't flicker right at the boundary. Only lower/tower/corner
+// cabinets are eligible; upper/appliance/countertop/accessory modules are
+// never islands regardless of position.
+const ISLAND_ENTER_DISTANCE_M = 0.85;
+const ISLAND_RELEASE_DISTANCE_M = 0.55;
+const ISLAND_ELIGIBLE_CATEGORIES = new Set<KitchenModule["category"]>(["lower", "tower", "corner"]);
+
+export function isFreestandingPosition(
+  x: number, z: number, roomWidthM: number, roomDepthM: number, wasIsland: boolean,
+): boolean {
+  const distanceToNearestWall = Math.min(x, roomWidthM - x, z, roomDepthM - z);
+  return wasIsland
+    ? distanceToNearestWall >= ISLAND_RELEASE_DISTANCE_M
+    : distanceToNearestWall > ISLAND_ENTER_DISTANCE_M;
+}
+
 // Within this many cm of another wall-mounted module's own mount height
 // (bottom edge) or top edge, a dragged wall-mounted module snaps to match
 // it — the way a row of upper cabinets actually gets hung level in a real
@@ -2140,7 +2159,7 @@ function AssemblyContent({
 }: {
   modules: KitchenModule[]; roomWidthM: number; roomDepthM: number; wireframe: boolean; showLabels: boolean; showDimensions: boolean;
   controlsRef: RefObject<OrbitControlsImpl | null>;
-  onModuleMove?: (id: string, x: number, z: number, rotation?: KitchenModule["rotation"], mountHeightCm?: number) => void;
+  onModuleMove?: (id: string, x: number, z: number, rotation?: KitchenModule["rotation"], mountHeightCm?: number, islandMode?: boolean) => void;
   onModuleActivate?: (id: string | null) => void;
   onModuleNudge?: (id: string, dx: number, dz: number, dMountHeight: number) => void;
   onModuleRemove?: (id: string) => void;
@@ -2372,7 +2391,9 @@ function AssemblyContent({
       // what keeps this from flip-flopping on every small nudge near a
       // corner or the room's center. Armed "Dirección fija" skips all of
       // that instead — the module only ever translates.
-      const rotation = moveMode.fixed ? mod.rotation : nearestWallRotation(x, z, roomWidthM, roomDepthM, liveRotation);
+      const islandEligible = ISLAND_ELIGIBLE_CATEGORIES.has(mod.category);
+      const islandMode = islandEligible && isFreestandingPosition(x, z, roomWidthM, roomDepthM, mod.options.islandMode ?? false);
+      const rotation = moveMode.fixed || islandMode ? mod.rotation : nearestWallRotation(x, z, roomWidthM, roomDepthM, liveRotation);
       liveRotation = rotation;
       if (isWallMounted(mod)) ({ x, z } = wallFlushXZ(mod, x, z, roomWidthM, roomDepthM, rotation));
       // Lines up with a cabinet in the other band (floor vs wall-mounted)
@@ -2407,7 +2428,9 @@ function AssemblyContent({
           // corner crossing that already happened mid-drag — unless armed
           // "Dirección fija", which keeps the module's original rotation
           // throughout, same as handleMove above.
-          const rotation = moveMode.fixed ? mod.rotation : nearestWallRotation(x, z, roomWidthM, roomDepthM, liveRotation);
+          const islandEligible = ISLAND_ELIGIBLE_CATEGORIES.has(mod.category);
+          const islandMode = islandEligible && isFreestandingPosition(x, z, roomWidthM, roomDepthM, mod.options.islandMode ?? false);
+          const rotation = moveMode.fixed || islandMode ? mod.rotation : nearestWallRotation(x, z, roomWidthM, roomDepthM, liveRotation);
           // Re-flushes against whichever wall `rotation` ended up facing —
           // matters when the drag crossed a corner and switched walls.
           if (isWallMounted(mod)) ({ x, z } = wallFlushXZ(mod, x, z, roomWidthM, roomDepthM, rotation));
@@ -2419,10 +2442,10 @@ function AssemblyContent({
             // slides as far toward the drop point as it can and stops right
             // at the obstacle, see slideToClosestFree.
             const landed = slideToClosestFree(mod, state.startX, state.startZ, x, z, rotation, modules);
-            onModuleMove?.(state.id, landed.x * 100, landed.z * 100, rotation, mountHeightCm);
+            onModuleMove?.(state.id, landed.x * 100, landed.z * 100, rotation, mountHeightCm, islandMode);
             toast(`Se detuvo junto a "${blocker.label}"`, { description: "No se pudo mover más sin empalmarse.", duration: 1800 });
           } else {
-            onModuleMove?.(state.id, x * 100, z * 100, rotation, mountHeightCm);
+            onModuleMove?.(state.id, x * 100, z * 100, rotation, mountHeightCm, islandMode);
           }
         }
       }
@@ -2531,7 +2554,7 @@ interface KitchenAssemblySceneProps {
   roomDepth: number;
   ceilingHeight: number;
   openings?: WallOpening[];
-  onModuleMove?: (id: string, x: number, z: number, rotation?: KitchenModule["rotation"], mountHeightCm?: number) => void;
+  onModuleMove?: (id: string, x: number, z: number, rotation?: KitchenModule["rotation"], mountHeightCm?: number, islandMode?: boolean) => void;
   onModuleActivate?: (id: string | null) => void;
   onModuleNudge?: (id: string, dx: number, dz: number, dMountHeight: number) => void;
   // Deletes straight from the module list — the only reliable way to remove

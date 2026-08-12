@@ -379,7 +379,7 @@ export function KitchenBuilder() {
               roomDepth={draft.roomDepth}
               ceilingHeight={draft.ceilingHeight}
               openings={draft.openings}
-              onModuleMove={(id, x, z, rotation, mountHeightCm) => updateModulePosition(id, x, z, rotation, mountHeightCm)}
+              onModuleMove={(id, x, z, rotation, mountHeightCm, islandMode) => updateModulePosition(id, x, z, rotation, mountHeightCm, islandMode)}
               onModuleActivate={(id) => setEditingModule(id)}
               onModuleNudge={(id, dx, dz, dMountHeight) => nudgeModule(id, dx, dz, dMountHeight)}
               onModuleRemove={removeModule}

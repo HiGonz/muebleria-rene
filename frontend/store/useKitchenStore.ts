@@ -98,7 +98,7 @@ interface KitchenStore {
   // installation height in the same update — dragging it up/down along its
   // wall (see AssemblyContent's handleDragStart) resolves x/z/rotation and
   // mountHeight together in one gesture, so they land in one history entry.
-  updateModulePosition: (id: string, x: number, z: number, rotation?: KitchenModule["rotation"], mountHeightCm?: number) => void;
+  updateModulePosition: (id: string, x: number, z: number, rotation?: KitchenModule["rotation"], mountHeightCm?: number, islandMode?: boolean) => void;
   nudgeModule: (id: string, dx: number, dz: number, dMountHeight: number) => void;
   rotateModule: (id: string) => void;
   duplicateModule: (id: string) => void;
@@ -235,7 +235,7 @@ export const useKitchenStore = create<KitchenStore>()(
           },
         })),
 
-      updateModulePosition: (id, x, z, rotation, mountHeightCm) =>
+      updateModulePosition: (id, x, z, rotation, mountHeightCm, islandMode) =>
         set((s) => {
           const current = s.draft.modules.find((m) => m.id === id);
           if (current?.options.locked) return {};
@@ -244,6 +244,7 @@ export const useKitchenStore = create<KitchenStore>()(
           const history = current && (current.x !== x || current.z !== z)
             ? [...s.moveHistory, { moduleId: id, x: current.x, z: current.z, rotation: current.rotation }].slice(-MOVE_HISTORY_LIMIT)
             : s.moveHistory;
+          const hasOptionsPatch = mountHeightCm !== undefined || islandMode !== undefined;
           return {
             moveHistory: history,
             draft: {
@@ -252,7 +253,13 @@ export const useKitchenStore = create<KitchenStore>()(
                 m.id === id
                   ? {
                       ...m, x, z, rotation: rotation ?? m.rotation,
-                      options: mountHeightCm !== undefined ? { ...m.options, mountHeight: mountHeightCm } : m.options,
+                      options: hasOptionsPatch
+                        ? {
+                            ...m.options,
+                            ...(mountHeightCm !== undefined ? { mountHeight: mountHeightCm } : {}),
+                            ...(islandMode !== undefined ? { islandMode } : {}),
+                          }
+                        : m.options,
                     }
                   : m
               ),
