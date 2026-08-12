@@ -1284,16 +1284,19 @@ function buildSampleKitchenIsla(): KitchenDraft {
 
   // Freestanding island — two real lower cabinets joined edge-to-edge,
   // clear of both wall runs, roughly centered on the open floor to the
-  // south-east of the L (room is 580×380, so this sits ~2m+ from every
-  // wall — well past the 0.85m island-mode threshold). rotation: 90 is
+  // south-east of the L (room is 580×380, so this sits well over 1.5m from
+  // every wall — well past the 0.85m island-mode threshold). rotation: 90 is
   // deliberately NOT the nearest-wall pick (that would be the south wall,
   // rotation 180) — demonstrates that a real drag-placed island holds
   // whatever rotation it's given instead of snapping to face a wall.
   // Doors on the front, a small open back (2 shelves, no panel) facing the
   // walkway on the other side — the same snapToNeighbor/addCountertop
   // machinery that joins wall-run cabinets joins these two into one
-  // continuous countertop with no extra code (see design spec).
-  add("gabinete_bajo_cajones", 315, 220, {
+  // continuous countertop with no extra code (see design spec). Cajones is
+  // 100cm wide (catalog default) and puertas is 90cm, so the flush boundary
+  // at x=360 puts cajones' center at 310 (260–360) and puertas' center stays
+  // at 405 (360–450) — a 190cm-wide island run, not 180cm.
+  add("gabinete_bajo_cajones", 310, 220, {
     rotation: 90,
     options: { islandMode: true, backPanelMaterial: "alacena", backShelves: 2 },
   });
