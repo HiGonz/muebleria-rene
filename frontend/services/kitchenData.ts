@@ -1774,7 +1774,16 @@ export function calculateKitchenMaterials(modules: KitchenModule[]): { lines: Ki
         }
       }
       for (let i = 0; i < o.shelves; i++) addPiece("Interior", o.boardMaterial, panelWidth, d.depth, "Repisas");
-      for (let i = 0; i < (o.backShelves || 0); i++) addPiece("Interior", o.boardMaterial, panelWidth, d.depth, "Repisas (traseras)");
+      // Back-face costing (doors/shelves) is gated on backPanelMaterial —
+      // stored backDoors/backShelves counts can be left over from a UI state
+      // the user has since switched away from (e.g. inspector's count field
+      // stays hidden-but-set after flipping Material back to "interior"), so
+      // costing must check the CURRENT mode, not just "count > 0", to avoid
+      // double-billing a plain back board plus phantom back doors/shelves for
+      // the same physical face. Mirrors ModulePreview3D.tsx's backMode-gated
+      // JSX for the same reason.
+      const backMode = o.backPanelMaterial ?? "interior";
+      for (let i = 0; i < (backMode === "alacena" ? (o.backShelves || 0) : 0); i++) addPiece("Interior", o.boardMaterial, panelWidth, d.depth, "Repisas (traseras)");
 
       // Side panels — manual per-module choice: skip, route to interior/exterior
       // pool, or (lambrín) skip the board pools and pool linear stock instead.
@@ -1806,8 +1815,10 @@ export function calculateKitchenMaterials(modules: KitchenModule[]): { lines: Ki
       }
       // Back doors (island cabinets, backPanelMaterial "puertas") — same
       // exterior-board + hinge costing as the front, just keyed off
-      // resolveBackDoors/backDoors instead.
-      const backDoors = resolveBackDoors(mod);
+      // resolveBackDoors/backDoors instead. Gated on backMode (see above) so
+      // a stale backDoors count left over from a since-abandoned "puertas"
+      // selection doesn't get costed alongside the current back-panel mode.
+      const backDoors = backMode === "puertas" ? resolveBackDoors(mod) : [];
       for (const door of backDoors) {
         addPiece("Exterior", o.exteriorMaterial, (door.widthPct / 100) * d.width, door.heightCm, "Puertas (traseras)");
       }
