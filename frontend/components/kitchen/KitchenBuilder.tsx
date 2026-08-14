@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { AnimatePresence, motion } from "framer-motion";
 import { Settings, Sparkles, Palette, Ruler, ChevronDown, Share2, MoreVertical } from "lucide-react";
@@ -45,6 +45,7 @@ export function KitchenBuilder() {
     draft, projectId, activeTab, showSelector, setActiveTab, resetDraft, loadSampleKitchen, loadProject, updateModulePosition, nudgeModule,
     openSelector, setEditingModule, moveHistory, undoLastMove, updateOpening, removeModule, toggleModuleLock,
   } = useKitchenStore();
+  const handleOpeningMove = useCallback((id: string, offset: number) => updateOpening(id, { offset }), [updateOpening]);
   const router = useRouter();
   const searchParams = useSearchParams();
   const [showRoomSettings, setShowRoomSettings] = useState(false);
@@ -379,12 +380,12 @@ export function KitchenBuilder() {
               roomDepth={draft.roomDepth}
               ceilingHeight={draft.ceilingHeight}
               openings={draft.openings}
-              onModuleMove={(id, x, z, rotation, mountHeightCm, islandMode) => updateModulePosition(id, x, z, rotation, mountHeightCm, islandMode)}
-              onModuleActivate={(id) => setEditingModule(id)}
-              onModuleNudge={(id, dx, dz, dMountHeight) => nudgeModule(id, dx, dz, dMountHeight)}
+              onModuleMove={updateModulePosition}
+              onModuleActivate={setEditingModule}
+              onModuleNudge={nudgeModule}
               onModuleRemove={removeModule}
               onModuleToggleLock={toggleModuleLock}
-              onOpeningMove={(id, offset) => updateOpening(id, { offset })}
+              onOpeningMove={handleOpeningMove}
               onUndo={undoLastMove}
               undoCount={moveHistory.length}
             />

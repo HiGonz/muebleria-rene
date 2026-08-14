@@ -2709,7 +2709,7 @@ interface KitchenAssemblySceneProps {
   readOnly?: boolean;
 }
 
-export function KitchenAssemblyScene({
+function KitchenAssemblySceneImpl({
   modules, roomWidth, roomDepth, ceilingHeight, openings = [], onModuleMove, onModuleActivate, onModuleNudge, onModuleRemove, onModuleToggleLock, onOpeningMove, onUndo, undoCount = 0, readOnly = false,
 }: KitchenAssemblySceneProps) {
   const [wireframe, setWireframe] = useState(false);
@@ -3008,3 +3008,5 @@ export function KitchenAssemblyScene({
     </div>
   );
 }
+
+export const KitchenAssemblyScene = memo(KitchenAssemblySceneImpl);
