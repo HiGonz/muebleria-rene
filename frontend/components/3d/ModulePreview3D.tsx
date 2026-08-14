@@ -20,7 +20,7 @@ import { useContextRecovery } from "./useContextRecovery";
 export const ModuleMoveArmedContext = createContext(false);
 
 // ─── Board thickness (meters) ─────────────────────────────────────────────────
-const T = 0.018;
+export const T = 0.018;
 // ─── Interaction tuning ───────────────────────────────────────────────────────
 const DOOR_OPEN_ANGLE = Math.PI * 0.42; // ~76°
 // "Chapulina" hinge — swings open much further than a standard concealed
@@ -174,7 +174,7 @@ export function mapKey(map: Texture | null | undefined): string {
 // ─── Hardware finish → handle/pull appearance ─────────────────────────────────
 // "Sin jaladores" isn't a finish at all — it means the door/drawer has no pull,
 // so its handle mesh is skipped entirely rather than given a look.
-const HARDWARE_LOOKS: Record<Exclude<HardwareFinish, "Sin jaladores">, { color: string; metalness: number; roughness: number }> = {
+export const HARDWARE_LOOKS: Record<Exclude<HardwareFinish, "Sin jaladores">, { color: string; metalness: number; roughness: number }> = {
   "Acero inoxidable": { color: "#c9cdd1", metalness: 0.85, roughness: 0.25 },
   "Negro mate": { color: "#1c1c1c", metalness: 0.3, roughness: 0.65 },
   "Dorado": { color: "#d4af37", metalness: 0.9, roughness: 0.2 },
@@ -183,7 +183,7 @@ const HARDWARE_LOOKS: Record<Exclude<HardwareFinish, "Sin jaladores">, { color: 
 };
 
 // ─── Primitives ───────────────────────────────────────────────────────────────
-function Box({
+export function Box({
   pos,
   size,
   color,
@@ -223,7 +223,7 @@ function Box({
 // ─── Carcass (5 panels) ────────────────────────────────────────────────────────
 // Left/right side panels are optional: a module marked "ninguno" on that side
 // (because a neighboring module already covers it) renders without that panel.
-function Carcass({ W, H, D, color, leftColor, rightColor, leftMap, rightMap, hasTop = true, hasBack = true, wireframe = false }: {
+export function Carcass({ W, H, D, color, leftColor, rightColor, leftMap, rightMap, hasTop = true, hasBack = true, wireframe = false }: {
   W: number; H: number; D: number; color: string; leftColor: string | null; rightColor: string | null;
   leftMap?: Texture | null; rightMap?: Texture | null;
   // A module with its own countertop doesn't get a separate interior-board
@@ -251,7 +251,7 @@ function Carcass({ W, H, D, color, leftColor, rightColor, leftMap, rightMap, has
 }
 
 // ─── Shelves (interior, evenly spaced between floor and top panel) ───────────
-function Shelves({ W, H, D, count, toeKick, ctThick, color, wireframe = false, zoneHeightM }: {
+export function Shelves({ W, H, D, count, toeKick, ctThick, color, wireframe = false, zoneHeightM }: {
   W: number; H: number; D: number; count: number; toeKick: number; ctThick: number; color: string; wireframe?: boolean;
   // Confines the shelf grid to a shorter interior zone than the full
   // carcass — used when a door's own opening is shorter than the cabinet
@@ -279,7 +279,7 @@ function Shelves({ W, H, D, count, toeKick, ctThick, color, wireframe = false, z
 }
 
 // ─── Toe Kick ─────────────────────────────────────────────────────────────────
-function ToeKick({ W, D, height, color, map, roughness, aluminum = false, wireframe = false }: {
+export function ToeKick({ W, D, height, color, map, roughness, aluminum = false, wireframe = false }: {
   W: number; D: number; height: number; color: string; map?: Texture | null; roughness?: number;
   // Brushed-aluminum strip look (zocaloMaterial: "Aluminio") instead of the
   // painted/finished board look every other toe-kick uses.
@@ -309,7 +309,7 @@ const FILLER_PROUD = 0.003;
 // scrap, finished to match the exterior — visual only, no new board, so it
 // never enters the cost breakdown. Only skipped when the side is already set
 // to "exterior", which already shows this same finish across its full depth.
-function SideFiller({ side, W, H, D, color, map, roughness, wireframe = false }: {
+export function SideFiller({ side, W, H, D, color, map, roughness, wireframe = false }: {
   side: "left" | "right"; W: number; H: number; D: number;
   color: string; map?: Texture | null; roughness?: number; wireframe?: boolean;
 }) {
@@ -325,7 +325,7 @@ function SideFiller({ side, W, H, D, color, map, roughness, wireframe = false }:
 // height above the top-most door/drawer for mounting hardware, and nothing
 // ever drew a front over it — just bare (white) carcass showing through right
 // under the countertop.
-function TopFiller({ W, D, yCenter, marginH, color, map, roughness, wireframe = false }: {
+export function TopFiller({ W, D, yCenter, marginH, color, map, roughness, wireframe = false }: {
   W: number; D: number; yCenter: number; marginH: number;
   color: string; map?: Texture | null; roughness?: number; wireframe?: boolean;
 }) {
@@ -752,7 +752,7 @@ function Countertop({
 }
 
 // ─── Drawer Face Mesh ─────────────────────────────────────────────────────────
-function DrawerFace({
+export function DrawerFace({
   drawer, W, D, toeKick, color, map, roughness, hardware = "Acero inoxidable", wireframe = false, onSelect, interiorColor,
 }: {
   drawer: DrawerDef; W: number; D: number; toeKick: number; color: string;
@@ -840,7 +840,7 @@ function DrawerFace({
 }
 
 // ─── Door Panel Mesh ──────────────────────────────────────────────────────────
-function DoorPanel({
+export function DoorPanel({
   door, W, D, toeKick, color, map, roughness, hardware = "Acero inoxidable", wireframe = false, onSelect,
 }: {
   door: DoorDef; W: number; D: number; toeKick: number; color: string;
