@@ -59,6 +59,13 @@ interface ClosetStore {
   // consumer's own effect can't tell the two apart and may race ahead of
   // rehydration, overwriting a real draft with a fresh empty one.
   _hasHydrated: boolean;
+  // Real, notifying store action — onRehydrateStorage's callback below calls
+  // this instead of mutating `_hasHydrated` on the state object directly.
+  // Zustand only notifies subscribed hooks (useSyncExternalStore) from
+  // inside its own set(); a bare `state._hasHydrated = true` mutation after
+  // hydrate()'s set() has already returned is invisible to React unless
+  // something else happens to force a re-render afterward.
+  setHasHydrated: () => void;
 
   initNiche: (widthCm: number, heightCm: number, depthCm: number) => void;
   addModule: (widthCm: number, depthCm: number) => void;
@@ -69,6 +76,7 @@ interface ClosetStore {
   moveBlock: (moduleId: string, blockId: string, direction: "up" | "down") => void;
   updateBlockHeight: (moduleId: string, blockId: string, heightCm: number) => void;
   updateBlockConfig: (moduleId: string, blockId: string, patch: ClosetBlockConfigPatch) => void;
+  updateModuleWidth: (moduleId: string, widthCm: number) => void;
 }
 
 // Every module-mutating action goes through this so "which conjunto/module"
@@ -108,6 +116,7 @@ export const useClosetStore = create<ClosetStore>()(
       project: null,
       selectedModuleId: null,
       _hasHydrated: false,
+      setHasHydrated: () => set({ _hasHydrated: true }),
 
       initNiche: (widthCm, heightCm, depthCm) => {
         const area = buildNewArea("Closet", "niche", { width: widthCm, height: heightCm, depth: depthCm });
@@ -203,6 +212,16 @@ export const useClosetStore = create<ClosetStore>()(
             })),
           };
         }),
+
+      // A module's width is independent per module — a hangrod module often
+      // needs to be wider than a drawer module next to it in the same
+      // conjunto (stackAlongAxis packs whatever width each module reports,
+      // so this alone is enough to make rows of mixed-width modules work).
+      updateModuleWidth: (moduleId, widthCm) =>
+        set((s) => {
+          if (!s.project) return {};
+          return { project: updateModuleInProject(s.project, moduleId, (mod) => ({ ...mod, width: widthCm })) };
+        }),
     }),
     {
       name: "closet-draft-v1",
@@ -211,10 +230,12 @@ export const useClosetStore = create<ClosetStore>()(
       // Documented zustand pattern for "rehydration has genuinely applied":
       // called once at store setup; the returned callback fires once
       // hydration finishes (whether it found a real draft or confirmed
-      // there was nothing to restore), and mutating the draft here is how
-      // persist wants consumers to flip a hydration-done flag.
+      // there was nothing to restore). Calls the real setHasHydrated()
+      // action (a genuine set()) rather than mutating state in place, so
+      // subscribed hooks are actually notified — see setHasHydrated's own
+      // comment for why the direct-mutation variant is unreliable.
       onRehydrateStorage: () => (state) => {
-        if (state) state._hasHydrated = true;
+        state?.setHasHydrated();
       },
     }
   )

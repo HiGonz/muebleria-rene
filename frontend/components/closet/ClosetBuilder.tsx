@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useClosetStore } from "@/store/useClosetStore";
 import { ClosetAssemblyScene } from "@/components/3d/ClosetAssemblyScene";
 import { ClosetModuleStackEditor } from "./ClosetModuleStackEditor";
+import { NumericField } from "./NumericField";
 import { isNicheSpace } from "@/types/closet";
 
 const DEFAULT_MODULE_WIDTH_CM = 60;
@@ -17,6 +18,10 @@ export function ClosetBuilder() {
   const addModule = useClosetStore((s) => s.addModule);
   const removeModule = useClosetStore((s) => s.removeModule);
   const selectModule = useClosetStore((s) => s.selectModule);
+  // Width is set once here at creation time (also editable later per-module
+  // in ClosetModuleStackEditor) — a hangrod module often needs to be wider
+  // than a drawer module next to it, so a single fixed default isn't enough.
+  const [newModuleWidthCm, setNewModuleWidthCm] = useState(DEFAULT_MODULE_WIDTH_CM);
 
   // First-ever visit (nothing in localStorage yet) starts from a reasonable
   // default niche so the scene isn't empty on load. Gated on hasHydrated so
@@ -46,12 +51,23 @@ export function ClosetBuilder() {
     <div className="flex h-screen flex-col bg-ink text-ivory overflow-hidden">
       <header className="flex shrink-0 items-center justify-between border-b border-ivory/8 px-4 py-2.5">
         <h1 className="font-display text-sm font-semibold">{project.projectName}</h1>
-        <button
-          onClick={() => addModule(DEFAULT_MODULE_WIDTH_CM, DEFAULT_MODULE_DEPTH_CM)}
-          className="rounded-lg bg-brass px-3 py-1.5 text-xs font-semibold text-ink hover:bg-brass-soft"
-        >
-          + Agregar módulo
-        </button>
+        <div className="flex items-center gap-2">
+          <label className="flex items-center gap-1 text-[11px] text-warmgray">
+            Ancho (cm)
+            <NumericField
+              value={newModuleWidthCm} min={20}
+              onCommit={setNewModuleWidthCm}
+              className="w-14 rounded border border-ivory/15 bg-ink px-1.5 py-0.5 text-right text-xs text-ivory"
+              ariaLabel="Ancho del nuevo módulo en centímetros"
+            />
+          </label>
+          <button
+            onClick={() => addModule(newModuleWidthCm, DEFAULT_MODULE_DEPTH_CM)}
+            className="rounded-lg bg-brass px-3 py-1.5 text-xs font-semibold text-ink hover:bg-brass-soft"
+          >
+            + Agregar módulo
+          </button>
+        </div>
       </header>
       <div className="flex flex-1 overflow-hidden">
         <div className="relative flex-1">

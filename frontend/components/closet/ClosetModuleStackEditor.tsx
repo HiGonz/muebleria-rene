@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useClosetStore } from "@/store/useClosetStore";
 import { CLOSET_BLOCK_CATALOG, layoutModuleBlocks, validateModuleHeight } from "@/services/closetData";
 import type { ClosetBlock, ClosetBlockKind, ClosetModule } from "@/types/closet";
+import { NumericField } from "./NumericField";
 
 // Each block kind's own configurable fields, beyond the shared heightCm —
 // this is what makes "cada bloque tiene su propia configuración" (the
@@ -18,17 +19,17 @@ function BlockConfigFields({ moduleId, block }: { moduleId: string; block: Close
       <div className="flex items-center gap-2 pl-1">
         <label className="flex items-center gap-1 text-[10px] text-warmgray">
           Cajones
-          <input
-            type="number" min={1} value={block.config.quantity}
-            onChange={(e) => updateBlockConfig(moduleId, block.id, { quantity: Math.max(1, Number(e.target.value)) })}
+          <NumericField
+            value={block.config.quantity} min={1}
+            onCommit={(n) => updateBlockConfig(moduleId, block.id, { quantity: n })}
             className="w-10 rounded border border-ivory/15 bg-ink px-1 py-0.5 text-right text-[10px] text-ivory"
           />
         </label>
         <label className="flex items-center gap-1 text-[10px] text-warmgray">
           Separación (cm)
-          <input
-            type="number" min={0} value={block.config.gapCm}
-            onChange={(e) => updateBlockConfig(moduleId, block.id, { gapCm: Math.max(0, Number(e.target.value)) })}
+          <NumericField
+            value={block.config.gapCm} min={0}
+            onCommit={(n) => updateBlockConfig(moduleId, block.id, { gapCm: n })}
             className="w-10 rounded border border-ivory/15 bg-ink px-1 py-0.5 text-right text-[10px] text-ivory"
           />
         </label>
@@ -40,9 +41,9 @@ function BlockConfigFields({ moduleId, block }: { moduleId: string; block: Close
       <div className="flex items-center gap-2 pl-1">
         <label className="flex items-center gap-1 text-[10px] text-warmgray">
           Puertas
-          <input
-            type="number" min={1} value={block.config.doorCount}
-            onChange={(e) => updateBlockConfig(moduleId, block.id, { doorCount: Math.max(1, Number(e.target.value)) })}
+          <NumericField
+            value={block.config.doorCount} min={1}
+            onCommit={(n) => updateBlockConfig(moduleId, block.id, { doorCount: n })}
             className="w-10 rounded border border-ivory/15 bg-ink px-1 py-0.5 text-right text-[10px] text-ivory"
           />
         </label>
@@ -61,9 +62,9 @@ function BlockConfigFields({ moduleId, block }: { moduleId: string; block: Close
       <div className="flex items-center gap-2 pl-1">
         <label className="flex items-center gap-1 text-[10px] text-warmgray">
           Altura de barra (cm desde el bloque)
-          <input
-            type="number" min={0} value={block.config.rodHeightFromBottomCm}
-            onChange={(e) => updateBlockConfig(moduleId, block.id, { rodHeightFromBottomCm: Math.max(0, Number(e.target.value)) })}
+          <NumericField
+            value={block.config.rodHeightFromBottomCm} min={0}
+            onCommit={(n) => updateBlockConfig(moduleId, block.id, { rodHeightFromBottomCm: n })}
             className="w-12 rounded border border-ivory/15 bg-ink px-1 py-0.5 text-right text-[10px] text-ivory"
           />
         </label>
@@ -78,6 +79,7 @@ export function ClosetModuleStackEditor({ module, maxHeightCm }: { module: Close
   const removeBlock = useClosetStore((s) => s.removeBlock);
   const moveBlock = useClosetStore((s) => s.moveBlock);
   const updateBlockHeight = useClosetStore((s) => s.updateBlockHeight);
+  const updateModuleWidth = useClosetStore((s) => s.updateModuleWidth);
   const [showPicker, setShowPicker] = useState(false);
 
   const validation = validateModuleHeight(module.blocks, maxHeightCm);
@@ -100,6 +102,16 @@ export function ClosetModuleStackEditor({ module, maxHeightCm }: { module: Close
         </span>
       </div>
 
+      <label className="flex items-center gap-1.5 text-[10px] text-warmgray">
+        Ancho del módulo (cm)
+        <NumericField
+          value={module.width} min={20}
+          onCommit={(n) => updateModuleWidth(module.id, n)}
+          className="w-14 rounded border border-ivory/15 bg-ink px-1.5 py-0.5 text-right text-xs text-ivory"
+          ariaLabel="Ancho del módulo en centímetros"
+        />
+      </label>
+
       <div className="flex flex-col gap-1.5">
         {topToBottom.map(({ block, yBottomCm, yTopCm }) => {
           const entry = CLOSET_BLOCK_CATALOG.find((e) => e.kind === block.kind)!;
@@ -110,13 +122,11 @@ export function ClosetModuleStackEditor({ module, maxHeightCm }: { module: Close
                   <p className="truncate text-xs font-medium text-ivory">{entry.label}</p>
                   <p className="text-[10px] text-warmgray">{yBottomCm}cm – {yTopCm}cm</p>
                 </div>
-                <input
-                  type="number"
-                  value={block.heightCm}
-                  min={1}
-                  onChange={(e) => updateBlockHeight(module.id, block.id, Math.max(1, Number(e.target.value)))}
+                <NumericField
+                  value={block.heightCm} min={1}
+                  onCommit={(n) => updateBlockHeight(module.id, block.id, n)}
                   className="w-14 rounded border border-ivory/15 bg-ink px-1.5 py-0.5 text-right text-xs text-ivory"
-                  aria-label={`Altura de ${entry.label}`}
+                  ariaLabel={`Altura de ${entry.label}`}
                 />
                 <button onClick={() => moveBlock(module.id, block.id, "up")} title="Subir" className="text-warmgray hover:text-ivory">↑</button>
                 <button onClick={() => moveBlock(module.id, block.id, "down")} title="Bajar" className="text-warmgray hover:text-ivory">↓</button>
