@@ -4,10 +4,13 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { PersistStorage, StorageValue } from "zustand/middleware";
 import type {
-  ClosetBlock, ClosetBlockKind, ClosetConjunto, ClosetModule, ClosetProject,
+  ClosetArea, ClosetBlock, ClosetBlockKind, ClosetConjunto, ClosetModule, ClosetProject,
   DoorBlockConfig, DrawerBlockConfig, HangRodBlockConfig, OpenBlockConfig,
 } from "@/types/closet";
-import { buildNewArea, buildNewBlock, buildNewClosetModule, buildNewConjunto } from "@/services/closetData";
+import {
+  buildNewArea, buildNewBlock, buildNewClosetModule, buildNewConjunto,
+  buildNewTopShelf, conjuntoWidthCm, reconcileTopShelfCoverage,
+} from "@/services/closetData";
 
 // Partial<A|B|C|D> would resolve to Partial<{}> (a union's keyof is the
 // INTERSECTION of its members' keys, and these four share none) — useless
@@ -51,6 +54,11 @@ function createDebouncedLocalStorage(delayMs: number): PersistStorage<PersistedC
 interface ClosetStore {
   project: ClosetProject | null;
   selectedModuleId: string | null;
+  // Which conjunto's modules/editor the UI is currently showing. Switching
+  // conjuntos always clears selectedModuleId too (see selectConjunto) — a
+  // module selected in a different conjunto has no meaning once the visible
+  // module list belongs to a new one.
+  selectedConjuntoId: string | null;
   // Flips false -> true exactly once, via persist's onRehydrateStorage
   // callback below, once rehydration has genuinely applied (whether it
   // found a real draft or confirmed there was nothing to restore). Lets
@@ -77,6 +85,13 @@ interface ClosetStore {
   updateBlockHeight: (moduleId: string, blockId: string, heightCm: number) => void;
   updateBlockConfig: (moduleId: string, blockId: string, patch: ClosetBlockConfigPatch) => void;
   updateModuleWidth: (moduleId: string, widthCm: number) => void;
+
+  addConjunto: () => void;
+  removeConjunto: (conjuntoId: string) => void;
+  selectConjunto: (conjuntoId: string | null) => void;
+  updateConjuntoX: (conjuntoId: string, xCm: number) => void;
+  setTopShelf: (conjuntoId: string, coversModuleIds: string[]) => void;
+  removeTopShelf: (conjuntoId: string) => void;
 }
 
 // Every module-mutating action goes through this so "which conjunto/module"
@@ -110,30 +125,41 @@ function updateConjuntoInProject(project: ClosetProject, conjuntoId: string, upd
   };
 }
 
+// Same shared-lookup rationale as updateModuleInProject/updateConjuntoInProject,
+// one level up again: adding/removing a conjunto itself (not a module within
+// one) changes the área's own conjuntos array, so it goes through this
+// instead of a third inline areas.map(...) traversal.
+function updateAreaInProject(project: ClosetProject, areaId: string, updater: (area: ClosetArea) => ClosetArea): ClosetProject {
+  return { ...project, areas: project.areas.map((area) => (area.id === areaId ? updater(area) : area)) };
+}
+
 export const useClosetStore = create<ClosetStore>()(
   persist(
     (set) => ({
       project: null,
       selectedModuleId: null,
+      selectedConjuntoId: null,
       _hasHydrated: false,
       setHasHydrated: () => set({ _hasHydrated: true }),
 
       initNiche: (widthCm, heightCm, depthCm) => {
         const area = buildNewArea("Closet", "niche", { width: widthCm, height: heightCm, depth: depthCm });
-        area.conjuntos = [buildNewConjunto(0, 0)];
+        const firstConjunto = buildNewConjunto(0, 0);
+        area.conjuntos = [firstConjunto];
         set({
           project: { id: null, clientName: "", projectName: "Closet nuevo", notes: "", areas: [area] },
           selectedModuleId: null,
+          selectedConjuntoId: firstConjunto.id,
         });
       },
 
       addModule: (widthCm, depthCm) =>
         set((s) => {
           if (!s.project) return {};
-          // Phase 1 always has exactly one conjunto (see plan's Global
-          // Constraints) — grab its real id rather than hardcoding index 0
-          // inline, so the traversal itself lives only in updateConjuntoInProject.
-          const targetConjuntoId = s.project.areas[0]?.conjuntos[0]?.id;
+          // Phase 2: multiple conjuntos may exist — a new module always goes
+          // into whichever one is currently selected, falling back to the
+          // first conjunto if somehow none is selected yet.
+          const targetConjuntoId = s.selectedConjuntoId ?? s.project.areas[0]?.conjuntos[0]?.id;
           if (!targetConjuntoId) return {};
           const newModule = buildNewClosetModule(widthCm, depthCm);
           return {
@@ -153,10 +179,13 @@ export const useClosetStore = create<ClosetStore>()(
             .find((conjunto) => conjunto.modules.some((m) => m.id === moduleId));
           if (!owningConjunto) return {};
           return {
-            project: updateConjuntoInProject(s.project, owningConjunto.id, (conjunto) => ({
-              ...conjunto,
-              modules: conjunto.modules.filter((m) => m.id !== moduleId),
-            })),
+            project: updateConjuntoInProject(s.project, owningConjunto.id, (conjunto) => {
+              const modules = conjunto.modules.filter((m) => m.id !== moduleId);
+              const topShelf = conjunto.topShelf
+                ? reconcileTopShelfCoverage(conjunto.topShelf, modules.map((m) => m.id)) ?? undefined
+                : undefined;
+              return { ...conjunto, modules, topShelf };
+            }),
             selectedModuleId: s.selectedModuleId === moduleId ? null : s.selectedModuleId,
           };
         }),
@@ -221,6 +250,54 @@ export const useClosetStore = create<ClosetStore>()(
         set((s) => {
           if (!s.project) return {};
           return { project: updateModuleInProject(s.project, moduleId, (mod) => ({ ...mod, width: widthCm })) };
+        }),
+
+      addConjunto: () =>
+        set((s) => {
+          if (!s.project) return {};
+          const area = s.project.areas[0];
+          if (!area) return {};
+          const rightmostEndCm = area.conjuntos.reduce((max, c) => Math.max(max, c.x + conjuntoWidthCm(c)), 0);
+          const newConjunto = buildNewConjunto(area.conjuntos.length ? rightmostEndCm + 10 : 0, 0);
+          return {
+            project: updateAreaInProject(s.project, area.id, (a) => ({ ...a, conjuntos: [...a.conjuntos, newConjunto] })),
+            selectedConjuntoId: newConjunto.id,
+            selectedModuleId: null,
+          };
+        }),
+
+      removeConjunto: (conjuntoId) =>
+        set((s) => {
+          if (!s.project) return {};
+          const area = s.project.areas[0];
+          if (!area) return {};
+          const remaining = area.conjuntos.filter((c) => c.id !== conjuntoId);
+          const wasSelected = s.selectedConjuntoId === conjuntoId;
+          return {
+            project: updateAreaInProject(s.project, area.id, (a) => ({ ...a, conjuntos: remaining })),
+            selectedConjuntoId: wasSelected ? (remaining[0]?.id ?? null) : s.selectedConjuntoId,
+            selectedModuleId: wasSelected ? null : s.selectedModuleId,
+          };
+        }),
+
+      selectConjunto: (conjuntoId) => set({ selectedConjuntoId: conjuntoId, selectedModuleId: null }),
+
+      updateConjuntoX: (conjuntoId, xCm) =>
+        set((s) => {
+          if (!s.project) return {};
+          return { project: updateConjuntoInProject(s.project, conjuntoId, (c) => ({ ...c, x: xCm })) };
+        }),
+
+      setTopShelf: (conjuntoId, coversModuleIds) =>
+        set((s) => {
+          if (!s.project) return {};
+          return { project: updateConjuntoInProject(s.project, conjuntoId, (c) => ({ ...c, topShelf: buildNewTopShelf(coversModuleIds) })) };
+        }),
+
+      removeTopShelf: (conjuntoId) =>
+        set((s) => {
+          if (!s.project) return {};
+          return { project: updateConjuntoInProject(s.project, conjuntoId, (c) => ({ ...c, topShelf: undefined })) };
         }),
     }),
     {
