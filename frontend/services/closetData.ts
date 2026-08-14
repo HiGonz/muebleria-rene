@@ -1,6 +1,6 @@
 import type {
   ClosetArea, ClosetBlock, ClosetBlockKind, ClosetConjunto, ClosetModule,
-  ClosetSpace, ClosetSpaceType, DoorBlockConfig, DrawerBlockConfig,
+  ClosetSpace, ClosetSpaceType, ClosetTopShelf, DoorBlockConfig, DrawerBlockConfig,
   HangRodBlockConfig, OpenBlockConfig,
 } from "@/types/closet";
 
@@ -109,4 +109,89 @@ export function buildNewConjunto(x: number, z: number, rotation: 0 | 90 | 180 | 
 
 export function buildNewArea(label: string, spaceType: ClosetSpaceType, space: ClosetSpace): ClosetArea {
   return { id: newId("area"), label, spaceType, space, conjuntos: [] };
+}
+
+// ─── Conjunto placement (1D — a niche área only ever has one wall, so a
+// conjunto's only real degree of freedom is its X offset along it) ─────────
+export interface ConjuntoRange { startCm: number; endCm: number }
+
+export function conjuntoWidthCm(conjunto: ClosetConjunto): number {
+  const packed = stackAlongAxis(conjunto.modules.map((m) => ({ sizeCm: m.width })));
+  return packed.length ? packed[packed.length - 1].endCm : 0;
+}
+
+export function conjuntoRange(conjunto: ClosetConjunto): ConjuntoRange {
+  const widthCm = conjuntoWidthCm(conjunto);
+  return { startCm: conjunto.x, endCm: conjunto.x + widthCm };
+}
+
+// Just enough tolerance to absorb floating-point noise, same rationale as
+// kitchen's OVERLAP_TOLERANCE_M.
+const CONJUNTO_OVERLAP_TOLERANCE_CM = 0.3;
+
+export function conjuntosOverlap(a: ConjuntoRange, b: ConjuntoRange): boolean {
+  return a.startCm < b.endCm - CONJUNTO_OVERLAP_TOLERANCE_CM && a.endCm > b.startCm + CONJUNTO_OVERLAP_TOLERANCE_CM;
+}
+
+// A drag release is "place it here" — searches outward in both directions
+// (1cm steps) from the target for the nearest X where the conjunto's own
+// width doesn't overlap any other conjunto's range, clamped to stay fully
+// inside the área. Mirrors kitchen's findNearestFreePosition ring-search,
+// simplified from a 2D ring to a 1D line since a conjunto only has one axis
+// of freedom. Returns null only if truly nothing in [0, areaWidthCm] fits
+// (the conjunto is wider than the área itself).
+export function findNearestFreeConjuntoX(
+  targetXCm: number, widthCm: number, areaWidthCm: number, others: ConjuntoRange[],
+): number | null {
+  const maxX = areaWidthCm - widthCm;
+  if (maxX < 0) return null;
+  const clamp = (x: number) => Math.min(Math.max(x, 0), maxX);
+  const overlapsAny = (x: number) => others.some((o) => conjuntosOverlap({ startCm: x, endCm: x + widthCm }, o));
+
+  const clamped = clamp(targetXCm);
+  if (!overlapsAny(clamped)) return clamped;
+
+  const stepCm = 1;
+  for (let offset = stepCm; offset <= areaWidthCm; offset += stepCm) {
+    for (const dir of [1, -1] as const) {
+      const candidate = clamp(targetXCm + dir * offset);
+      if (!overlapsAny(candidate)) return candidate;
+    }
+  }
+  return null;
+}
+
+// ─── Repisa superior (spans a contiguous run of one conjunto's modules) ────
+export function buildNewTopShelf(coversModuleIds: string[]): ClosetTopShelf {
+  return { id: newId("repisa"), coversModuleIds, thickness: 2, material: "Melamina blanca 15mm" };
+}
+
+// If a covered module is removed, the shelf's coverage shrinks to whatever
+// contiguous sub-run of its ORIGINAL coverage still exists in the module's
+// new order; if none of the covered ids remain, the shelf is dropped. The
+// "survivors are no longer contiguous" case (some other module now sits
+// between two covered ones) can't currently happen through the app — modules
+// only ever get appended or removed, never reordered/inserted mid-list, so
+// removing one always closes the gap cleanly — but the check stays in place
+// as the correct, defensive behavior for if/when module reordering is added.
+export function reconcileTopShelfCoverage(topShelf: ClosetTopShelf, moduleIdsInOrder: string[]): ClosetTopShelf | null {
+  const stillPresent = topShelf.coversModuleIds.filter((id) => moduleIdsInOrder.includes(id));
+  if (stillPresent.length === 0) return null;
+  const indices = stillPresent.map((id) => moduleIdsInOrder.indexOf(id)).sort((a, b) => a - b);
+  const isContiguous = indices.every((idx, i) => i === 0 || idx === indices[i - 1] + 1);
+  if (!isContiguous) return null;
+  return { ...topShelf, coversModuleIds: indices.map((idx) => moduleIdsInOrder[idx]) };
+}
+
+export interface TopShelfLayout { xStartCm: number; xEndCm: number; yTopCm: number }
+
+export function layoutTopShelf(topShelf: ClosetTopShelf, conjunto: ClosetConjunto): TopShelfLayout | null {
+  const packed = stackAlongAxis(conjunto.modules.map((m) => ({ sizeCm: m.width, module: m })));
+  const covered = packed.filter((p) => topShelf.coversModuleIds.includes(p.item.module.id));
+  if (covered.length === 0) return null;
+  return {
+    xStartCm: Math.min(...covered.map((p) => p.startCm)),
+    xEndCm: Math.max(...covered.map((p) => p.endCm)),
+    yTopCm: Math.max(...covered.map((p) => moduleTotalHeightCm(p.item.module.blocks))),
+  };
 }
