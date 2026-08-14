@@ -360,13 +360,14 @@ export const useKitchenStore = create<KitchenStore>()(
               { description: islandMode ? "Gira libre y puedes configurar su cara trasera en el inspector." : "Volvió a orientarse hacia la pared más cercana.", duration: 2200 },
             );
           }
+          const updated: KitchenModule = { ...mod, x, z, options: { ...mod.options, mountHeight, islandMode } };
           return {
             draft: {
               ...s.draft,
-              modules: s.draft.modules.map((m) =>
-                m.id === id ? { ...m, x, z, options: { ...m.options, mountHeight, islandMode } } : m
-              ),
+              modules: s.draft.modules.map((m) => (m.id === id ? updated : m)),
             },
+            undoStack: pushUndoEntry(s.undoStack, mod, updated),
+            redoStack: [],
           };
         }),
 
@@ -395,39 +396,77 @@ export const useKitchenStore = create<KitchenStore>()(
               { description: islandMode ? "Gira libre y puedes configurar su cara trasera en el inspector." : "Volvió a orientarse hacia la pared más cercana.", duration: 2200 },
             );
           }
+          const updated: KitchenModule = { ...mod, options: { ...mod.options, islandModeManual: forced, islandMode } };
           return {
             draft: {
               ...s.draft,
-              modules: s.draft.modules.map((m) =>
-                m.id === id ? { ...m, options: { ...m.options, islandModeManual: forced, islandMode } } : m
-              ),
+              modules: s.draft.modules.map((m) => (m.id === id ? updated : m)),
             },
+            undoStack: pushUndoEntry(s.undoStack, mod, updated),
+            redoStack: [],
           };
         }),
 
-      undoLastMove: () =>
+      undo: () =>
         set((s) => {
-          const history = [...s.moveHistory];
-          const last = history.pop();
-          if (!last) return {};
+          const entry = s.undoStack[s.undoStack.length - 1];
+          if (!entry) return {};
+          const remaining = s.undoStack.slice(0, -1);
+          let modules = s.draft.modules;
+          if (entry.after === null) {
+            modules = [...modules, entry.before!];
+          } else if (entry.before === null) {
+            modules = modules.filter((m) => m.id !== entry.moduleId);
+          } else {
+            const target = modules.find((m) => m.id === entry.moduleId);
+            modules = target && !target.options.locked
+              ? modules.map((m) => (m.id === entry.moduleId ? entry.before! : m))
+              : modules;
+          }
           return {
-            moveHistory: history,
-            draft: {
-              ...s.draft,
-              modules: s.draft.modules.map((m) => (m.id === last.moduleId && !m.options.locked ? { ...m, x: last.x, z: last.z, rotation: last.rotation } : m)),
-            },
+            draft: { ...s.draft, modules },
+            undoStack: remaining,
+            redoStack: [...s.redoStack, entry],
+          };
+        }),
+
+      redo: () =>
+        set((s) => {
+          const entry = s.redoStack[s.redoStack.length - 1];
+          if (!entry) return {};
+          const remaining = s.redoStack.slice(0, -1);
+          let modules = s.draft.modules;
+          if (entry.before === null) {
+            modules = [...modules, entry.after!];
+          } else if (entry.after === null) {
+            modules = modules.filter((m) => m.id !== entry.moduleId);
+          } else {
+            const target = modules.find((m) => m.id === entry.moduleId);
+            modules = target && !target.options.locked
+              ? modules.map((m) => (m.id === entry.moduleId ? entry.after! : m))
+              : modules;
+          }
+          return {
+            draft: { ...s.draft, modules },
+            redoStack: remaining,
+            undoStack: [...s.undoStack, entry],
           };
         }),
 
       rotateModule: (id) =>
-        set((s) => ({
-          draft: {
-            ...s.draft,
-            modules: s.draft.modules.map((m) =>
-              m.id === id && !m.options.locked ? { ...m, rotation: ((m.rotation + 90) % 360) as KitchenModule["rotation"] } : m
-            ),
-          },
-        })),
+        set((s) => {
+          const mod = s.draft.modules.find((m) => m.id === id);
+          if (!mod || mod.options.locked) return {};
+          const updated: KitchenModule = { ...mod, rotation: ((mod.rotation + 90) % 360) as KitchenModule["rotation"] };
+          return {
+            draft: {
+              ...s.draft,
+              modules: s.draft.modules.map((m) => (m.id === id ? updated : m)),
+            },
+            undoStack: pushUndoEntry(s.undoStack, mod, updated),
+            redoStack: [],
+          };
+        }),
 
       duplicateModule: (id) =>
         set((s) => {
@@ -444,17 +483,28 @@ export const useKitchenStore = create<KitchenStore>()(
             options: { ...original.options, locked: false },
           };
           const idx = s.draft.modules.findIndex((m) => m.id === id);
-          const updated = [...s.draft.modules.slice(0, idx + 1), copy, ...s.draft.modules.slice(idx + 1)];
-          return { draft: { ...s.draft, modules: updated, editingModuleId: copy.id } };
+          const updatedModules = [...s.draft.modules.slice(0, idx + 1), copy, ...s.draft.modules.slice(idx + 1)];
+          return {
+            draft: { ...s.draft, modules: updatedModules, editingModuleId: copy.id },
+            undoStack: pushUndoEntry(s.undoStack, null, copy),
+            redoStack: [],
+          };
         }),
 
       toggleModuleLock: (id) =>
-        set((s) => ({
-          draft: {
-            ...s.draft,
-            modules: s.draft.modules.map((m) => (m.id === id ? { ...m, options: { ...m.options, locked: !m.options.locked } } : m)),
-          },
-        })),
+        set((s) => {
+          const mod = s.draft.modules.find((m) => m.id === id);
+          if (!mod) return {};
+          const updated: KitchenModule = { ...mod, options: { ...mod.options, locked: !mod.options.locked } };
+          return {
+            draft: {
+              ...s.draft,
+              modules: s.draft.modules.map((m) => (m.id === id ? updated : m)),
+            },
+            undoStack: pushUndoEntry(s.undoStack, mod, updated),
+            redoStack: [],
+          };
+        }),
 
       // ── Bulk material actions ──────────────────────────────────────────────
       applyExteriorToAll: (material, texture) => {
