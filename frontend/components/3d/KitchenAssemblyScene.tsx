@@ -2426,7 +2426,7 @@ function AssemblyContent({
       // corner or the room's center. Armed "Dirección fija" skips all of
       // that instead — the module only ever translates.
       const islandEligible = ISLAND_ELIGIBLE_CATEGORIES.has(mod.category);
-      const islandMode = islandEligible && isFreestandingPosition(x, z, roomWidthM, roomDepthM, liveIslandMode);
+      const islandMode = mod.options.islandModeManual ? true : islandEligible && isFreestandingPosition(x, z, roomWidthM, roomDepthM, liveIslandMode);
       liveIslandMode = islandMode;
       const rotation = moveMode.fixed ? mod.rotation : islandMode ? liveRotation : nearestWallRotation(x, z, roomWidthM, roomDepthM, liveRotation);
       liveRotation = rotation;
@@ -2464,7 +2464,7 @@ function AssemblyContent({
           // "Dirección fija", which keeps the module's original rotation
           // throughout, same as handleMove above.
           const islandEligible = ISLAND_ELIGIBLE_CATEGORIES.has(mod.category);
-          const islandMode = islandEligible && isFreestandingPosition(x, z, roomWidthM, roomDepthM, liveIslandMode);
+          const islandMode = mod.options.islandModeManual ? true : islandEligible && isFreestandingPosition(x, z, roomWidthM, roomDepthM, liveIslandMode);
           liveIslandMode = islandMode;
           // The only feedback island mode gets otherwise is a frozen rotation
           // and a hidden inspector section — neither is obvious mid-drag, so

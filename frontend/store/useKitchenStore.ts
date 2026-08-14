@@ -101,6 +101,10 @@ interface KitchenStore {
   // mountHeight together in one gesture, so they land in one history entry.
   updateModulePosition: (id: string, x: number, z: number, rotation?: KitchenModule["rotation"], mountHeightCm?: number, islandMode?: boolean) => void;
   nudgeModule: (id: string, dx: number, dz: number, dMountHeight: number) => void;
+  // The only way options.islandModeManual ever changes — see the
+  // implementation below for why turning it off needs more than a plain
+  // options patch.
+  setIslandModeManual: (id: string, forced: boolean) => void;
   rotateModule: (id: string) => void;
   duplicateModule: (id: string) => void;
   toggleModuleLock: (id: string) => void;
@@ -287,9 +291,11 @@ export const useKitchenStore = create<KitchenStore>()(
           const mountHeight = dMountHeight
             ? Math.min(Math.max((mod.options.mountHeight || 144) + dMountHeight, 60), 280)
             : mod.options.mountHeight;
-          const islandMode = ISLAND_ELIGIBLE_CATEGORIES.has(mod.category)
-            ? isFreestandingPosition(x / 100, z / 100, s.draft.roomWidth / 100, s.draft.roomDepth / 100, mod.options.islandMode ?? false)
-            : mod.options.islandMode;
+          const islandMode = mod.options.islandModeManual
+            ? true
+            : ISLAND_ELIGIBLE_CATEGORIES.has(mod.category)
+              ? isFreestandingPosition(x / 100, z / 100, s.draft.roomWidth / 100, s.draft.roomDepth / 100, mod.options.islandMode ?? false)
+              : mod.options.islandMode;
           // Same transition-only toast as the drag path (KitchenAssemblyScene.tsx)
           // — nudging is the other way islandMode can flip, and it gets zero
           // other feedback (frozen rotation, hidden inspector section).
@@ -304,6 +310,41 @@ export const useKitchenStore = create<KitchenStore>()(
               ...s.draft,
               modules: s.draft.modules.map((m) =>
                 m.id === id ? { ...m, x, z, options: { ...m.options, mountHeight, islandMode } } : m
+              ),
+            },
+          };
+        }),
+
+      // The inspector's "Forzar modo isla" toggle. Setting `forced: true`
+      // pins islandMode to true immediately — no need to drag the module
+      // first for the "Panel trasero" section to appear. Setting
+      // `forced: false` re-derives islandMode from the module's CURRENT
+      // position via the same isFreestandingPosition check the drag/nudge
+      // paths use, rather than just clearing it — a module that's already
+      // far from every wall stays an island (as if it had just been dragged
+      // there), one that's close to a wall reverts to normal. Fires the same
+      // transition toast as the drag/nudge paths, only when islandMode's
+      // value actually changes.
+      setIslandModeManual: (id, forced) =>
+        set((s) => {
+          const mod = s.draft.modules.find((m) => m.id === id);
+          if (!mod || mod.options.locked) return {};
+          const islandMode = forced
+            ? true
+            : ISLAND_ELIGIBLE_CATEGORIES.has(mod.category)
+              ? isFreestandingPosition(mod.x / 100, mod.z / 100, s.draft.roomWidth / 100, s.draft.roomDepth / 100, mod.options.islandMode ?? false)
+              : (mod.options.islandMode ?? false);
+          if (islandMode !== (mod.options.islandMode ?? false)) {
+            toast(
+              islandMode ? `"${mod.label}" ahora es isla` : `"${mod.label}" ya no es isla`,
+              { description: islandMode ? "Gira libre y puedes configurar su cara trasera en el inspector." : "Volvió a orientarse hacia la pared más cercana.", duration: 2200 },
+            );
+          }
+          return {
+            draft: {
+              ...s.draft,
+              modules: s.draft.modules.map((m) =>
+                m.id === id ? { ...m, options: { ...m.options, islandModeManual: forced, islandMode } } : m
               ),
             },
           };
