@@ -95,15 +95,24 @@ function clampOffset(offset: number, width: number, wallLength: number): number 
   return Math.min(Math.max(offset, half), wallLength - half);
 }
 
-// A position a module was dragged FROM, kept just long enough to undo an
-// accidental drag (e.g. grabbing a module while trying to orbit the camera).
-interface MoveHistoryEntry {
+// One undoable change to exactly one module. `before`/`after` are the
+// module's full state immediately before/after the change — `before: null`
+// means the module didn't exist yet (this was an add), `after: null` means
+// it no longer exists (this was a delete). This single shape covers every
+// module-mutating action uniformly (add/move/rotate/dimension-change/
+// delete/duplicate/lock-toggle) without a separate inverter per action
+// type, and each entry stores at most one module — never the whole draft.
+interface UndoEntry {
   moduleId: string;
-  x: number;
-  z: number;
-  rotation: KitchenModule["rotation"];
+  before: KitchenModule | null;
+  after: KitchenModule | null;
 }
-const MOVE_HISTORY_LIMIT = 3;
+const UNDO_HISTORY_LIMIT = 50;
+
+function pushUndoEntry(stack: UndoEntry[], before: KitchenModule | null, after: KitchenModule | null): UndoEntry[] {
+  const moduleId = (before ?? after)!.id;
+  return [...stack, { moduleId, before, after }].slice(-UNDO_HISTORY_LIMIT);
+}
 
 // ─── Store Interface ───────────────────────────────────────────────────────────
 interface KitchenStore {
@@ -114,7 +123,8 @@ interface KitchenStore {
   // Panel UI state (not persisted in draft)
   showSelector: boolean;
   activeTab: "builder" | "3d" | "summary";
-  moveHistory: MoveHistoryEntry[];
+  undoStack: UndoEntry[];
+  redoStack: UndoEntry[];
 
   // Project actions
   updateProject: (payload: Partial<Pick<KitchenDraft, "clientName" | "clientPhone" | "projectName" | "notes" | "roomWidth" | "roomDepth" | "ceilingHeight">>) => void;
@@ -143,7 +153,8 @@ interface KitchenStore {
   rotateModule: (id: string) => void;
   duplicateModule: (id: string) => void;
   toggleModuleLock: (id: string) => void;
-  undoLastMove: () => void;
+  undo: () => void;
+  redo: () => void;
 
   // Bulk material actions — homogenize every relevant module in one click
   // instead of opening each one's inspector individually.
@@ -188,20 +199,21 @@ export const useKitchenStore = create<KitchenStore>()(
       projectId: null,
       showSelector: false,
       activeTab: "3d",
-      moveHistory: [],
+      undoStack: [],
+      redoStack: [],
 
       // ── Project actions ───────────────────────────────────────────────────
       updateProject: (payload) =>
         set((s) => ({ draft: { ...s.draft, ...payload } })),
 
       resetDraft: () =>
-        set({ draft: { ...initialDraft }, projectId: null, showSelector: false, activeTab: "3d", moveHistory: [] }),
+        set({ draft: { ...initialDraft }, projectId: null, showSelector: false, activeTab: "3d", undoStack: [], redoStack: [] }),
 
       loadSampleKitchen: (variant = 1) =>
-        set({ draft: buildSampleKitchen(variant), projectId: null, showSelector: false, activeTab: "3d", moveHistory: [] }),
+        set({ draft: buildSampleKitchen(variant), projectId: null, showSelector: false, activeTab: "3d", undoStack: [], redoStack: [] }),
 
       loadProject: (projectId, draft) =>
-        set({ draft, projectId, showSelector: false, activeTab: "3d", moveHistory: [] }),
+        set({ draft, projectId, showSelector: false, activeTab: "3d", undoStack: [], redoStack: [] }),
 
       // ── Module actions ────────────────────────────────────────────────────
       addModule: (type) =>
@@ -226,6 +238,8 @@ export const useKitchenStore = create<KitchenStore>()(
           return {
             draft: { ...s.draft, modules: [...s.draft.modules, newModule] },
             showSelector: false,
+            undoStack: pushUndoEntry(s.undoStack, null, newModule),
+            redoStack: [],
           };
         }),
 
@@ -247,63 +261,69 @@ export const useKitchenStore = create<KitchenStore>()(
               depth: niche.dimensions.depth,
             },
           };
-          return { draft: { ...s.draft, modules: [...s.draft.modules, newModule] } };
+          return {
+            draft: { ...s.draft, modules: [...s.draft.modules, newModule] },
+            undoStack: pushUndoEntry(s.undoStack, null, newModule),
+            redoStack: [],
+          };
         }),
 
       removeModule: (id) =>
         set((s) => {
-          if (s.draft.modules.find((m) => m.id === id)?.options.locked) return {};
+          const existing = s.draft.modules.find((m) => m.id === id);
+          if (!existing || existing.options.locked) return {};
           return {
-            moveHistory: s.moveHistory.filter((h) => h.moduleId !== id),
             draft: {
               ...s.draft,
               modules: s.draft.modules.filter((m) => m.id !== id),
               editingModuleId: s.draft.editingModuleId === id ? null : s.draft.editingModuleId,
             },
+            undoStack: pushUndoEntry(s.undoStack, existing, null),
+            redoStack: [],
           };
         }),
 
       updateModule: (id, patch) =>
-        set((s) => ({
-          draft: {
-            ...s.draft,
-            modules: s.draft.modules.map((m) =>
-              m.id === id && !m.options.locked
-                ? { ...m, ...patch, dimensions: patch.dimensions ? { ...m.dimensions, ...patch.dimensions } : m.dimensions, options: patch.options ? { ...m.options, ...patch.options } : m.options }
-                : m
-            ),
-          },
-        })),
+        set((s) => {
+          const existing = s.draft.modules.find((m) => m.id === id);
+          if (!existing || existing.options.locked) return {};
+          const updated: KitchenModule = {
+            ...existing, ...patch,
+            dimensions: patch.dimensions ? { ...existing.dimensions, ...patch.dimensions } : existing.dimensions,
+            options: patch.options ? { ...existing.options, ...patch.options } : existing.options,
+          };
+          return {
+            draft: {
+              ...s.draft,
+              modules: s.draft.modules.map((m) => (m.id === id ? updated : m)),
+            },
+            undoStack: pushUndoEntry(s.undoStack, existing, updated),
+            redoStack: [],
+          };
+        }),
 
       updateModulePosition: (id, x, z, rotation, mountHeightCm, islandMode) =>
         set((s) => {
           const current = s.draft.modules.find((m) => m.id === id);
-          if (current?.options.locked) return {};
-          // Record where it was dragged FROM (not to) — undo restores this.
-          // Only the most recent few are kept; older entries just fall off.
-          const history = current && (current.x !== x || current.z !== z)
-            ? [...s.moveHistory, { moduleId: id, x: current.x, z: current.z, rotation: current.rotation }].slice(-MOVE_HISTORY_LIMIT)
-            : s.moveHistory;
+          if (!current || current.options.locked) return {};
           const hasOptionsPatch = mountHeightCm !== undefined || islandMode !== undefined;
+          const updated: KitchenModule = {
+            ...current, x, z, rotation: rotation ?? current.rotation,
+            options: hasOptionsPatch
+              ? {
+                  ...current.options,
+                  ...(mountHeightCm !== undefined ? { mountHeight: mountHeightCm } : {}),
+                  ...(islandMode !== undefined ? { islandMode } : {}),
+                }
+              : current.options,
+          };
           return {
-            moveHistory: history,
             draft: {
               ...s.draft,
-              modules: s.draft.modules.map((m) =>
-                m.id === id
-                  ? {
-                      ...m, x, z, rotation: rotation ?? m.rotation,
-                      options: hasOptionsPatch
-                        ? {
-                            ...m.options,
-                            ...(mountHeightCm !== undefined ? { mountHeight: mountHeightCm } : {}),
-                            ...(islandMode !== undefined ? { islandMode } : {}),
-                          }
-                        : m.options,
-                    }
-                  : m
-              ),
+              modules: s.draft.modules.map((m) => (m.id === id ? updated : m)),
             },
+            undoStack: pushUndoEntry(s.undoStack, current, updated),
+            redoStack: [],
           };
         }),
 
