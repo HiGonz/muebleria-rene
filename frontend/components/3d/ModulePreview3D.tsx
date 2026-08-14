@@ -1223,6 +1223,67 @@ function AereoHuecoInferiorMesh({ module, wireframe = false, onSelect }: {
   );
 }
 
+// ─── Armario alto media puerta — one door covers only the top half; the
+// bottom half is fully open (no door, no shelf). Same idea as
+// AereoHuecoInferiorMesh just above (door zone height derived live from the
+// module's own height, recomputed on every render), but a single door and a
+// single divider instead of two doors and a cubby split — see the design
+// note on this type's catalog entry (kitchenData.ts) for why it moved off
+// the generic useDetailedLayout/doorDefs mechanism, which froze the door at
+// whatever height the cabinet had when it was first placed.
+// ARMARIO_MEDIA_PUERTA_DOOR_ZONE_PCT mirrors kitchenData.ts's materials
+// calculator.
+const ARMARIO_MEDIA_PUERTA_DOOR_ZONE_PCT = 0.5;
+function ArmarioAltoMediaPuertaMesh({ module, wireframe = false, onSelect }: {
+  module: KitchenModule; wireframe?: boolean; onSelect?: () => void;
+}) {
+  const W = module.dimensions.width / 100;
+  const H = module.dimensions.height / 100;
+  const D = module.dimensions.depth / 100;
+  const color = module.options.color || "#d4c5b0";
+  const exteriorColor = module.options.exteriorColor || color;
+  const exteriorMap = getWoodTexture(module.options.exteriorTexture);
+  const exteriorRoughness = getWoodRoughness(module.options.exteriorTexture);
+  const leftColor = module.options.leftSidePanel === "ninguno" || module.options.leftSidePanel === "lambrin" ? null : module.options.leftSidePanel === "exterior" ? exteriorColor : color;
+  const rightColor = module.options.rightSidePanel === "ninguno" || module.options.rightSidePanel === "lambrin" ? null : module.options.rightSidePanel === "exterior" ? exteriorColor : color;
+  const leftMap = module.options.leftSidePanel === "exterior" ? exteriorMap : null;
+  const rightMap = module.options.rightSidePanel === "exterior" ? exteriorMap : null;
+
+  const doorZoneH = H * ARMARIO_MEDIA_PUERTA_DOOR_ZONE_PCT;
+  const openZoneH = H - doorZoneH;
+  const dividerColor = shiftColor(color, -0.04);
+
+  const doorDefs: DoorDef[] = [
+    { id: "media-puerta-d0", label: "Puerta superior", widthPct: 100, offsetPct: 0, fromBottomCm: openZoneH * 100, heightCm: doorZoneH * 100, hingeLeft: true, doorStyle: module.options.doorStyle },
+  ];
+
+  return (
+    <group>
+      <Carcass W={W} H={H} D={D} color={color} leftColor={leftColor} rightColor={rightColor} leftMap={leftMap} rightMap={rightMap} wireframe={wireframe} />
+      {/* Divider between the open zone (bottom) and the door-covered zone (top) */}
+      <Box pos={[0, openZoneH, 0]} size={[W - T * 2, T, D]} color={dividerColor} wireframe={wireframe} />
+      {module.options.leftSidePanel === "lambrin" && (
+        <LambrinPanel pos={[-W / 2 + T / 2, H / 2, 0]} faceW={D} faceH={H} horizontal={false} outward={-1} color={exteriorColor} map={exteriorMap} roughness={exteriorRoughness} wireframe={wireframe} />
+      )}
+      {module.options.rightSidePanel === "lambrin" && (
+        <LambrinPanel pos={[W / 2 - T / 2, H / 2, 0]} faceW={D} faceH={H} horizontal={false} outward={1} color={exteriorColor} map={exteriorMap} roughness={exteriorRoughness} wireframe={wireframe} />
+      )}
+      {module.options.leftSidePanel !== "exterior" && (
+        <SideFiller side="left" W={W} H={H} D={D} color={exteriorColor} map={exteriorMap} roughness={exteriorRoughness} wireframe={wireframe} />
+      )}
+      {module.options.rightSidePanel !== "exterior" && (
+        <SideFiller side="right" W={W} H={H} D={D} color={exteriorColor} map={exteriorMap} roughness={exteriorRoughness} wireframe={wireframe} />
+      )}
+      {doorDefs.map((d) => (
+        <DoorPanel
+          key={d.id} door={d} W={W} D={D} toeKick={0} color={exteriorColor} map={exteriorMap} roughness={exteriorRoughness}
+          hardware={module.options.hardwareFinish} wireframe={wireframe} onSelect={onSelect}
+        />
+      ))}
+    </group>
+  );
+}
+
 // ─── Cajón con hueco superior — a lower cabinet split evenly in half: one
 // drawer at the bottom, a fully open cubby above it (no shelf, no door) —
 // the mirror image of AereoHuecoInferiorMesh's open-below/closed-above
@@ -1907,6 +1968,11 @@ export function CabinetMesh({ module, wireframe = false, onSelect }: {
   // Two doors covering only the top zone, open cubby zone below.
   if (module.type === "aereo_hueco_inferior") {
     return <AereoHuecoInferiorMesh module={module} wireframe={wireframe} onSelect={onSelect} />;
+  }
+
+  // One door covering only the top half, open bottom half below.
+  if (module.type === "armario_alto_media_puerta") {
+    return <ArmarioAltoMediaPuertaMesh module={module} wireframe={wireframe} onSelect={onSelect} />;
   }
 
   // One drawer at the bottom, open cubby above it — the floor-cabinet

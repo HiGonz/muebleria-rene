@@ -34,6 +34,16 @@ const CAVA_VINOS_ROWS = 5;
 // two-cubby zone below. Mirrored in ModulePreview3D.tsx's AereoHuecoInferiorMesh.
 const AEREO_HUECO_DOOR_ZONE_PCT = 0.55;
 
+// Armario alto media puerta — same idea as AEREO_HUECO_DOOR_ZONE_PCT, but a
+// literal half/half split (the door covers the top HALF, the bottom half is
+// open — see the catalog entry's own description). Computed live from
+// dimensions.height on every use (here and in
+// ModulePreview3D.tsx's ArmarioAltoMediaPuertaMesh) instead of the door's
+// old fixed fromBottomCm/heightCm, which never changed when the cabinet's
+// height did — see the design note on the catalog entry below for why this
+// type moved off the generic useDetailedLayout/doorDefs mechanism entirely.
+const ARMARIO_MEDIA_PUERTA_DOOR_ZONE_PCT = 0.5;
+
 // Librero giratorio con espejo — fixed 10-shelf-row grid (2 columns, one
 // center divider) on the rotating unit, and the clearance (cm) between the
 // fixed housing and that inner unit on every side so it can spin freely.
@@ -751,6 +761,14 @@ export const MODULE_CATALOG: ModuleCatalogEntry[] = [
     },
     configurableFields: ["mountHeight", "hasUnderLight", "hardwareFinish", "boardMaterial", "color"],
   },
+  // Door covers the top half; the bottom half is fully open (no door, no
+  // shelf) — see ArmarioAltoMediaPuertaMesh. Used to be modeled as a
+  // useDetailedLayout override with a door frozen at fixed
+  // fromBottomCm/heightCm values computed once for the 90cm default height —
+  // that never recomputed when the cabinet's own height changed, so the door
+  // drifted out of sync with the opening it's supposed to cover. Moved to a
+  // dedicated mesh (same pattern as aereo_hueco_inferior) that derives the
+  // door's zone from dimensions.height on every render instead.
   {
     type: "armario_alto_media_puerta",
     category: "upper",
@@ -758,12 +776,7 @@ export const MODULE_CATALOG: ModuleCatalogEntry[] = [
     description: "Mismo armario alto — solo existe la puerta superior; la mitad inferior queda completamente abierta",
     icon: "🗄️",
     defaultDimensions: { height: 90, width: 40, depth: 30 },
-    defaultOptions: {
-      drawers: 0, doors: 1, shelves: 1, mountHeight: 144, useDetailedLayout: true,
-      doorDefs: [
-        { id: "puerta-sup", label: "Puerta superior", widthPct: 100, offsetPct: 0, fromBottomCm: 45.3, heightCm: 44.7, hingeLeft: true, doorStyle: "Lisa" },
-      ],
-    },
+    defaultOptions: { drawers: 0, doors: 1, shelves: 0, mountHeight: 144 },
     configurableFields: ["mountHeight", "hasUnderLight", "hardwareFinish", "boardMaterial", "color"],
   },
   // Nichos: an open display niche, near-square front — same base mesh as
@@ -1808,6 +1821,18 @@ export function calculateKitchenMaterials(modules: KitchenModule[]): { lines: Ki
         addPiece("Exterior", o.exteriorMaterial, panelWidth / 2, doorZoneH, "Puertas");
         addPiece("Exterior", o.exteriorMaterial, panelWidth / 2, doorZoneH, "Puertas");
         addHardware("bisagra", "Bisagras", 2, "pares", o.drawerSystem === "Soft-close" ? 65 : 35);
+      } else if (mod.type === "armario_alto_media_puerta") {
+        // One door covers only the top half; the bottom half is fully open,
+        // no shelf (see ArmarioAltoMediaPuertaMesh) — half of
+        // aereo_hueco_inferior's shape (one door, one divider, no second
+        // cubby split), same live height-derived door zone.
+        addPiece("Interior", o.boardMaterial, panelWidth, d.depth, "Tapas y bases"); // top
+        addPiece("Interior", o.boardMaterial, panelWidth, d.depth, "Tapas y bases"); // bottom
+        addPiece("Interior", o.boardMaterial, panelWidth, d.height, "Respaldo");
+        addPiece("Interior", o.boardMaterial, panelWidth, d.depth, "División puerta/hueco");
+        const mediaPuertaDoorZoneH = d.height * ARMARIO_MEDIA_PUERTA_DOOR_ZONE_PCT;
+        addPiece("Exterior", o.exteriorMaterial, panelWidth, mediaPuertaDoorZoneH, "Puertas");
+        addHardware("bisagra", "Bisagras", 1, "par", o.drawerSystem === "Soft-close" ? 65 : 35);
       } else if (mod.type === "librero_giratorio_espejo") {
         // Fixed outer housing (left/right/top/bottom, open front — see
         // LibreroGiratorioMesh) plus a separate inner rotating body: its own
@@ -1884,10 +1909,11 @@ export function calculateKitchenMaterials(modules: KitchenModule[]): { lines: Ki
       }
 
       // ── Doors — always exterior board (visible face); use detailed defs when available ──
-      // aereo_hueco_inferior's two doors are sized to its own door zone
-      // above (not the module's full usable height), and already accounted
-      // for there — skip the generic full-height door sizing for it.
-      const doors = mod.type === "aereo_hueco_inferior" ? [] : resolveDoors(mod);
+      // aereo_hueco_inferior's two doors and armario_alto_media_puerta's one
+      // door are sized to their own door zone above (not the module's full
+      // usable height), and already accounted for there — skip the generic
+      // full-height door sizing for them.
+      const doors = (mod.type === "aereo_hueco_inferior" || mod.type === "armario_alto_media_puerta") ? [] : resolveDoors(mod);
       for (const door of doors) {
         addPiece("Exterior", o.exteriorMaterial, (door.widthPct / 100) * d.width, door.heightCm, "Puertas");
         if (door.pullOutAccessory) addPullOut(door.pullOutAccessory);
