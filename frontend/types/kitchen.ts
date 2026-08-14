@@ -428,6 +428,18 @@ export interface ModuleOptions {
   // omitted in that mode, exposing the module's own shared shelf cavity —
   // see CabinetMesh). Only meaningful when backPanelMaterial is "alacena".
   backShelves?: number;
+  // User-forced island mode — bypasses isFreestandingPosition entirely while
+  // true, so a module behaves like an island (free rotation, configurable
+  // back face) even close to a wall. Purely additive: while false/undefined,
+  // islandMode continues to follow automatic position detection exactly as
+  // before this field existed. Set together with islandMode itself (see
+  // setIslandModeManual in useKitchenStore.ts) so every existing consumer of
+  // options.islandMode (CabinetMesh, calculateKitchenMaterials, the
+  // inspector's "Panel trasero" gate) keeps reading a single,
+  // already-correct boolean — none of them need to know this override
+  // exists. Only meaningful for lower/tower/corner modules (see
+  // ISLAND_ELIGIBLE_CATEGORIES).
+  islandModeManual?: boolean;
 }
 
 // ─── Kitchen Module ────────────────────────────────────────────────────────────
