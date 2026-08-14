@@ -43,9 +43,27 @@ const SAMPLE_KITCHENS: { variant: SampleKitchenVariant; label: string; hint: str
 export function KitchenBuilder() {
   const {
     draft, projectId, activeTab, showSelector, setActiveTab, resetDraft, loadSampleKitchen, loadProject, updateModulePosition, nudgeModule,
-    openSelector, setEditingModule, moveHistory, undoLastMove, updateOpening, removeModule, toggleModuleLock,
+    openSelector, setEditingModule, undoStack, redoStack, undo, redo, updateOpening, removeModule, toggleModuleLock,
   } = useKitchenStore();
   const handleOpeningMove = useCallback((id: string, offset: number) => updateOpening(id, { offset }), [updateOpening]);
+  // Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z — global within the builder (not scoped
+  // to the 3D tab) since editing also happens through the module inspector.
+  // Ignored with focus in a text field, same guard the arrow-key nudge in
+  // KitchenAssemblyScene.tsx already uses.
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (!e.ctrlKey) return;
+      const key = e.key.toLowerCase();
+      if (key !== "z" && key !== "y") return;
+      const el = e.target as HTMLElement | null;
+      if (el && /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName)) return;
+      e.preventDefault();
+      if (key === "y" || (key === "z" && e.shiftKey)) redo();
+      else undo();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [undo, redo]);
   const router = useRouter();
   const searchParams = useSearchParams();
   const [showRoomSettings, setShowRoomSettings] = useState(false);
@@ -386,8 +404,10 @@ export function KitchenBuilder() {
               onModuleRemove={removeModule}
               onModuleToggleLock={toggleModuleLock}
               onOpeningMove={handleOpeningMove}
-              onUndo={undoLastMove}
-              undoCount={moveHistory.length}
+              onUndo={undo}
+              undoCount={undoStack.length}
+              onRedo={redo}
+              redoCount={redoStack.length}
             />
 
             {modulesCount === 0 && !showSelector && !editingModule && (
