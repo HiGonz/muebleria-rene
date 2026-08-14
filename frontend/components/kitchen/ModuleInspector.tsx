@@ -258,6 +258,10 @@ export function ModuleInspector() {
   // for every field this drives (zócalo section, mountHeight, door-hinge
   // options).
   const isUpperCorner = type === "esquinero_triangular" || type === "esquinero_triangular_puerta" || type === "gabinete_pared_esquinero_puertas";
+  // The blind-extension corner cabinets (floor and wall) — as opposed to the
+  // triangular esquineros, which have no blind extension and so don't take
+  // cornerExtensionWidthCm or the back-panel/overhang fields below.
+  const isBlindCorner = type === "gabinete_bajo_esquinero_puertas" || type === "gabinete_pared_esquinero_puertas";
   const isLower = (category === "lower" || category === "corner") && !isUpperCorner;
   const isUpper = category === "upper" || isUpperCorner;
   const isTower = category === "tower";
@@ -427,6 +431,20 @@ export function ModuleInspector() {
                 <p className="mt-2 text-[10px] text-warmgray/70">
                   Invierte todo el mueble para que la esquina ciega quede del lado contrario — útil cuando la pared corre hacia el otro lado.
                 </p>
+                {isBlindCorner && (
+                  <>
+                    <FieldGroup label="Ancho de la extensión ciega">
+                      <NumInput
+                        value={opt.cornerExtensionWidthCm ?? module.dimensions.depth}
+                        onChange={(v) => updateOpt("cornerExtensionWidthCm", v)}
+                        min={10} max={120} unit="cm"
+                      />
+                    </FieldGroup>
+                    <p className="mt-2 text-[10px] text-warmgray/70">
+                      Por defecto es igual al fondo del mueble (como siempre ha sido). Cámbialo para que la extensión mantenga su tamaño aunque reduzcas el fondo — por ejemplo, para liberar más cubierta hacia el otro lado sin achicar el hueco de la esquina.
+                    </p>
+                  </>
+                )}
               </Section>
             )}
 
@@ -472,17 +490,21 @@ export function ModuleInspector() {
               </Section>
             )}
 
-            {(type === "desayunador" || type === "librero_giratorio_espejo" || opt.islandMode || opt.backPanelMaterial === "puertas" || opt.backPanelMaterial === "alacena") && (
+            {(type === "desayunador" || type === "librero_giratorio_espejo" || opt.islandMode || opt.backPanelMaterial === "puertas" || opt.backPanelMaterial === "alacena" || isBlindCorner) && (
               <Section label="Panel trasero">
                 <div className="grid grid-cols-2 gap-3">
                   <FieldGroup label="Material">
                     <SelectInput
                       value={opt.backPanelMaterial ?? "interior"}
                       onChange={(v) => updateOpt("backPanelMaterial", v)}
-                      options={type === "librero_giratorio_espejo" ? BACK_PANEL_OPTIONS.filter((o) => o.value !== "puertas" && o.value !== "alacena") : BACK_PANEL_OPTIONS.filter((o) => o.value !== "espejo")}
+                      options={
+                        type === "librero_giratorio_espejo" ? BACK_PANEL_OPTIONS.filter((o) => o.value !== "puertas" && o.value !== "alacena") :
+                        (isBlindCorner && !opt.islandMode) ? BACK_PANEL_OPTIONS.filter((o) => o.value === "interior" || o.value === "exterior" || o.value === "lambrin") :
+                        BACK_PANEL_OPTIONS.filter((o) => o.value !== "espejo")
+                      }
                     />
                   </FieldGroup>
-                  {(type === "desayunador" || opt.islandMode) && (
+                  {(type === "desayunador" || opt.islandMode || isBlindCorner) && (
                     <FieldGroup label="Vuelo extra de cubierta">
                       <NumInput value={opt.barOverhangCm ?? (type === "desayunador" ? 30 : 0)} onChange={(v) => updateOpt("barOverhangCm", v)} min={0} max={60} unit="cm" />
                     </FieldGroup>
@@ -503,6 +525,8 @@ export function ModuleInspector() {
                     ? "El respaldo queda expuesto hacia el lado del banquillo (no contra un muro), por eso lleva un acabado en vez de tablero liso. La cubierta vuela este tanto extra sobre ese lado."
                     : type === "librero_giratorio_espejo"
                     ? "El respaldo lleva un espejo en vez de tablero — visible por el lado opuesto a los estantes."
+                    : isBlindCorner && !opt.islandMode
+                    ? "Úsalo cuando este esquinero queda al final de una corrida, sin pared detrás — dale un acabado en vez de tablero liso, y vuela la cubierta ese tanto extra hacia ese lado."
                     : "Este mueble está en modo isla: el respaldo queda expuesto hacia el cuarto. Puedes dejarlo con un acabado plano, ponerle sus propias puertas, o abrirlo tipo alacena."}
                 </p>
               </Section>

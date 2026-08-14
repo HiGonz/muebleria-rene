@@ -12,7 +12,7 @@ import { Camera3DControls, type CameraAction } from "./Camera3DControls";
 import { SelectionToolbar, type NudgeDirection } from "./SelectionToolbar";
 import { getWoodTexture, getWoodRoughness } from "./woodTextures";
 import { useContextRecovery } from "./useContextRecovery";
-import { CATEGORY_ICONS, WALL_GAP_TOLERANCE_M, cornerPerpendicularRotation, cornerExtensionWorldCenterCm, isFreestandingPosition, ISLAND_ELIGIBLE_CATEGORIES, countertopFrontEdgeCoord, countertopBackEdgeCoord } from "@/services/kitchenData";
+import { CATEGORY_ICONS, WALL_GAP_TOLERANCE_M, cornerPerpendicularRotation, cornerExtensionWorldCenterCm, cornerExtensionWidthCm, isFreestandingPosition, ISLAND_ELIGIBLE_CATEGORIES, countertopFrontEdgeCoord, countertopBackEdgeCoord } from "@/services/kitchenData";
 import type { KitchenModule, WallOpening, WallSide } from "@/types/kitchen";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 
@@ -170,7 +170,7 @@ const SNAP_MIN_OVERLAP_M = 0.15;
 // matches their footprint, no widening needed.
 const BLIND_CORNER_TYPES = new Set<KitchenModule["type"]>(["gabinete_bajo_esquinero_puertas", "gabinete_pared_esquinero_puertas"]);
 function blindCornerFootprintWidth(mod: KitchenModule): number {
-  return BLIND_CORNER_TYPES.has(mod.type) ? mod.dimensions.width + mod.dimensions.depth : mod.dimensions.width;
+  return BLIND_CORNER_TYPES.has(mod.type) ? mod.dimensions.width + cornerExtensionWidthCm(mod) : mod.dimensions.width;
 }
 
 function moduleFootprint(mod: KitchenModule): { halfW: number; halfD: number } {
@@ -1422,11 +1422,19 @@ function computeCountertopRunSpans(modules: KitchenModule[]): CountertopRunSpan[
   // perpendicular wall directly instead of adding a free-floating one and
   // hoping the run-merge tolerance happens to pick it up.
   for (const mod of modules) {
-    if (!mod.options.includesCountertop || !BLIND_CORNER_TYPES.has(mod.type)) continue;
+    // Island mode means this corner cabinet isn't actually sitting flush
+    // against two perpendicular walls — it's a freestanding piece, so there
+    // is no real wall run for its blind extension to miter into. Without
+    // this guard, cornerPerpendicularRotation can (depending on rotation +
+    // cornerBlindSide) land on the SAME rotation as an unrelated cabinet
+    // meters away, and the match-by-distance search below has no way to
+    // know a stove or other gap sits physically between them — it would
+    // extend that cabinet's countertop straight across it.
+    if (!mod.options.includesCountertop || !BLIND_CORNER_TYPES.has(mod.type) || mod.options.islandMode) continue;
     const perpRotation = cornerPerpendicularRotation(mod);
     const perpIsEastWest = perpRotation === 90 || perpRotation === 270;
     const center = cornerExtensionWorldCenterCm(mod);
-    const halfDepthM = mod.dimensions.depth / 200;
+    const halfDepthM = cornerExtensionWidthCm(mod) / 200;
     const centerAlongWallM = (perpIsEastWest ? center.z : center.x) / 100;
     // The extension's two along-wall edges — which one faces the existing
     // neighboring run and which one faces the true room corner depends on
@@ -1473,18 +1481,11 @@ function computeCountertopRunSpans(modules: KitchenModule[]): CountertopRunSpan[
       }
       best.widthM = newEnd - newStart;
       best.alongWall = (newStart + newEnd) / 2;
-    } else {
-      // Blind corner extensions are always against two perpendicular walls
-      // — never an island — so frontEdgeCm/backEdgeCm just bracket the
-      // extension's own depth around its center; isIsland stays false and
-      // CountertopRunFrame never reads these two fields for it.
-      const perpDepthCoordCm = mod.dimensions.depth / 2;
-      segs.push({
-        alongWall: centerAlongWallM, widthM: mod.dimensions.depth / 100,
-        wallKey: `${perpRotation}|${Math.round(perpDepthCoordCm * 10)}`, rotation: perpRotation, topY: moduleTopY(mod),
-        isIsland: false, frontEdgeCm: perpDepthCoordCm, backEdgeCm: perpDepthCoordCm,
-      });
     }
+    // No real perpendicular neighbor with countertop within range — this
+    // corner's own segment (pushed above; footprintWidthM already folds in
+    // the blind extension) already covers its full flat board. A standalone
+    // corner never needs a diagonal miter, so there's nothing more to add.
   }
   const byWallKey = new Map<string, Seg[]>();
   for (const s of segs) {

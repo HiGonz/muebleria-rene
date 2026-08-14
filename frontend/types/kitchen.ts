@@ -344,6 +344,17 @@ export interface ModuleOptions {
   // than a fixed physical side, so this is the only thing that needs to
   // flip.
   cornerBlindSide?: "izquierda" | "derecha";
+  // Blind-corner cabinets only: width (cm) of the blind D-wide extension —
+  // undefined/omitted defaults to the cabinet's own dimensions.depth (every
+  // existing saved corner cabinet, where the extension has always been a
+  // true D×D square). Set this to decouple the extension's width from the
+  // cabinet's own depth — e.g. shrinking depth to free up more countertop
+  // overhang toward an exposed back without shrinking the blind extension
+  // to match. See cornerExtensionWidthCm() in kitchenData.ts, the single
+  // place that resolves this default — every consumer (CornerBlindCabinetMesh,
+  // the BOM pass, the diagonal-miter countertop pass) reads through it
+  // rather than falling back to dimensions.depth independently.
+  cornerExtensionWidthCm?: number;
   // Per-door hinge side override (index-aligned with the auto-generated door
   // order, left to right). Undefined/missing entries fall back to the
   // default alternating pattern (even index = hinges left, odd = hinges

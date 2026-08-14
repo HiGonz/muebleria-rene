@@ -5,6 +5,7 @@ import { OrbitControls, MeshReflectorMaterial } from "@react-three/drei";
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { MathUtils, Shape, Vector2, type Group, type Texture } from "three";
 import type { KitchenModule, DrawerDef, DoorDef, HardwareFinish, PullOutAccessoryType } from "@/types/kitchen";
+import { cornerExtensionWidthCm } from "@/services/kitchenData";
 import { getWoodTexture, getWoodRoughness } from "./woodTextures";
 import { useContextRecovery } from "./useContextRecovery";
 
@@ -1562,14 +1563,35 @@ function CornerBlindCabinetMesh({ module, wireframe = false, onSelect }: {
   const W = module.dimensions.width / 100;
   const H = module.dimensions.height / 100;
   const D = module.dimensions.depth / 100;
-  const Wt = W + D;
+  // E is the blind extension's own width — defaults to D (every existing
+  // saved corner cabinet) but can be decoupled via cornerExtensionWidthCm,
+  // e.g. to shrink D for extra back countertop overhang without shrinking
+  // the extension to match. D itself keeps meaning the cabinet's true
+  // physical depth everywhere else below (Carcass, doors, the main
+  // countertop slab's own front-to-back span).
+  const E = cornerExtensionWidthCm(module) / 100;
+  const Wt = W + E;
   const toeKick = module.options.hasToeKick ? module.options.toeKickHeight / 100 : 0;
   const ctThick = module.options.includesCountertop ? module.options.countertopThickness / 100 : 0;
   const ctOverhang = (module.options.countertopOverhang || 2) / 100;
+  // Extra countertop depth toward the BACK — same field/meaning as
+  // desayunador/island's own barOverhangCm, just exposed here too (see
+  // ModuleInspector's "Panel trasero" gate) for a corner cabinet whose back
+  // ends up exposed (e.g. a shallower D freeing up more counter toward a
+  // walkway) instead of hidden against a wall.
+  const backOverhang = (module.options.barOverhangCm || 0) / 100;
   const color = module.options.color || "#d4c5b0";
   const exteriorColor = module.options.exteriorColor || color;
   const exteriorMap = getWoodTexture(module.options.exteriorTexture);
   const exteriorRoughness = getWoodRoughness(module.options.exteriorTexture);
+  // Back panel — plain interior board by default (hidden against a wall,
+  // same as any other lower cabinet), but exterior/lambrin when this
+  // corner's back is actually exposed. See CabinetMesh's own backMode for
+  // the same idea on a plain (non-corner) cabinet — corner only offers
+  // interior/exterior/lambrin (no espejo/puertas/alacena; those don't apply
+  // to a corner's back — see the inspector's gating).
+  const backMode = module.options.backPanelMaterial ?? "interior";
+  const hasCustomBack = backMode !== "interior";
   // leftSidePanel means the extension's own outer edge here (the true
   // outer-left of the widened Wt carcass). There is no divider between the
   // original cabinet and the extension — they always share one open cavity;
@@ -1596,7 +1618,7 @@ function CornerBlindCabinetMesh({ module, wireframe = false, onSelect }: {
   const topMarginH = TOP_FACE_MARGIN_CM / 100;
   const facesTop = toeKick + Math.max(H - toeKick - ctThick - topMarginH, 0);
   // Shifts the doors' own W-wide local frame so it lands flush with the
-  // RIGHT edge of the wider Wt carcass — the blind D-wide extension sits
+  // RIGHT edge of the wider Wt carcass — the blind E-wide extension sits
   // untouched to its left. Every option this cabinet uses (leftSidePanel,
   // rightSidePanel, leftFrontSidePanel) is already documented as meaning
   // "the extension's own outer edge" / "the cabinet's true outer edge"
@@ -1605,12 +1627,19 @@ function CornerBlindCabinetMesh({ module, wireframe = false, onSelect }: {
   // extension sits on without changing what any option means. Three.js
   // flips face winding automatically for a negative-determinant transform,
   // so lighting/culling stay correct with no per-face changes needed.
-  const doorGroupX = D / 2;
+  const doorGroupX = E / 2;
   const mirrored = module.options.cornerBlindSide === "derecha";
 
   return (
     <group scale={mirrored ? [-1, 1, 1] : [1, 1, 1]}>
-      <Carcass W={Wt} H={H} D={D} color={color} leftColor={leftColor} rightColor={rightColor} leftMap={leftMap} rightMap={rightMap} hasTop={ctThick === 0} wireframe={wireframe} />
+      <Carcass W={Wt} H={H} D={D} color={color} leftColor={leftColor} rightColor={rightColor} leftMap={leftMap} rightMap={rightMap} hasTop={ctThick === 0} hasBack={!hasCustomBack} wireframe={wireframe} />
+      {hasCustomBack && (
+        backMode === "lambrin" ? (
+          <LambrinPanel pos={[0, H / 2, -D / 2 + T / 2]} faceW={Wt - T * 2} faceH={H - T * 2} horizontal outward={-1} color={exteriorColor} map={exteriorMap} roughness={exteriorRoughness} wireframe={wireframe} />
+        ) : (
+          <Box pos={[0, H / 2, -D / 2 + T / 2]} size={[Wt - T * 2, H - T * 2, T]} color={exteriorColor} map={exteriorMap} roughness={exteriorRoughness} wireframe={wireframe} />
+        )
+      )}
       {module.options.leftSidePanel !== "exterior" && (
         <SideFiller side="left" W={Wt} H={H} D={D} color={exteriorColor} map={exteriorMap} roughness={exteriorRoughness} wireframe={wireframe} />
       )}
@@ -1639,6 +1668,11 @@ function CornerBlindCabinetMesh({ module, wireframe = false, onSelect }: {
         const dropR = ctThick;
         const frontZ = D / 2 + ctOverhang;
         const flatZ = frontZ - dropR;
+        // Back edge — flush with the carcass by default, pushed out by
+        // backOverhang when this corner's back is exposed (see backMode
+        // above). Spans the full slabW below, so it extends uniformly
+        // across both the door zone and the extension zone as one edge.
+        const backZ = D / 2 + backOverhang;
         // Slab pokes ~1cm proud of the carcass on each side.
         const PAD = 0.01;
         const slabW = Wt + PAD * 2;
@@ -1650,16 +1684,16 @@ function CornerBlindCabinetMesh({ module, wireframe = false, onSelect }: {
         return (
           <>
             <Box
-              pos={[0, H + ctThick / 2, (flatZ - D / 2) / 2]}
-              size={[slabW, ctThick, flatZ + D / 2]}
+              pos={[0, H + ctThick / 2, (flatZ - backZ) / 2]}
+              size={[slabW, ctThick, flatZ + backZ]}
               color={ctColor} map={ctMap} roughness={ctRoughness} metalness={ctMetalness} wireframe={wireframe}
             />
             <group position={[bullnoseX, 0, 0]}>
               <CountertopDropEdge W={bullnoseW} bottomY={H - dropR} thickness={2 * dropR} flatZ={flatZ} color={ctColor} map={ctMap} roughness={ctRoughness} metalness={ctMetalness} wireframe={wireframe} />
             </group>
             <Box
-              pos={[-Wt / 2 + D / 2, H + ctThick / 2, (flatZ + frontZ) / 2]}
-              size={[D, ctThick, frontZ - flatZ]}
+              pos={[-Wt / 2 + E / 2, H + ctThick / 2, (flatZ + frontZ) / 2]}
+              size={[E, ctThick, frontZ - flatZ]}
               color={ctColor} map={ctMap} roughness={ctRoughness} metalness={ctMetalness} wireframe={wireframe}
             />
           </>
@@ -1680,8 +1714,8 @@ function CornerBlindCabinetMesh({ module, wireframe = false, onSelect }: {
           as a fake door front that doesn't open. */}
       {module.options.leftFrontSidePanel === "interior" && (
         <Box
-          pos={[-Wt / 2 + D / 2, toeKick + (facesTop - toeKick) / 2, D / 2 + 0.01]}
-          size={[D - 0.006, Math.max(facesTop - toeKick, 0), 0.019]}
+          pos={[-Wt / 2 + E / 2, toeKick + (facesTop - toeKick) / 2, D / 2 + 0.01]}
+          size={[E - 0.006, Math.max(facesTop - toeKick, 0), 0.019]}
           color={color} roughness={0.72} wireframe={wireframe}
         />
       )}

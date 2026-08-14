@@ -1525,24 +1525,37 @@ export function cornerPerpendicularRotation(mod: Pick<KitchenModule, "rotation" 
   return ((mod.rotation + (mirrored ? 270 : 90)) % 360) as KitchenModule["rotation"];
 }
 
+// Blind-corner cabinets only: width (cm) of the blind extension. Defaults to
+// the cabinet's own depth — matching every existing saved corner cabinet,
+// where the extension has always been a true depth×depth square — unless
+// options.cornerExtensionWidthCm overrides it (see that field's own comment
+// in types/kitchen.ts). Every place that needs "how wide is this corner's
+// blind extension" reads through this one function instead of re-deriving
+// the depth default independently, so decoupling stays consistent across
+// rendering, collision, and pricing.
+export function cornerExtensionWidthCm(mod: Pick<KitchenModule, "dimensions" | "options">): number {
+  return mod.options.cornerExtensionWidthCm ?? mod.dimensions.depth;
+}
+
 // World-space center of a blind-corner cabinet's own extension block — the
-// D×D (depth×depth) slice of its widened Wt=width+depth carcass that sits
-// on whichever side cornerBlindSide picks, D/2 in from that carcass's outer
-// edge (matching CornerBlindCabinetMesh's own local geometry). Used to place
-// the diagonal-miter countertop segment this extension needs on the
-// PERPENDICULAR wall (see cornerPerpendicularRotation and the
-// includesCountertop call site) at the position along that wall where the
-// two runs actually meet, instead of guessing from room dimensions.
+// E×D (extension-width × depth) slice of its widened Wt=width+extension
+// carcass that sits on whichever side cornerBlindSide picks, E/2 in from
+// that carcass's outer edge (matching CornerBlindCabinetMesh's own local
+// geometry). Used to place the diagonal-miter countertop segment this
+// extension needs on the PERPENDICULAR wall (see cornerPerpendicularRotation
+// and the includesCountertop call site) at the position along that wall
+// where the two runs actually meet, instead of guessing from room dimensions.
 export function cornerExtensionWorldCenterCm(mod: Pick<KitchenModule, "x" | "z" | "rotation" | "dimensions" | "options">): { x: number; z: number } {
-  const Wt = mod.dimensions.width + mod.dimensions.depth;
+  const E = cornerExtensionWidthCm(mod);
+  const Wt = mod.dimensions.width + E;
   const mirrored = mod.options.cornerBlindSide === "derecha";
-  const xLocal = mirrored ? Wt / 2 - mod.dimensions.depth / 2 : -Wt / 2 + mod.dimensions.depth / 2;
+  const xLocal = mirrored ? Wt / 2 - E / 2 : -Wt / 2 + E / 2;
   const theta = (mod.rotation * Math.PI) / 180;
   return { x: mod.x + xLocal * Math.cos(theta), z: mod.z - xLocal * Math.sin(theta) };
 }
 
-function footprintHalfExtentsCm(mod: Pick<KitchenModule, "type" | "dimensions" | "rotation">): { halfW: number; halfD: number } {
-  const footprintWidth = BLIND_CORNER_TYPES.has(mod.type) ? mod.dimensions.width + mod.dimensions.depth : mod.dimensions.width;
+function footprintHalfExtentsCm(mod: Pick<KitchenModule, "type" | "dimensions" | "rotation" | "options">): { halfW: number; halfD: number } {
+  const footprintWidth = BLIND_CORNER_TYPES.has(mod.type) ? mod.dimensions.width + cornerExtensionWidthCm(mod) : mod.dimensions.width;
   const isRotated = mod.rotation === 90 || mod.rotation === 270;
   return isRotated
     ? { halfW: mod.dimensions.depth / 2, halfD: footprintWidth / 2 }
@@ -1781,7 +1794,7 @@ export function calculateKitchenMaterials(modules: KitchenModule[]): { lines: Ki
     // boards joined at the seam. Doors and side panels still key off the
     // original d.width/d.depth — only these structural, wall-to-wall panels
     // grow to panelWidth.
-    const panelWidth = (mod.type === "gabinete_bajo_esquinero_puertas" || mod.type === "gabinete_pared_esquinero_puertas") ? d.width + d.depth : d.width;
+    const panelWidth = (mod.type === "gabinete_bajo_esquinero_puertas" || mod.type === "gabinete_pared_esquinero_puertas") ? d.width + cornerExtensionWidthCm(mod) : d.width;
 
     if (mod.category === "lower" || mod.category === "upper" || mod.category === "tower" || mod.category === "corner") {
       if (mod.type === "corona_luz") {
@@ -2055,11 +2068,20 @@ export function calculateKitchenMaterials(modules: KitchenModule[]): { lines: Ki
   // same-wall segment is safe even with a wide margin.
   const CORNER_NEIGHBOR_MATCH_M = 1;
   for (const mod of modules) {
-    if (!mod.options.includesCountertop || !BLIND_CORNER_TYPES.has(mod.type)) continue;
+    // Island mode means this corner cabinet isn't actually sitting flush
+    // against two perpendicular walls — it's a freestanding piece, so there
+    // is no real wall run for its blind extension to miter into. Without
+    // this guard, cornerPerpendicularRotation can (depending on rotation +
+    // cornerBlindSide) land on the SAME rotation as an unrelated cabinet
+    // meters away, and the match-by-distance search below has no way to
+    // know a stove or other gap sits physically between them — it would
+    // extend that cabinet's countertop straight across it. See the
+    // identical guard in KitchenAssemblyScene.tsx.
+    if (!mod.options.includesCountertop || !BLIND_CORNER_TYPES.has(mod.type) || mod.options.islandMode) continue;
     const perpRotation = cornerPerpendicularRotation(mod);
     const perpIsEastWest = perpRotation === 90 || perpRotation === 270;
     const center = cornerExtensionWorldCenterCm(mod);
-    const halfDepthM = mod.dimensions.depth / 200;
+    const halfDepthM = cornerExtensionWidthCm(mod) / 200;
     const centerAlongWallM = (perpIsEastWest ? center.z : center.x) / 100;
     // The extension's two along-wall edges — which one faces the existing
     // neighboring run and which one faces the true room corner isn't a
@@ -2104,15 +2126,11 @@ export function calculateKitchenMaterials(modules: KitchenModule[]): { lines: Ki
       }
       best.widthM = newEnd - newStart;
       best.alongWall = (newStart + newEnd) / 2;
-    } else {
-      // No real neighbor on that wall to attach to (e.g. this corner
-      // cabinet is standing alone) — the miter still needs SOME material,
-      // so it lands as its own small segment instead of silently vanishing.
-      const { label, cost } = resolveCountertopCost(mod.options);
-      addCountertop(label, mod.dimensions.depth / 100, cost, mod, false, {
-        rotation: perpRotation, alongWall: centerAlongWallM, depthCoord: mod.dimensions.depth / 2,
-      });
     }
+    // No real neighbor on that wall to attach to (e.g. this corner cabinet
+    // is standing alone) — its own segment (panelWidth = width+depth, added
+    // above) already bills its full flat board. A standalone corner never
+    // needs a diagonal miter, so there's nothing more to add here.
   }
 
   // ── Edge banding — one consolidated line per profile; expandable into a
@@ -2346,21 +2364,7 @@ export function calculateKitchenMaterials(modules: KitchenModule[]): { lines: Ki
         }))
         .sort((a, b) => a.part.localeCompare(b.part) || b.width * b.height - a.width * a.height);
 
-      // Simple per-sheet cut diagram: group each placed piece by sheet index
-      // so a carpenter can see roughly where each cut goes on each physical
-      // sheet — moduleId/moduleLabel ride along so the summary UI can filter
-      // "just this module's pieces" (see the module picker in KitchenSummary.tsx).
-      const sheetLayouts: { part: string; x: number; y: number; width: number; height: number; moduleId?: string; moduleLabel?: string }[][] = Array.from(
-        { length: result.sheets },
-        () => []
-      );
-      for (const p of result.placements) {
-        sheetLayouts[p.sheet]?.push({ part: p.label ?? "", x: p.x, y: p.y, width: p.width, height: p.height, moduleId: p.moduleId, moduleLabel: p.moduleLabel });
-      }
-
-      // Safety-margin sheets, bought on top of the real packed count but
-      // never drawn into the cut diagram above (sheetLayouts stays sized to
-      // result.sheets — there's nothing to cut on a margin sheet yet).
+      // Safety-margin sheets, bought on top of the real packed count.
       // Interior: shop always wants 2 spare sheets per material, for
       // cutting errors/damaged pieces/mid-project changes — unconditional.
       // Exterior: only worth keeping a spare if the LAST sheet the packer
@@ -2380,12 +2384,30 @@ export function calculateKitchenMaterials(modules: KitchenModule[]): { lines: Ki
           .filter((p) => p.sheet === lastSheetIndex)
           .reduce((sum, p) => sum + p.width * p.height, 0);
         const lastSheetUtilizationPct = (lastSheetUsedCm2 / sheetAreaCm2) * 100;
-        if (lastSheetUtilizationPct > 50) {
+        if (lastSheetUtilizationPct >= 80) {
+          marginSheets = 2;
+          marginNote = ` + 2 hojas de margen (última hoja al ${Math.round(lastSheetUtilizationPct)}% de aprovechamiento)`;
+        } else if (lastSheetUtilizationPct >= 50) {
           marginSheets = 1;
           marginNote = ` + 1 hoja de margen (última hoja al ${Math.round(lastSheetUtilizationPct)}% de aprovechamiento)`;
         }
       }
       const finalSheets = result.sheets + marginSheets;
+
+      // Simple per-sheet cut diagram: group each placed piece by sheet index
+      // so a carpenter can see roughly where each cut goes on each physical
+      // sheet — moduleId/moduleLabel ride along so the summary UI can filter
+      // "just this module's pieces" (see the module picker in KitchenSummary.tsx).
+      // Sized to finalSheets (not just result.sheets) so the margin sheets
+      // added above show up too — empty (nothing placed on them yet), but
+      // visible in the cut diagram as real spare sheets to have on hand.
+      const sheetLayouts: { part: string; x: number; y: number; width: number; height: number; moduleId?: string; moduleLabel?: string }[][] = Array.from(
+        { length: finalSheets },
+        () => []
+      );
+      for (const p of result.placements) {
+        sheetLayouts[p.sheet]?.push({ part: p.label ?? "", x: p.x, y: p.y, width: p.width, height: p.height, moduleId: p.moduleId, moduleLabel: p.moduleLabel });
+      }
 
       addLine(
         `Hojas ${poolLabel} ${material} — ${result.pieceCount} piezas (${netAreaM2.toFixed(2)} m² útiles · ${utilization}% aprovechamiento · ${waste}% desperdicio, por eso se necesitan ${result.sheets} hojas de ${STANDARD_SHEET_WIDTH_CM / 100}×${STANDARD_SHEET_HEIGHT_CM / 100} m${marginNote})`,
