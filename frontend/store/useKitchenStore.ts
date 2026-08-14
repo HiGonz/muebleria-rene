@@ -17,6 +17,11 @@ import type {
 // per-module edit fans out to the whole kitchen). A brand-new module picks
 // these up from whatever's already in the room instead of falling back to
 // the catalog's own hardcoded defaults, so it never shows up mismatched.
+// Board material/thickness is deliberately NOT in this list — interior is
+// always "Melamina blanca 15mm" and exterior always "MDF 18mm" for a new
+// module, regardless of what applyExteriorToAll set on the rest of the
+// room (that still freely repaints existing modules; it just no longer
+// seeds new ones). exteriorTexture (the finish/color) still inherits.
 type PersistedKitchenState = { draft: KitchenDraft; projectId: number | null };
 
 const PERSIST_DEBOUNCE_MS = 500;
@@ -52,7 +57,7 @@ function createDebouncedLocalStorage(delayMs: number): PersistStorage<PersistedK
 }
 
 const GLOBAL_MATERIAL_FIELDS = [
-  "exteriorMaterial", "exteriorTexture", "hardwareFinish", "zocaloMaterial",
+  "exteriorTexture", "hardwareFinish", "zocaloMaterial",
   "countertopModel", "countertopMaterial", "countertopColor", "countertopTexture",
 ] as const satisfies readonly (keyof ModuleOptions)[];
 

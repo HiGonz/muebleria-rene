@@ -18,6 +18,54 @@ import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 
 const SHOW_DIMENSIONS_KEY = "kitchen-show-dimensions";
 
+// ─── Camera view persistence ─────────────────────────────────────────────────
+// Remembers the last camera position + orbit target the user left the scene
+// at, keyed per project (editor) or per share token (public viewer) — see
+// cameraPersistKey on KitchenAssemblySceneProps. Plain localStorage I/O, same
+// as SHOW_DIMENSIONS_KEY above, deliberately outside the Zustand store: this
+// is imperative camera/view state, not draft data, and doesn't need to be
+// reactive or trigger re-renders.
+const CAMERA_PERSIST_DEBOUNCE_MS = 500;
+
+interface PersistedCameraView {
+  position: [number, number, number];
+  target: [number, number, number];
+}
+
+function cameraStorageKey(persistKey: string | number): string {
+  return `kitchen-camera:${persistKey}`;
+}
+
+function readPersistedCameraView(persistKey: string | number | null | undefined): PersistedCameraView | null {
+  if (persistKey == null || typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(cameraStorageKey(persistKey));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<PersistedCameraView>;
+    if (!Array.isArray(parsed.position) || parsed.position.length !== 3 || !Array.isArray(parsed.target) || parsed.target.length !== 3) return null;
+    return parsed as PersistedCameraView;
+  } catch {
+    return null;
+  }
+}
+
+// OrbitControls' onChange fires on every pointermove during a drag/zoom/pan
+// — writing straight through would hammer localStorage many times a second.
+// This coalesces a burst of interaction into one write after the camera
+// settles, same rationale and delay as PERSIST_DEBOUNCE_MS in
+// useKitchenStore.ts.
+function createDebouncedCameraWriter(delayMs: number) {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  return (persistKey: string | number, view: PersistedCameraView) => {
+    if (typeof window === "undefined") return;
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(() => {
+      window.localStorage.setItem(cameraStorageKey(persistKey), JSON.stringify(view));
+      timer = null;
+    }, delayMs);
+  };
+}
+
 // ─── Drag-to-reposition types ──────────────────────────────────────────────────
 // The room has no rotation/offset of its own, so raycasting the pointer against
 // the floor plane (y=0) gives room-space (x,z) directly — no per-wall local-space
@@ -535,11 +583,25 @@ function setGrabCursor(hover: boolean) {
 }
 
 // ─── Camera Rig ───────────────────────────────────────────────────────────────
-function CameraRig({ target }: { target: [number, number, number] }) {
+function CameraRig({ target, initialOrbitTarget, controlsRef }: {
+  target: [number, number, number];
+  // The user's last-saved orbit target (look-at point) — applied once on
+  // mount only, separate from the position effect below, since camera
+  // presets (Reset/Frontal/...) only ever change position, never this.
+  initialOrbitTarget?: [number, number, number] | null;
+  controlsRef?: RefObject<OrbitControlsImpl | null>;
+}) {
   const { camera } = useThree();
   useEffect(() => {
     camera.position.set(...target);
   }, [camera, target]);
+  useEffect(() => {
+    if (initialOrbitTarget && controlsRef?.current) {
+      controlsRef.current.target.set(...initialOrbitTarget);
+      controlsRef.current.update();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   return null;
 }
 
@@ -1366,19 +1428,36 @@ function computeCountertopRunSpans(modules: KitchenModule[]): CountertopRunSpan[
     const center = cornerExtensionWorldCenterCm(mod);
     const halfDepthM = mod.dimensions.depth / 200;
     const centerAlongWallM = (perpIsEastWest ? center.z : center.x) / 100;
-    const cornerPointM = centerAlongWallM - halfDepthM;
-    const neighborEdgeM = centerAlongWallM + halfDepthM;
+    // The extension's two along-wall edges — which one faces the existing
+    // neighboring run and which one faces the true room corner depends on
+    // which side of the room this corner is on (NW vs NE/SW/SE) and isn't
+    // fixed to a sign: for an NW corner the neighbor sits at the HIGHER
+    // coordinate and the corner at the lower one, but for an NE corner it's
+    // reversed (the neighbor run ends at the LOWER coordinate, the corner —
+    // the far wall — is at the HIGHER one). Rather than assuming a fixed
+    // +/- direction (which only matched the NW case and squared off every
+    // other corner), try both edges against every candidate segment below
+    // and let whichever one actually lands next to a real segment be the
+    // neighbor edge; the other one is the corner point to extend to.
+    const edgeLow = centerAlongWallM - halfDepthM;
+    const edgeHigh = centerAlongWallM + halfDepthM;
 
     let best: Seg | null = null;
     let bestDist = Infinity;
+    let neighborEdgeM = edgeHigh;
+    let cornerPointM = edgeLow;
     for (const seg of segs) {
       if (seg.rotation !== perpRotation) continue;
       const segStart = seg.alongWall - seg.widthM / 2;
       const segEnd = seg.alongWall + seg.widthM / 2;
-      const dist = Math.min(Math.abs(segStart - neighborEdgeM), Math.abs(segEnd - neighborEdgeM));
-      if (dist < bestDist) {
-        bestDist = dist;
-        best = seg;
+      for (const edge of [edgeLow, edgeHigh]) {
+        const dist = Math.min(Math.abs(segStart - edge), Math.abs(segEnd - edge));
+        if (dist < bestDist) {
+          bestDist = dist;
+          best = seg;
+          neighborEdgeM = edge;
+          cornerPointM = edge === edgeLow ? edgeHigh : edgeLow;
+        }
       }
     }
 
@@ -2668,8 +2747,21 @@ function AssemblyContent({
       endDrag(handleMove, handleUp, pointerId);
     };
 
-    if (controlsRef.current) controlsRef.current.enabled = false;
-    try { gl.domElement.setPointerCapture(pointerId); } catch { /* pointer already captured */ }
+    // Only claim the gesture from OrbitControls once this module is
+    // actually armed for move ("Mover" button) — otherwise a touch here is
+    // either a tap (selects, handled below via CLICK_DISTANCE_PX) or an
+    // unarmed drag that never moves anything (handleMove bails out via the
+    // moveMode?.id check). Letting an unarmed drag reach OrbitControls too
+    // means the camera can be orbited by dragging over ANY cabinet — not
+    // just over a literal patch of visible floor/wall — which is the whole
+    // point when cabinets cover most of the screen on mobile. An armed drag
+    // keeps disabling the camera exactly as before, so repositioning a
+    // module never also spins the view underneath it.
+    const armedForMove = moveMode?.id === mod.id;
+    if (armedForMove) {
+      if (controlsRef.current) controlsRef.current.enabled = false;
+      try { gl.domElement.setPointerCapture(pointerId); } catch { /* pointer already captured */ }
+    }
     dragRef.current = {
       id: mod.id, startPointerX: hit.x, startPointerZ: hit.z, startX: mod.x / 100, startZ: mod.z / 100, pointerId,
       startClientX: e.nativeEvent.clientX, startClientY: e.nativeEvent.clientY,
@@ -2783,10 +2875,15 @@ interface KitchenAssemblySceneProps {
   // list (isolate/hide/delete controls), which has no editing callback of
   // its own to gate on.
   readOnly?: boolean;
+  // Key for remembering the last camera view (position + orbit target) in
+  // localStorage — see the camera-persistence helpers above. The editor
+  // passes its projectId, the public viewer its share token; omitted (e.g.
+  // an unsaved draft with no projectId yet) just skips persistence.
+  cameraPersistKey?: string | number | null;
 }
 
 function KitchenAssemblySceneImpl({
-  modules, roomWidth, roomDepth, ceilingHeight, openings = [], onModuleMove, onModuleActivate, onModuleNudge, onModuleRemove, onModuleToggleLock, onOpeningMove, onUndo, undoCount = 0, onRedo, redoCount = 0, readOnly = false,
+  modules, roomWidth, roomDepth, ceilingHeight, openings = [], onModuleMove, onModuleActivate, onModuleNudge, onModuleRemove, onModuleToggleLock, onOpeningMove, onUndo, undoCount = 0, onRedo, redoCount = 0, readOnly = false, cameraPersistKey,
 }: KitchenAssemblySceneProps) {
   const [wireframe, setWireframe] = useState(false);
   const [showLabels, setShowLabels] = useState(false);
@@ -2830,8 +2927,20 @@ function KitchenAssemblySceneImpl({
   const centerX = roomWidthM / 2;
   const centerZ = roomDepthM / 2;
   const resetTarget: [number, number, number] = [centerX + 1, 2.8, roomDepthM + 3];
-  const [cameraTarget, setCameraTarget] = useState<[number, number, number]>(resetTarget);
+  // Read once per mount/key-change — a fresh camera view saved from a
+  // previous visit to this same project/share link, if any.
+  const persistedCamera = useMemo(() => readPersistedCameraView(cameraPersistKey), [cameraPersistKey]);
+  const [cameraTarget, setCameraTarget] = useState<[number, number, number]>(() => persistedCamera?.position ?? resetTarget);
   const controlsRef = useRef<OrbitControlsImpl>(null);
+  const writeCameraView = useMemo(() => createDebouncedCameraWriter(CAMERA_PERSIST_DEBOUNCE_MS), []);
+  const handleCameraChange = useCallback(() => {
+    if (cameraPersistKey == null) return;
+    const controls = controlsRef.current;
+    if (!controls) return;
+    const pos = controls.object.position;
+    const tgt = controls.target;
+    writeCameraView(cameraPersistKey, { position: [pos.x, pos.y, pos.z], target: [tgt.x, tgt.y, tgt.z] });
+  }, [cameraPersistKey, writeCameraView]);
 
   const { instanceKey, handleCreated: handleCanvasCreated } = useContextRecovery();
 
@@ -3035,7 +3144,7 @@ function KitchenAssemblySceneImpl({
         onPointerMissed={() => { setSelectedId(null); onModuleActivate?.(null); }}
       >
         <color attach="background" args={["#1c1c28"]} />
-        <CameraRig target={cameraTarget} />
+        <CameraRig target={cameraTarget} initialOrbitTarget={persistedCamera?.target ?? null} controlsRef={controlsRef} />
         <OrbitControls
           ref={controlsRef}
           target={[centerX, 0.9, centerZ]}
@@ -3044,6 +3153,7 @@ function KitchenAssemblySceneImpl({
           enablePan
           panSpeed={1.2}
           screenSpacePanning
+          onChange={handleCameraChange}
         />
 
         <ambientLight intensity={1} />

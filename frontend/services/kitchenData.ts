@@ -2061,19 +2061,34 @@ export function calculateKitchenMaterials(modules: KitchenModule[]): { lines: Ki
     const center = cornerExtensionWorldCenterCm(mod);
     const halfDepthM = mod.dimensions.depth / 200;
     const centerAlongWallM = (perpIsEastWest ? center.z : center.x) / 100;
-    const cornerPointM = centerAlongWallM - halfDepthM; // where the two walls actually meet
-    const neighborEdgeM = centerAlongWallM + halfDepthM; // where a flush neighbor's slab should already start
+    // The extension's two along-wall edges — which one faces the existing
+    // neighboring run and which one faces the true room corner isn't a
+    // fixed sign: it depends on which side of the room this corner is on
+    // (e.g. an NW corner's neighbor sits at the HIGHER coordinate and the
+    // corner at the lower one, but an NE corner is reversed). Try both
+    // edges against every candidate segment and let whichever one actually
+    // lands next to a real segment be the neighbor edge; the other is the
+    // corner point to extend to — see the identical pass in
+    // KitchenAssemblyScene.tsx for the full rationale.
+    const edgeLow = centerAlongWallM - halfDepthM;
+    const edgeHigh = centerAlongWallM + halfDepthM;
 
     let best: CountertopSegment | null = null;
     let bestDist = Infinity;
+    let neighborEdgeM = edgeHigh;
+    let cornerPointM = edgeLow;
     for (const seg of countertopSegments) {
       if (seg.rotation !== perpRotation) continue;
       const segStart = seg.alongWall - seg.widthM / 2;
       const segEnd = seg.alongWall + seg.widthM / 2;
-      const dist = Math.min(Math.abs(segStart - neighborEdgeM), Math.abs(segEnd - neighborEdgeM));
-      if (dist < bestDist) {
-        bestDist = dist;
-        best = seg;
+      for (const edge of [edgeLow, edgeHigh]) {
+        const dist = Math.min(Math.abs(segStart - edge), Math.abs(segEnd - edge));
+        if (dist < bestDist) {
+          bestDist = dist;
+          best = seg;
+          neighborEdgeM = edge;
+          cornerPointM = edge === edgeLow ? edgeHigh : edgeLow;
+        }
       }
     }
 

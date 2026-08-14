@@ -16,10 +16,14 @@ const KitchenAssemblyScene = dynamic(() => import("@/components/3d/KitchenAssemb
 export default function PublicKitchenViewerPage({ params }: { params: Promise<{ token: string }> }) {
   const [view, setView] = useState<PublicKitchenView | null>(null);
   const [notFound, setNotFound] = useState(false);
+  const [token, setToken] = useState<string | null>(null);
 
   useEffect(() => {
     params
-      .then(({ token }) => getPublicKitchenShare(token))
+      .then(({ token }) => {
+        setToken(token);
+        return getPublicKitchenShare(token);
+      })
       .then(setView)
       .catch(() => setNotFound(true));
   }, [params]);
@@ -55,6 +59,7 @@ export default function PublicKitchenViewerPage({ params }: { params: Promise<{ 
           roomDepth={view.roomDepth}
           ceilingHeight={view.ceilingHeight}
           openings={view.openings}
+          cameraPersistKey={token}
         />
       </div>
     </div>

@@ -3,9 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { AnimatePresence, motion } from "framer-motion";
-import { Settings, Sparkles, Palette, Ruler, ChevronDown, Share2, MoreVertical } from "lucide-react";
+import { Settings, Palette, Share2, MoreVertical } from "lucide-react";
 import { toast } from "sonner";
-import type { SampleKitchenVariant } from "@/services/kitchenData";
 import { getKitchenProject, saveKitchenProject } from "@/services/api";
 import { useKitchenStore } from "@/store/useKitchenStore";
 import { useIsMobile } from "@/lib/useIsMobile";
@@ -14,7 +13,6 @@ import { ModuleInspector } from "./ModuleInspector";
 import { KitchenSummary } from "./KitchenSummary";
 import { BuilderFab } from "./BuilderFab";
 import { GlobalMaterialsModal } from "./GlobalMaterialsModal";
-import { GlobalHeightsModal } from "./GlobalHeightsModal";
 import { RoomSettingsModal } from "./RoomSettingsModal";
 import { ShareModal } from "./ShareModal";
 import { Button } from "@/components/ui/button";
@@ -34,15 +32,9 @@ const TABS = [
   { id: "summary" as const, label: "Resumen",  icon: "📋" },
 ];
 
-const SAMPLE_KITCHENS: { variant: SampleKitchenVariant; label: string; hint: string }[] = [
-  { variant: 1, label: "Cocina 1", hint: "Normal · doble alacena aérea" },
-  { variant: 2, label: "Cocina 2", hint: "Isla · cocina de puente" },
-  { variant: 3, label: "Cocina 3", hint: "Corona de luz" },
-];
-
 export function KitchenBuilder() {
   const {
-    draft, projectId, activeTab, showSelector, setActiveTab, resetDraft, loadSampleKitchen, loadProject, updateModulePosition, nudgeModule,
+    draft, projectId, activeTab, showSelector, setActiveTab, resetDraft, loadProject, updateModulePosition, nudgeModule,
     openSelector, setEditingModule, undoStack, redoStack, undo, redo, updateOpening, removeModule, toggleModuleLock,
   } = useKitchenStore();
   const handleOpeningMove = useCallback((id: string, offset: number) => updateOpening(id, { offset }), [updateOpening]);
@@ -68,46 +60,43 @@ export function KitchenBuilder() {
   const searchParams = useSearchParams();
   const [showRoomSettings, setShowRoomSettings] = useState(false);
   const [showGlobalMaterials, setShowGlobalMaterials] = useState(false);
-  const [showGlobalHeights, setShowGlobalHeights] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
-  const [showSampleMenu, setShowSampleMenu] = useState(false);
   const [saving, setSaving] = useState(false);
-  const sampleMenuRef = useRef<HTMLDivElement>(null);
   // Everything the full desktop header shows inline (project name/client,
-  // Nuevo, Compartir, Habitación, Materiales, Alturas, Cocina de muestra,
-  // Guardar) collapses into this one menu below 768px — see the compact
-  // mobile header further down. Desktop (md:) is untouched.
+  // Nuevo, Compartir, Habitación, Materiales, Guardar) collapses into this
+  // one menu below 768px — see the compact mobile header further down.
+  // Desktop (md:) is untouched.
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const mobileMenuRef = useRef<HTMLDivElement>(null);
 
   // Loading /kitchen?projectId=123 pulls that saved project from the backend
   // into the draft — only once per id, so it doesn't clobber edits in progress.
   const loadedProjectIdRef = useRef<number | null>(null);
+  // Gates rendering while the target project's data hasn't arrived yet —
+  // without this, navigating straight from one saved project to another
+  // re-mounts this component with the OUTGOING project's draft still sitting
+  // in the (page-level) store, and it flashes on screen for the second or
+  // two the fetch below takes before loadProject() swaps it out. Lazily
+  // initialized so a fresh mount whose URL already wants a different
+  // project than what's currently in the store starts in the loading state
+  // from the very first paint, instead of flashing the stale draft first.
+  const [projectLoading, setProjectLoading] = useState(() => {
+    const param = searchParams.get("projectId");
+    const id = param ? Number(param) : null;
+    return id !== null && !Number.isNaN(id) && id !== projectId;
+  });
   useEffect(() => {
     const param = searchParams.get("projectId");
     const id = param ? Number(param) : null;
     if (id === null || Number.isNaN(id) || loadedProjectIdRef.current === id) return;
     loadedProjectIdRef.current = id;
+    setProjectLoading(true);
     getKitchenProject(id)
       .then((remoteDraft) => loadProject(id, remoteDraft))
-      .catch(() => toast.error("No fue posible cargar el proyecto de cocina."));
+      .catch(() => toast.error("No fue posible cargar el proyecto de cocina."))
+      .finally(() => setProjectLoading(false));
   }, [searchParams, loadProject]);
 
-  useEffect(() => {
-    if (!showSampleMenu) return;
-    const onClickOutside = (e: MouseEvent) => {
-      // The sample-kitchen options render a second time inside the mobile
-      // menu (see the compact mobile header below) — its own dropdown lives
-      // in the desktop-only header, hidden on mobile, so a click on the
-      // mobile copy would otherwise always read as "outside" and
-      // self-close on mousedown before the click handler even runs.
-      const target = e.target as Node;
-      if ((sampleMenuRef.current?.contains(target)) || (mobileMenuRef.current?.contains(target))) return;
-      setShowSampleMenu(false);
-    };
-    document.addEventListener("mousedown", onClickOutside);
-    return () => document.removeEventListener("mousedown", onClickOutside);
-  }, [showSampleMenu]);
   useEffect(() => {
     if (!showMobileMenu) return;
     const onClickOutside = (e: MouseEvent) => {
@@ -151,6 +140,14 @@ export function KitchenBuilder() {
       setSaving(false);
     }
   };
+
+  if (projectLoading) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-ink">
+        <div className="h-10 w-10 animate-spin rounded-full border-2 border-brass border-t-transparent" />
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-screen flex-col bg-ink text-ivory overflow-hidden">
@@ -207,54 +204,6 @@ export function KitchenBuilder() {
             <Palette size={14} />
             <span className="hidden sm:inline sm:ml-1.5">Materiales</span>
           </Button>
-          <Button
-            variant="ghost"
-            className="h-8 w-8 px-0 text-xs sm:w-auto sm:px-3"
-            onClick={() => setShowGlobalHeights(true)}
-            title="Alturas globales"
-            aria-label="Alturas globales"
-          >
-            <Ruler size={14} />
-            <span className="hidden sm:inline sm:ml-1.5">Alturas</span>
-          </Button>
-          <div className="relative" ref={sampleMenuRef}>
-            <Button
-              variant="ghost"
-              className="h-8 w-8 px-0 text-xs sm:w-auto sm:px-3"
-              onClick={() => setShowSampleMenu((v) => !v)}
-              title="Cocina de muestra"
-              aria-label="Cocina de muestra"
-              aria-haspopup="menu"
-              aria-expanded={showSampleMenu}
-            >
-              <Sparkles size={14} />
-              <span className="hidden sm:inline sm:ml-1.5">Cocina de muestra</span>
-              <ChevronDown size={12} className="hidden sm:inline sm:ml-1" />
-            </Button>
-            {showSampleMenu && (
-              <div
-                role="menu"
-                aria-label="Elegir cocina de muestra"
-                className="absolute right-0 top-full z-20 mt-1.5 w-52 overflow-hidden rounded-xl border border-ivory/12 bg-ink/95 p-1 shadow-[0_8px_24px_rgba(0,0,0,0.5)] backdrop-blur-md"
-              >
-                {SAMPLE_KITCHENS.map((k) => (
-                  <button
-                    key={k.variant}
-                    role="menuitem"
-                    type="button"
-                    onClick={() => {
-                      loadSampleKitchen(k.variant);
-                      setShowSampleMenu(false);
-                    }}
-                    className="flex w-full flex-col items-start gap-0.5 rounded-lg px-3 py-2 text-left transition-colors hover:bg-ivory/8"
-                  >
-                    <span className="text-xs font-medium text-ivory">{k.label}</span>
-                    <span className="text-[10px] text-warmgray">{k.hint}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
           <Button variant="secondary" className="h-8 px-3 text-xs" onClick={resetDraft}>Nuevo</Button>
           {projectId !== null && (
             <Button
@@ -277,9 +226,9 @@ export function KitchenBuilder() {
       {/* ── Top bar (mobile, <768px) ─────────────────────────────────────────
           One slim row replaces the desktop header + the old separate tab
           strip below it — project name/client and every secondary action
-          (Nuevo, Compartir, Habitación, Materiales, Alturas, Cocina de
-          muestra, Guardar) move into the "⋮" menu so the 3D view and the
-          module panel get as much vertical space as possible. */}
+          (Nuevo, Compartir, Habitación, Materiales, Guardar) move into the
+          "⋮" menu so the 3D view and the module panel get as much vertical
+          space as possible. */}
       <header className="flex md:hidden shrink-0 items-center gap-1.5 border-b border-ivory/8 px-2 h-11">
         <button
           onClick={() => router.push("/kitchen/projects")}
@@ -337,40 +286,6 @@ export function KitchenBuilder() {
               <button role="menuitem" onClick={() => { setShowGlobalMaterials(true); setShowMobileMenu(false); }} className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-xs text-ivory transition-colors hover:bg-ivory/8">
                 <Palette size={14} className="text-warmgray" /> Materiales globales
               </button>
-              <button role="menuitem" onClick={() => { setShowGlobalHeights(true); setShowMobileMenu(false); }} className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-xs text-ivory transition-colors hover:bg-ivory/8">
-                <Ruler size={14} className="text-warmgray" /> Alturas globales
-              </button>
-              <button
-                role="menuitem"
-                onClick={() => setShowSampleMenu((v) => !v)}
-                aria-expanded={showSampleMenu}
-                className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-xs text-ivory transition-colors hover:bg-ivory/8"
-              >
-                <Sparkles size={14} className="text-warmgray" /> Cocina de muestra
-                <ChevronDown size={12} className={`ml-auto text-warmgray transition-transform ${showSampleMenu ? "rotate-180" : ""}`} />
-              </button>
-              {/* showSampleMenu's own dropdown lives in the desktop header
-                  (hidden on mobile), so its options are repeated inline here
-                  instead of relying on that hidden panel. */}
-              {showSampleMenu && (
-                <div className="mb-1 space-y-0.5 rounded-lg bg-ivory/4 p-1">
-                  {SAMPLE_KITCHENS.map((k) => (
-                    <button
-                      key={k.variant}
-                      role="menuitem"
-                      onClick={() => {
-                        loadSampleKitchen(k.variant);
-                        setShowSampleMenu(false);
-                        setShowMobileMenu(false);
-                      }}
-                      className="flex w-full flex-col items-start gap-0.5 rounded-lg px-3 py-1.5 text-left transition-colors hover:bg-ivory/8"
-                    >
-                      <span className="text-xs font-medium text-ivory">{k.label}</span>
-                      <span className="text-[10px] text-warmgray">{k.hint}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
               <div className="mt-1 border-t border-ivory/8 pt-1">
                 <button
                   role="menuitem"
@@ -408,6 +323,7 @@ export function KitchenBuilder() {
               undoCount={undoStack.length}
               onRedo={redo}
               redoCount={redoStack.length}
+              cameraPersistKey={projectId}
             />
 
             {modulesCount === 0 && !showSelector && !editingModule && (
@@ -460,7 +376,6 @@ export function KitchenBuilder() {
 
       {showRoomSettings && <RoomSettingsModal onClose={() => setShowRoomSettings(false)} />}
       {showGlobalMaterials && <GlobalMaterialsModal onClose={() => setShowGlobalMaterials(false)} />}
-      {showGlobalHeights && <GlobalHeightsModal onClose={() => setShowGlobalHeights(false)} />}
       {showShareModal && projectId !== null && (
         <ShareModal kitchenProjectId={projectId} onClose={() => setShowShareModal(false)} />
       )}
