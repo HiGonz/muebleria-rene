@@ -1189,6 +1189,10 @@ export function ClosetBuilder() {
   const area = project.areas[0];
   const conjunto = area?.conjuntos[0];
   if (!area || !conjunto || !isNicheSpace(area.space)) return null;
+  // Destructure right after the guard (same pattern ClosetAssemblyScene
+  // uses) rather than reading area.space.height later past intervening
+  // JSX/derived values — keeps the niche-narrowing trivially in scope.
+  const { height: areaHeightCm } = area.space;
 
   const selectedModule = conjunto.modules.find((m) => m.id === selectedModuleId) ?? null;
 
@@ -1224,7 +1228,7 @@ export function ClosetBuilder() {
           </div>
           {selectedModule ? (
             <>
-              <ClosetModuleStackEditor module={selectedModule} maxHeightCm={area.space.height} />
+              <ClosetModuleStackEditor module={selectedModule} maxHeightCm={areaHeightCm} />
               <div className="mt-auto border-t border-ivory/8 p-3">
                 <button
                   onClick={() => removeModule(selectedModule.id)}
