@@ -2,6 +2,7 @@
 
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import type { PersistStorage, StorageValue } from "zustand/middleware";
 import { toast } from "sonner";
 import { buildNewModule, buildSampleKitchen, calculateKitchenMaterials, getCountertopModel, findFreeSpotNear, isFreestandingPosition, ISLAND_ELIGIBLE_CATEGORIES } from "@/services/kitchenData";
 import type { SampleKitchenVariant } from "@/services/kitchenData";
@@ -16,6 +17,40 @@ import type {
 // per-module edit fans out to the whole kitchen). A brand-new module picks
 // these up from whatever's already in the room instead of falling back to
 // the catalog's own hardcoded defaults, so it never shows up mismatched.
+type PersistedKitchenState = { draft: KitchenDraft; projectId: number | null };
+
+const PERSIST_DEBOUNCE_MS = 500;
+
+// Zustand's persist middleware writes on every single set() by default —
+// for this store that means the whole draft (every module's dimensions and
+// options) is JSON.stringify'd and written to localStorage on every
+// keystroke in a text field. This defers the actual write until the caller
+// has been quiet for PERSIST_DEBOUNCE_MS, coalescing a burst of edits into
+// one write. In-memory state is untouched — only the disk write is delayed.
+function createDebouncedLocalStorage(delayMs: number): PersistStorage<PersistedKitchenState> {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  return {
+    getItem: (name) => {
+      if (typeof window === "undefined") return null;
+      const raw = window.localStorage.getItem(name);
+      return raw ? (JSON.parse(raw) as StorageValue<PersistedKitchenState>) : null;
+    },
+    setItem: (name, value) => {
+      if (typeof window === "undefined") return;
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => {
+        window.localStorage.setItem(name, JSON.stringify(value));
+        timer = null;
+      }, delayMs);
+    },
+    removeItem: (name) => {
+      if (typeof window === "undefined") return;
+      if (timer) { clearTimeout(timer); timer = null; }
+      window.localStorage.removeItem(name);
+    },
+  };
+}
+
 const GLOBAL_MATERIAL_FIELDS = [
   "exteriorMaterial", "exteriorTexture", "hardwareFinish", "zocaloMaterial",
   "countertopModel", "countertopMaterial", "countertopColor", "countertopTexture",
@@ -586,6 +621,7 @@ export const useKitchenStore = create<KitchenStore>()(
       // orphaned instead of migrated (see v1→v2 bump above for precedent).
       name: "kitchen-draft-v3",
       partialize: (state) => ({ draft: state.draft, projectId: state.projectId }),
+      storage: createDebouncedLocalStorage(PERSIST_DEBOUNCE_MS),
     }
   )
 );
