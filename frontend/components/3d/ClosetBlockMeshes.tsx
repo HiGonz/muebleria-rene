@@ -8,12 +8,23 @@ import { layoutModuleBlocks, moduleTotalHeightCm } from "@/services/closetData";
 const BOARD_COLOR = "#d4c5b0";
 const FRONT_COLOR = "#e8e0d4";
 
+// DrawerFace/DoorPanel position their content at `toeKick + T + fromBottomCm`
+// (see ModulePreview3D.tsx) — that extra `T` accounts for a physical bottom
+// board below local y=0 in kitchen's normal usage. Our <group position={[0,
+// bottomYM, 0]}> wrapper doesn't have an equivalent bottom board to absorb
+// it, so without reserving T out of the content span, the topmost front's
+// rendered top edge lands T past the block's own top boundary (poking
+// through the ceiling panel or the divider above). Reserving T here keeps
+// content within [bottomYM, bottomYM + heightCm/100].
+const T_CM = T * 100;
+
 // One evenly-spaced DrawerDef per drawer in the block, spanning its own
 // heightCm — mirrors the even-split idea kitchen uses for auto-laid-out
 // drawers, simplified (no zone-height override, no door coexistence).
 function drawerDefsFor(block: Extract<ClosetBlock, { kind: "drawers" }>): DrawerDef[] {
   const { quantity, gapCm, individualHeightCm } = block.config;
-  const perDrawerCm = individualHeightCm ?? (block.heightCm - gapCm * Math.max(quantity - 1, 0)) / quantity;
+  const contentHeightCm = Math.max(block.heightCm - T_CM, 0);
+  const perDrawerCm = individualHeightCm ?? (contentHeightCm - gapCm * Math.max(quantity - 1, 0)) / quantity;
   return Array.from({ length: quantity }, (_, i) => ({
     id: `${block.id}_d${i}`,
     label: `Cajón ${i + 1}`,
@@ -30,6 +41,7 @@ function drawerDefsFor(block: Extract<ClosetBlock, { kind: "drawers" }>): Drawer
 // split across the width unless explicit doorWidths are given.
 function doorDefsFor(block: Extract<ClosetBlock, { kind: "doors" }>): DoorDef[] {
   const { doorCount, doorWidths } = block.config;
+  const contentHeightCm = Math.max(block.heightCm - T_CM, 0);
   const widths = doorWidths && doorWidths.length === doorCount ? doorWidths : Array.from({ length: doorCount }, () => 100 / doorCount);
   let offsetPct = 0;
   return widths.map((widthPct, i) => {
@@ -39,7 +51,7 @@ function doorDefsFor(block: Extract<ClosetBlock, { kind: "doors" }>): DoorDef[] 
       widthPct,
       offsetPct,
       fromBottomCm: 0,
-      heightCm: block.heightCm,
+      heightCm: contentHeightCm,
       hingeLeft: i % 2 === 0,
       doorStyle: "Lisa",
     };
