@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { X } from "lucide-react";
 import type { KitchenMaterialLine, KitchenModule } from "@/types/kitchen";
 import { useKitchenStore } from "@/store/useKitchenStore";
@@ -25,7 +25,7 @@ interface PieceInfo {
 
 export function KitchenSummary() {
   const { draft, getMaterials } = useKitchenStore();
-  const { lines, summary } = getMaterials();
+  const { lines, summary } = useMemo(() => getMaterials(), [draft.modules]);
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
   const [pieceInfo, setPieceInfo] = useState<PieceInfo | null>(null);
   // "¿en qué hojas está usando este mueble?" — pick a module from the picker
