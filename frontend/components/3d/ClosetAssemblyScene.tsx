@@ -52,7 +52,7 @@ export function ClosetAssemblyScene({ project }: { project: ClosetProject }) {
         <NicheBackdrop widthM={widthM} heightM={heightM} depthM={depthM} />
         <Grid position={[widthM / 2, -0.004, depthM / 2]} args={[widthM + 1, depthM + 1]} cellColor="#3a3a48" sectionColor="#4a4a58" fadeDistance={10} />
         {packed.map(({ item, startCm }) => (
-          <ClosetModuleMesh key={item.module.id} module={item.module} x={rowOffsetM + startCm / 100} z={0} />
+          <ClosetModuleMesh key={item.module.id} module={item.module} x={rowOffsetM + (startCm + item.module.width / 2) / 100} z={item.module.depth / 200} />
         ))}
         <OrbitControls target={[widthM / 2, heightM / 2, 0]} enableDamping dampingFactor={0.08} />
       </Canvas>
