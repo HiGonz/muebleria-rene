@@ -217,6 +217,7 @@ export function ModuleInspector() {
   const {
     getEditingModule, updateModule, setEditingModule, removeModule, duplicateModule, rotateModule, toggleModuleLock,
     applyExteriorToAll, applyHardwareToAll, applyCountertopToAll, applyZocaloMaterialToAll, placeAccessoryInNiche,
+    setIslandModeManual,
   } = useKitchenStore();
   const module = getEditingModule();
   // Delete used to live in the header right next to the "×" close button,
@@ -456,6 +457,21 @@ export function ModuleInspector() {
               )}
             </Section>
 
+            {(category === "lower" || category === "tower" || category === "corner") && (
+              <Section label="Isla">
+                <FieldGroup label="Forzar modo isla">
+                  <SelectInput
+                    value={opt.islandModeManual ? "si" : "no"}
+                    onChange={(v) => setIslandModeManual(module.id, v === "si")}
+                    options={[{ value: "si", label: "Forzado" }, { value: "no", label: "Automático" }]}
+                  />
+                </FieldGroup>
+                <p className="mt-2 text-[10px] text-warmgray/70">
+                  Automático: se vuelve isla solo al arrastrarlo lejos de toda pared. Forzado: se queda en modo isla (gira libre, cara trasera configurable) sin importar qué tan cerca esté de una pared.
+                </p>
+              </Section>
+            )}
+
             {(type === "desayunador" || type === "librero_giratorio_espejo" || opt.islandMode || opt.backPanelMaterial === "puertas" || opt.backPanelMaterial === "alacena") && (
               <Section label="Panel trasero">
                 <div className="grid grid-cols-2 gap-3">
@@ -487,7 +503,7 @@ export function ModuleInspector() {
                     ? "El respaldo queda expuesto hacia el lado del banquillo (no contra un muro), por eso lleva un acabado en vez de tablero liso. La cubierta vuela este tanto extra sobre ese lado."
                     : type === "librero_giratorio_espejo"
                     ? "El respaldo lleva un espejo en vez de tablero — visible por el lado opuesto a los estantes."
-                    : "Este mueble está en modo isla (lejos de cualquier muro): el respaldo queda expuesto hacia el cuarto. Puedes dejarlo con un acabado plano, ponerle sus propias puertas, o abrirlo tipo alacena."}
+                    : "Este mueble está en modo isla: el respaldo queda expuesto hacia el cuarto. Puedes dejarlo con un acabado plano, ponerle sus propias puertas, o abrirlo tipo alacena."}
                 </p>
               </Section>
             )}
