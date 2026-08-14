@@ -5,7 +5,7 @@ import dynamic from "next/dynamic";
 import { Trash2, Copy, RotateCw, Lock, Unlock } from "lucide-react";
 import { useKitchenStore } from "@/store/useKitchenStore";
 import { Input, NumberInput, Textarea } from "@/components/ui/input";
-import { BOARD_COSTS, COUNTERTOP_MODELS, PULL_OUT_ACCESSORY_LABELS, NICHE_ACCESSORY_MATCH, getCatalogEntry } from "@/services/kitchenData";
+import { BOARD_COSTS, COUNTERTOP_MODELS, PULL_OUT_ACCESSORY_LABELS, NICHE_ACCESSORY_MATCH, getCatalogEntry, ISLAND_ELIGIBLE_CATEGORIES } from "@/services/kitchenData";
 import { WOOD_TEXTURES } from "@/components/3d/woodTextures";
 import type { BoardMaterial, ExteriorTextureId, KitchenModule, PullOutAccessoryType, SidePanelMode } from "@/types/kitchen";
 
@@ -457,7 +457,7 @@ export function ModuleInspector() {
               )}
             </Section>
 
-            {(category === "lower" || category === "tower" || category === "corner") && (
+            {ISLAND_ELIGIBLE_CATEGORIES.has(category) && (
               <Section label="Isla">
                 <FieldGroup label="Forzar modo isla">
                   <SelectInput
