@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BarChart3, Boxes, FileText, LayoutDashboard, PlusSquare, UtensilsCrossed, X } from "lucide-react";
+import { BarChart3, Boxes, FileText, LayoutDashboard, PlusSquare, Shirt, UtensilsCrossed, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const items = [
@@ -10,6 +10,10 @@ const items = [
   { href: "/projects/new", label: "Nuevo diseño", icon: PlusSquare },
   { href: "/kitchen", label: "Diseñar cocina", icon: UtensilsCrossed },
   { href: "/kitchen/projects", label: "Cocinas", icon: BarChart3 },
+  // No project list yet (Fase 1 del closet es solo borrador en localStorage,
+  // sin persistencia en backend) — a diferencia de cocina, todavía no hay un
+  // "/closet/projects" que enlazar aquí.
+  { href: "/closet", label: "Diseñar closet", icon: Shirt },
   { href: "/materials", label: "Materiales", icon: Boxes },
   { href: "/quotes", label: "Cotizaciones", icon: FileText },
   { href: "/projects", label: "Proyectos", icon: BarChart3 },

@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useRef } from "react";
-import { ArrowUp, ArrowDown, ArrowLeft, ArrowRight, ChevronUp, ChevronDown } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { ArrowUp, ArrowDown, ArrowLeft, ArrowRight, ChevronUp, ChevronDown, Move } from "lucide-react";
 import type { KitchenModule } from "@/types/kitchen";
 
 export type NudgeDirection = "left" | "right" | "forward" | "back" | "up" | "down";
@@ -67,6 +67,14 @@ function NudgeButton({ direction, icon: Icon, label, onNudge }: {
 // spot is never covered by the camera controls (top), the module list/legend
 // (bottom-left), or the selector/inspector panel (right-anchored) no matter
 // which of those happen to be open at the same time.
+//
+// Starts collapsed to a small toggle pill — it used to pop open in full
+// every time a module was selected, permanently eating screen space even
+// for a quick "just select to see its name" click. Local state (not lifted
+// to the parent) so it naturally resets to collapsed on every fresh
+// selection — remounting when `selectedModule` becomes null and mounting
+// again on the next pick, matching the same "collapsed until asked for"
+// feel as the module list pill.
 export function SelectionToolbar({
   module, stepCm, onStepChange, onNudge,
 }: {
@@ -76,6 +84,24 @@ export function SelectionToolbar({
   onNudge: (direction: NudgeDirection) => void;
 }) {
   const canMoveHeight = module.category === "upper" || module.type === "esquinero_triangular" || module.type === "esquinero_triangular_puerta" || module.type === "gabinete_pared_esquinero_puertas";
+  const [expanded, setExpanded] = useState(false);
+
+  if (!expanded) {
+    return (
+      <div className="pointer-events-none fixed left-3 top-1/2 z-30 -translate-y-1/2">
+        <button
+          type="button"
+          onClick={() => setExpanded(true)}
+          title="Mover mueble seleccionado"
+          aria-label="Mover mueble seleccionado"
+          aria-expanded={false}
+          className="pointer-events-auto flex h-9 w-9 items-center justify-center rounded-xl border border-ivory/15 bg-ink/90 text-ivory/85 shadow-[0_8px_24px_rgba(0,0,0,0.5)] backdrop-blur-md transition-colors hover:bg-ivory/10 hover:text-ivory focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brass/60"
+        >
+          <Move size={15} />
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="pointer-events-none fixed left-3 top-1/2 z-30 -translate-y-1/2">
@@ -84,6 +110,17 @@ export function SelectionToolbar({
         aria-label="Mover mueble seleccionado"
         className="pointer-events-auto flex flex-col items-center gap-1 rounded-xl border border-ivory/15 bg-ink/90 p-1 shadow-[0_8px_24px_rgba(0,0,0,0.5)] backdrop-blur-md"
       >
+        <button
+          type="button"
+          onClick={() => setExpanded(false)}
+          title="Ocultar controles de movimiento"
+          aria-label="Ocultar controles de movimiento"
+          aria-expanded={true}
+          className="flex h-6 w-full items-center justify-center rounded-md text-ivory/60 transition-colors hover:bg-ivory/10 hover:text-ivory"
+        >
+          <Move size={12} />
+        </button>
+
         {/* XZ nudge cross, always relative to the module's own front */}
         <div className="flex items-center gap-0.5">
           <div className="flex flex-col gap-0.5">
