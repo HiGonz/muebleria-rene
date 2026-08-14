@@ -246,6 +246,36 @@ function slideToClosestFree(
   return { x: startX + (targetX - startX) * lo, z: startZ + (targetZ - startZ) * lo };
 }
 
+// How deep (meters) a candidate placement would penetrate into its worst
+// same-band overlap, or 0 if clear — findNearestFreePosition's snug-fit
+// fallback below needs to compare HOW BAD different candidates are, not
+// just whether they collide, so a boolean (findOverlap) isn't enough here.
+function overlapDepthM(mod: KitchenModule, x: number, z: number, rotation: KitchenModule["rotation"], modules: KitchenModule[]): number {
+  const band = placementBand(mod);
+  if (!band) return 0;
+  const candidate = moduleBox(mod, x, z, rotation);
+  const candidateYRange = moduleYRange(mod);
+  let worst = 0;
+  for (const other of modules) {
+    if (other.id === mod.id || placementBand(other) !== band) continue;
+    const otherBox = moduleBox(other, other.x / 100, other.z / 100, other.rotation);
+    if (!boxesOverlap(candidate, otherBox)) continue;
+    if (!yRangesOverlap(candidateYRange, moduleYRange(other))) continue;
+    const overlapX = Math.min(candidate.maxX, otherBox.maxX) - Math.max(candidate.minX, otherBox.minX);
+    const overlapZ = Math.min(candidate.maxZ, otherBox.maxZ) - Math.max(candidate.minZ, otherBox.minZ);
+    worst = Math.max(worst, Math.min(overlapX, overlapZ));
+  }
+  return worst;
+}
+
+// A gap between two existing neighbors is sometimes a hair narrower than
+// this module's own nominal width — a few mm/cm of drift from however those
+// neighbors themselves got positioned earlier, not a real "doesn't fit".
+// Real cabinet installs absorb exactly this with shims/play; tolerate the
+// same amount of overlap here instead of refusing an otherwise-obviously-
+// intended placement.
+const MAX_TOLERATED_OVERLAP_M = 0.02;
+
 // A drag release is "place it here," not "slide toward it" — if the
 // dropped position has a real overlap (e.g. a few cm of pointer imprecision
 // against an otherwise-exact-fit gap), this searches a small area AROUND
@@ -253,8 +283,11 @@ function slideToClosestFree(
 // toward wherever the drag started (which can land the module somewhere
 // unrelated, on the far side of a completely different neighbor it merely
 // passed near en route). Expands outward ring by ring so the closest free
-// spot within each ring wins; returns null (caller keeps the pre-drag
-// position) if nothing clear turns up within maxRadiusM.
+// spot within each ring wins. If nothing is perfectly clear within
+// maxRadiusM, falls back to whichever nearby candidate has the *smallest*
+// overlap, as long as it's within MAX_TOLERATED_OVERLAP_M — a snug-but-real
+// fit beats refusing the move outright. Returns null (caller keeps the
+// pre-drag position) only when even that can't be satisfied.
 function findNearestFreePosition(
   mod: KitchenModule, targetX: number, targetZ: number, rotation: KitchenModule["rotation"],
   modules: KitchenModule[], roomWidthM: number, roomDepthM: number,
@@ -262,19 +295,25 @@ function findNearestFreePosition(
   if (!findOverlap(mod, targetX, targetZ, rotation, modules)) return { x: targetX, z: targetZ };
   const stepM = 0.02;
   const maxRadiusM = 0.6;
+  let bestSnug: { x: number; z: number; depth: number; dist: number } | null = null;
   for (let radius = stepM; radius <= maxRadiusM; radius += stepM) {
     let best: { x: number; z: number; dist: number } | null = null;
     const steps = Math.max(8, Math.round((2 * Math.PI * radius) / stepM));
     for (let i = 0; i < steps; i++) {
       const angle = (i / steps) * 2 * Math.PI;
       const { x, z } = clampModuleToRoom(mod, targetX + Math.cos(angle) * radius, targetZ + Math.sin(angle) * radius, roomWidthM, roomDepthM);
-      if (findOverlap(mod, x, z, rotation, modules)) continue;
-      const dist = Math.hypot(x - targetX, z - targetZ);
-      if (!best || dist < best.dist) best = { x, z, dist };
+      const depth = overlapDepthM(mod, x, z, rotation, modules);
+      if (depth === 0) {
+        const dist = Math.hypot(x - targetX, z - targetZ);
+        if (!best || dist < best.dist) best = { x, z, dist };
+      } else if (depth <= MAX_TOLERATED_OVERLAP_M) {
+        const dist = Math.hypot(x - targetX, z - targetZ);
+        if (!bestSnug || depth < bestSnug.depth || (depth === bestSnug.depth && dist < bestSnug.dist)) bestSnug = { x, z, depth, dist };
+      }
     }
     if (best) return { x: best.x, z: best.z };
   }
-  return null;
+  return bestSnug ? { x: bestSnug.x, z: bestSnug.z } : null;
 }
 
 // Keeps a module's actual footprint (accounting for its rotation and, for
