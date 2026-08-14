@@ -2311,6 +2311,7 @@ export function calculateKitchenMaterials(modules: KitchenModule[]): { lines: Ki
   // totalArea / sheetArea — a leftover offcut from one panel often isn't big
   // enough to fit the next panel that's needed, forcing an extra sheet.
   const sheetAreaM2 = (STANDARD_SHEET_WIDTH_CM * STANDARD_SHEET_HEIGHT_CM) / 10000;
+  const sheetAreaCm2 = STANDARD_SHEET_WIDTH_CM * STANDARD_SHEET_HEIGHT_CM;
   for (const poolLabel of Object.keys(boardPools) as (keyof typeof boardPools)[]) {
     for (const [material, pieces] of boardPools[poolLabel]) {
       const boardCost = BOARD_COSTS[material] ?? 180;
@@ -2342,9 +2343,38 @@ export function calculateKitchenMaterials(modules: KitchenModule[]): { lines: Ki
         sheetLayouts[p.sheet]?.push({ part: p.label ?? "", x: p.x, y: p.y, width: p.width, height: p.height, moduleId: p.moduleId, moduleLabel: p.moduleLabel });
       }
 
+      // Safety-margin sheets, bought on top of the real packed count but
+      // never drawn into the cut diagram above (sheetLayouts stays sized to
+      // result.sheets — there's nothing to cut on a margin sheet yet).
+      // Interior: shop always wants 2 spare sheets per material, for
+      // cutting errors/damaged pieces/mid-project changes — unconditional.
+      // Exterior: only worth keeping a spare if the LAST sheet the packer
+      // actually used is already more than half committed (>50%); if it's
+      // mostly empty, its own leftover space is margin enough. Reuses
+      // result.placements — the exact per-piece sheet assignments the
+      // packer already produced — to total just the last sheet's own used
+      // area, rather than running a second packing/estimation pass.
+      let marginSheets = 0;
+      let marginNote = "";
+      if (result.sheets > 0 && poolLabel === "Interior") {
+        marginSheets = 2;
+        marginNote = " + 2 hojas de margen";
+      } else if (result.sheets > 0 && poolLabel === "Exterior") {
+        const lastSheetIndex = result.sheets - 1;
+        const lastSheetUsedCm2 = result.placements
+          .filter((p) => p.sheet === lastSheetIndex)
+          .reduce((sum, p) => sum + p.width * p.height, 0);
+        const lastSheetUtilizationPct = (lastSheetUsedCm2 / sheetAreaCm2) * 100;
+        if (lastSheetUtilizationPct > 50) {
+          marginSheets = 1;
+          marginNote = ` + 1 hoja de margen (última hoja al ${Math.round(lastSheetUtilizationPct)}% de aprovechamiento)`;
+        }
+      }
+      const finalSheets = result.sheets + marginSheets;
+
       addLine(
-        `Hojas ${poolLabel} ${material} — ${result.pieceCount} piezas (${netAreaM2.toFixed(2)} m² útiles · ${utilization}% aprovechamiento · ${waste}% desperdicio, por eso se necesitan ${result.sheets} hojas de ${STANDARD_SHEET_WIDTH_CM / 100}×${STANDARD_SHEET_HEIGHT_CM / 100} m)`,
-        result.sheets,
+        `Hojas ${poolLabel} ${material} — ${result.pieceCount} piezas (${netAreaM2.toFixed(2)} m² útiles · ${utilization}% aprovechamiento · ${waste}% desperdicio, por eso se necesitan ${result.sheets} hojas de ${STANDARD_SHEET_WIDTH_CM / 100}×${STANDARD_SHEET_HEIGHT_CM / 100} m${marginNote})`,
+        finalSheets,
         "hoja",
         parseFloat(sheetCost.toFixed(2)),
         {
