@@ -2,7 +2,7 @@
 
 import { Canvas, useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
 import { Grid, Html, OrbitControls } from "@react-three/drei";
-import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject, type ReactNode } from "react";
+import { createContext, memo, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject, type ReactNode } from "react";
 import * as ReactDOM from "react-dom/client";
 import * as THREE from "three";
 import { Home, Eye, EyeOff, Move, MoveHorizontal, ArrowUp, Tag, Ruler, ChevronDown, ChevronUp, Settings2, Trash2, Lock, Unlock, RotateCw } from "lucide-react";
@@ -1867,6 +1867,102 @@ function ModuleHighlight({ mod }: { mod: KitchenModule }) {
   );
 }
 
+// ─── Memoized per-module scene node ────────────────────────────────────────
+// Wraps one module's full render output (mesh + label + dimensions overlay +
+// hover highlight + FAB cluster) behind React.memo with a custom comparator.
+// AssemblyContent re-renders up to ~60x/sec while a module is being dragged
+// (setDragPreview on every pointermove) — without this boundary, every OTHER
+// module's mesh tree (CabinetMesh -> DoorPanel/Shelves/drawers/fillers) was
+// re-created and reconciled on every single tick even though it provably
+// didn't change. The comparator intentionally does NOT compare `effective`,
+// `drag`, or any callback prop by reference — those are freshly built by the
+// parent on every render regardless, but they're pure functions of the
+// values that ARE compared below (mod, dragPreview, moveMode, etc.), so a
+// changed reference there never means the module's actual rendered output
+// changed.
+interface ModuleSceneItemProps {
+  mod: KitchenModule;
+  effective: KitchenModule;
+  wireframe: boolean;
+  showLabels: boolean;
+  showDimensions: boolean;
+  isHovered: boolean;
+  isSelected: boolean;
+  draggable: boolean;
+  drag: DragHandleProps | undefined;
+  onSelect: () => void;
+  dragPreview: DragPreview | null;
+  moveMode: { id: string; fixed: boolean } | null;
+  onModuleActivate?: (id: string | null) => void;
+  onModuleMove?: (id: string, x: number, z: number, rotation?: KitchenModule["rotation"], mountHeightCm?: number, islandMode?: boolean) => void;
+  onModuleRemove?: (id: string) => void;
+  onSelectModule: (id: string | null) => void;
+  setMoveMode: (updater: (cur: { id: string; fixed: boolean } | null) => { id: string; fixed: boolean } | null) => void;
+}
+
+function ModuleSceneItemImpl({
+  mod, effective, wireframe, showLabels, showDimensions, isHovered, isSelected, draggable, drag, onSelect,
+  moveMode, onModuleActivate, onModuleMove, onModuleRemove, onSelectModule, setMoveMode,
+}: ModuleSceneItemProps) {
+  return (
+    <group
+      onDoubleClick={(e) => {
+        e.stopPropagation();
+        onSelect();
+        onModuleActivate?.(mod.id);
+      }}
+    >
+      <ModuleMesh mod={effective} wireframe={wireframe} drag={drag} onSelect={onSelect} />
+      {showLabels && !isSelected && <ModuleLabel mod={effective} />}
+      {showDimensions && <ModuleDimensionsLabel mod={effective} />}
+      {isHovered && <ModuleHighlight mod={effective} />}
+      {isSelected && onModuleActivate && (
+        <ModuleFabCluster
+          mod={effective}
+          onEdit={() => onModuleActivate(mod.id)}
+          moveMode={moveMode?.id === mod.id ? (moveMode.fixed ? "fija" : "libre") : "off"}
+          onCycleMove={() => setMoveMode((cur) => {
+            if (cur?.id !== mod.id) return { id: mod.id, fixed: false };
+            if (!cur.fixed) return { id: mod.id, fixed: true };
+            return null;
+          })}
+          canMove={draggable}
+          onRotate={onModuleMove && !mod.options.locked ? () => onModuleMove(mod.id, mod.x, mod.z, ((mod.rotation + 90) % 360) as KitchenModule["rotation"]) : undefined}
+          onDelete={onModuleRemove && !mod.options.locked ? () => { onModuleRemove(mod.id); onSelectModule(null); setMoveMode((cur) => (cur?.id === mod.id ? null : cur)); } : undefined}
+        />
+      )}
+    </group>
+  );
+}
+
+function moduleSceneItemPropsEqual(prev: ModuleSceneItemProps, next: ModuleSceneItemProps): boolean {
+  if (prev.mod !== next.mod) return false;
+  if (prev.wireframe !== next.wireframe) return false;
+  if (prev.showLabels !== next.showLabels) return false;
+  if (prev.showDimensions !== next.showDimensions) return false;
+  if (prev.isHovered !== next.isHovered) return false;
+  if (prev.isSelected !== next.isSelected) return false;
+  if (prev.draggable !== next.draggable) return false;
+
+  const prevIsDragTarget = prev.dragPreview?.id === prev.mod.id;
+  const nextIsDragTarget = next.dragPreview?.id === next.mod.id;
+  if (prevIsDragTarget !== nextIsDragTarget) return false;
+  if (nextIsDragTarget) {
+    const p = prev.dragPreview!;
+    const n = next.dragPreview!;
+    if (p.x !== n.x || p.z !== n.z || p.rotation !== n.rotation || p.mountHeightCm !== n.mountHeightCm) return false;
+  }
+
+  const prevMoveArmed = prev.moveMode?.id === prev.mod.id;
+  const nextMoveArmed = next.moveMode?.id === next.mod.id;
+  if (prevMoveArmed !== nextMoveArmed) return false;
+  if (nextMoveArmed && prev.moveMode!.fixed !== next.moveMode!.fixed) return false;
+
+  return true;
+}
+
+const ModuleSceneItem = memo(ModuleSceneItemImpl, moduleSceneItemPropsEqual);
+
 // An opening's dimensions converted to meters and localized to a single wall
 // (the wall's own type/offset/width/height/sillHeight, unit-converted).
 interface WallOpeningM {
@@ -2554,34 +2650,26 @@ function AssemblyContent({
         // deselect it out from under the gear button.
         const selectThis = () => onSelectModule(mod.id);
         return (
-          <group
+          <ModuleSceneItem
             key={mod.id}
-            onDoubleClick={(e) => {
-              e.stopPropagation();
-              onSelectModule(mod.id);
-              onModuleActivate?.(mod.id);
-            }}
-          >
-            <ModuleMesh mod={effective} wireframe={wireframe} drag={drag} onSelect={selectThis} />
-            {showLabels && !(selectedId === mod.id) && <ModuleLabel mod={effective} />}
-            {showDimensions && <ModuleDimensionsLabel mod={effective} />}
-            {hoveredId === mod.id && <ModuleHighlight mod={effective} />}
-            {selectedId === mod.id && onModuleActivate && (
-              <ModuleFabCluster
-                mod={effective}
-                onEdit={() => onModuleActivate(mod.id)}
-                moveMode={moveMode?.id === mod.id ? (moveMode.fixed ? "fija" : "libre") : "off"}
-                onCycleMove={() => setMoveMode((cur) => {
-                  if (cur?.id !== mod.id) return { id: mod.id, fixed: false };
-                  if (!cur.fixed) return { id: mod.id, fixed: true };
-                  return null;
-                })}
-                canMove={draggable}
-                onRotate={onModuleMove && !mod.options.locked ? () => onModuleMove(mod.id, mod.x, mod.z, ((mod.rotation + 90) % 360) as KitchenModule["rotation"]) : undefined}
-                onDelete={onModuleRemove && !mod.options.locked ? () => { onModuleRemove(mod.id); onSelectModule(null); setMoveMode((cur) => (cur?.id === mod.id ? null : cur)); } : undefined}
-              />
-            )}
-          </group>
+            mod={mod}
+            effective={effective}
+            wireframe={wireframe}
+            showLabels={showLabels}
+            showDimensions={showDimensions}
+            isHovered={hoveredId === mod.id}
+            isSelected={selectedId === mod.id}
+            draggable={draggable}
+            drag={drag}
+            onSelect={selectThis}
+            dragPreview={dragPreview}
+            moveMode={moveMode}
+            onModuleActivate={onModuleActivate}
+            onModuleMove={onModuleMove}
+            onModuleRemove={onModuleRemove}
+            onSelectModule={onSelectModule}
+            setMoveMode={setMoveMode}
+          />
         );
       })}
       {showDimensions && dimLabelData.length > 0 && <DimensionLabelsOverlay data={dimLabelData} />}
