@@ -1,7 +1,7 @@
 "use client";
 
 import type { LucideIcon } from "lucide-react";
-import { ZoomIn, ZoomOut, Undo2 } from "lucide-react";
+import { ZoomIn, ZoomOut, Undo2, Redo2 } from "lucide-react";
 
 export interface CameraAction {
   key: string;
@@ -16,18 +16,20 @@ interface Camera3DControlsProps {
   toggles: CameraAction[];
   onZoomIn: () => void;
   onZoomOut: () => void;
-  /** Undo the last (up to 3) module drags — an escape hatch for grabbing a
-   *  module by accident while trying to orbit the camera. Hidden when there's
-   *  nothing to undo. */
+  /** Undo the last module change (add/move/rotate/dimension-change/delete/
+   *  duplicate/lock-toggle). Hidden when there's nothing to undo. */
   onUndo: () => void;
   undoCount: number;
+  /** Redo the last undone change. Hidden when there's nothing to redo. */
+  onRedo: () => void;
+  redoCount: number;
 }
 
 // Shared touch-friendly 3D view control cluster: icon buttons sized to the
 // ~44px touch-target minimum. Horizontal row top-left on desktop (matches the
 // old inline button rows this replaces); compact vertical stack bottom-right
 // on mobile, clear of notches/home-indicators via the safe-area utility.
-export function Camera3DControls({ presets, toggles, onZoomIn, onZoomOut, onUndo, undoCount }: Camera3DControlsProps) {
+export function Camera3DControls({ presets, toggles, onZoomIn, onZoomOut, onUndo, undoCount, onRedo, redoCount }: Camera3DControlsProps) {
   return (
     // pointer-events-none on the wrapper + pointer-events-auto on each visible
     // cluster: this wrapper has no explicit height, and `top`+`bottom` both
@@ -43,13 +45,28 @@ export function Camera3DControls({ presets, toggles, onZoomIn, onZoomOut, onUndo
         <div className="pointer-events-auto rounded-2xl p-1.5" style={{ background: "rgba(21,17,12,0.72)", backdropFilter: "blur(12px)" }}>
           <button
             onClick={onUndo}
-            aria-label="Deshacer último movimiento"
-            title={`Deshacer último movimiento (${undoCount} disponible${undoCount !== 1 ? "s" : ""})`}
+            aria-label="Deshacer"
+            title={`Deshacer (${undoCount} disponible${undoCount !== 1 ? "s" : ""})`}
             className="relative flex h-11 w-11 items-center justify-center rounded-xl text-amber-300 transition-colors hover:bg-ivory/10 hover:text-amber-200 active:scale-90"
           >
             <Undo2 size={18} />
             <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-amber-500 text-[9px] font-bold text-black">
               {undoCount}
+            </span>
+          </button>
+        </div>
+      )}
+      {redoCount > 0 && (
+        <div className="pointer-events-auto rounded-2xl p-1.5" style={{ background: "rgba(21,17,12,0.72)", backdropFilter: "blur(12px)" }}>
+          <button
+            onClick={onRedo}
+            aria-label="Rehacer"
+            title={`Rehacer (${redoCount} disponible${redoCount !== 1 ? "s" : ""})`}
+            className="relative flex h-11 w-11 items-center justify-center rounded-xl text-amber-300 transition-colors hover:bg-ivory/10 hover:text-amber-200 active:scale-90"
+          >
+            <Redo2 size={18} />
+            <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-amber-500 text-[9px] font-bold text-black">
+              {redoCount}
             </span>
           </button>
         </div>

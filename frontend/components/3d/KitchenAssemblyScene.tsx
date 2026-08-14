@@ -2775,6 +2775,8 @@ interface KitchenAssemblySceneProps {
   onOpeningMove?: (id: string, offset: number) => void;
   onUndo?: () => void;
   undoCount?: number;
+  onRedo?: () => void;
+  redoCount?: number;
   // The public "share with client" viewer passes this and nothing else —
   // every editing prop above is already optional and simply omitted there,
   // so this is the only new capability flag needed: it hides the module
@@ -2784,7 +2786,7 @@ interface KitchenAssemblySceneProps {
 }
 
 function KitchenAssemblySceneImpl({
-  modules, roomWidth, roomDepth, ceilingHeight, openings = [], onModuleMove, onModuleActivate, onModuleNudge, onModuleRemove, onModuleToggleLock, onOpeningMove, onUndo, undoCount = 0, readOnly = false,
+  modules, roomWidth, roomDepth, ceilingHeight, openings = [], onModuleMove, onModuleActivate, onModuleNudge, onModuleRemove, onModuleToggleLock, onOpeningMove, onUndo, undoCount = 0, onRedo, redoCount = 0, readOnly = false,
 }: KitchenAssemblySceneProps) {
   const [wireframe, setWireframe] = useState(false);
   const [showLabels, setShowLabels] = useState(false);
@@ -2869,6 +2871,7 @@ function KitchenAssemblySceneImpl({
           presets={presets} toggles={toggles}
           onZoomIn={() => zoom(0.8)} onZoomOut={() => zoom(1.25)}
           onUndo={() => onUndo?.()} undoCount={undoCount}
+          onRedo={() => onRedo?.()} redoCount={redoCount}
         />
       )}
 
