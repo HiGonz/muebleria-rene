@@ -246,6 +246,37 @@ function slideToClosestFree(
   return { x: startX + (targetX - startX) * lo, z: startZ + (targetZ - startZ) * lo };
 }
 
+// A drag release is "place it here," not "slide toward it" — if the
+// dropped position has a real overlap (e.g. a few cm of pointer imprecision
+// against an otherwise-exact-fit gap), this searches a small area AROUND
+// THE DROP POINT for the nearest still-clear spot, instead of walking back
+// toward wherever the drag started (which can land the module somewhere
+// unrelated, on the far side of a completely different neighbor it merely
+// passed near en route). Expands outward ring by ring so the closest free
+// spot within each ring wins; returns null (caller keeps the pre-drag
+// position) if nothing clear turns up within maxRadiusM.
+function findNearestFreePosition(
+  mod: KitchenModule, targetX: number, targetZ: number, rotation: KitchenModule["rotation"],
+  modules: KitchenModule[], roomWidthM: number, roomDepthM: number,
+): { x: number; z: number } | null {
+  if (!findOverlap(mod, targetX, targetZ, rotation, modules)) return { x: targetX, z: targetZ };
+  const stepM = 0.02;
+  const maxRadiusM = 0.6;
+  for (let radius = stepM; radius <= maxRadiusM; radius += stepM) {
+    let best: { x: number; z: number; dist: number } | null = null;
+    const steps = Math.max(8, Math.round((2 * Math.PI * radius) / stepM));
+    for (let i = 0; i < steps; i++) {
+      const angle = (i / steps) * 2 * Math.PI;
+      const { x, z } = clampModuleToRoom(mod, targetX + Math.cos(angle) * radius, targetZ + Math.sin(angle) * radius, roomWidthM, roomDepthM);
+      if (findOverlap(mod, x, z, rotation, modules)) continue;
+      const dist = Math.hypot(x - targetX, z - targetZ);
+      if (!best || dist < best.dist) best = { x, z, dist };
+    }
+    if (best) return { x: best.x, z: best.z };
+  }
+  return null;
+}
+
 // Keeps a module's actual footprint (accounting for its rotation and, for
 // blind-corner types, the extra depth-wide extension) fully inside the
 // room's walls — shared by both drag (handleDragStart) and the toolbar/
@@ -2580,12 +2611,16 @@ function AssemblyContent({
           const mountHeightCm = resolveMountHeightCm(target.rawHeightCm);
           const blocker = findOverlap(mod, x, z, rotation, modules);
           if (blocker) {
-            // Doesn't snap all the way back to where the drag started —
-            // slides as far toward the drop point as it can and stops right
-            // at the obstacle, see slideToClosestFree.
-            const landed = slideToClosestFree(mod, state.startX, state.startZ, x, z, rotation, modules);
-            onModuleMove?.(state.id, landed.x * 100, landed.z * 100, rotation, mountHeightCm, islandMode);
-            toast(`Se detuvo junto a "${blocker.label}"`, { description: "No se pudo mover más sin empalmarse.", duration: 1800 });
+            // Searches near the drop point itself for the closest still-clear
+            // spot instead of walking back toward wherever the drag started —
+            // see findNearestFreePosition.
+            const landed = findNearestFreePosition(mod, x, z, rotation, modules, roomWidthM, roomDepthM);
+            if (landed) {
+              onModuleMove?.(state.id, landed.x * 100, landed.z * 100, rotation, mountHeightCm, islandMode);
+              toast(`"${mod.label}" se acomodó junto a "${blocker.label}"`, { description: "Se ajustó al espacio libre más cercano.", duration: 1800 });
+            } else {
+              toast(`No cabe junto a "${blocker.label}"`, { description: "No hay espacio libre cercano, se mantuvo la posición anterior.", duration: 1800 });
+            }
           } else {
             onModuleMove?.(state.id, x * 100, z * 100, rotation, mountHeightCm, islandMode);
           }
