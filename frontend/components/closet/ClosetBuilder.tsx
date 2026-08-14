@@ -10,6 +10,7 @@ const DEFAULT_MODULE_WIDTH_CM = 60;
 const DEFAULT_MODULE_DEPTH_CM = 60;
 
 export function ClosetBuilder() {
+  const hasHydrated = useClosetStore((s) => s._hasHydrated);
   const project = useClosetStore((s) => s.project);
   const selectedModuleId = useClosetStore((s) => s.selectedModuleId);
   const initNiche = useClosetStore((s) => s.initNiche);
@@ -18,11 +19,18 @@ export function ClosetBuilder() {
   const selectModule = useClosetStore((s) => s.selectModule);
 
   // First-ever visit (nothing in localStorage yet) starts from a reasonable
-  // default niche so the scene isn't empty on load.
+  // default niche so the scene isn't empty on load. Gated on hasHydrated so
+  // this can never fire before persist's rehydration has genuinely applied
+  // (or genuinely confirmed there's nothing to restore) — otherwise a real
+  // draft can be silently overwritten by a fresh empty niche on refresh.
   useEffect(() => {
-    if (!project) initNiche(300, 240, 60);
-  }, [project, initNiche]);
+    if (hasHydrated && !project) initNiche(300, 240, 60);
+  }, [hasHydrated, project, initNiche]);
 
+  // Not yet hydrated: render nothing rather than treating "haven't checked
+  // storage yet" the same as "genuinely empty" (which would otherwise flash
+  // briefly before the real draft applies).
+  if (!hasHydrated) return null;
   if (!project) return null;
   const area = project.areas[0];
   const conjunto = area?.conjuntos[0];

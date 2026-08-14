@@ -51,6 +51,14 @@ function createDebouncedLocalStorage(delayMs: number): PersistStorage<PersistedC
 interface ClosetStore {
   project: ClosetProject | null;
   selectedModuleId: string | null;
+  // Flips false -> true exactly once, via persist's onRehydrateStorage
+  // callback below, once rehydration has genuinely applied (whether it
+  // found a real draft or confirmed there was nothing to restore). Lets
+  // consumers (see ClosetBuilder) distinguish "haven't checked storage yet"
+  // from "checked storage, there really was nothing" — without this, a
+  // consumer's own effect can't tell the two apart and may race ahead of
+  // rehydration, overwriting a real draft with a fresh empty one.
+  _hasHydrated: boolean;
 
   initNiche: (widthCm: number, heightCm: number, depthCm: number) => void;
   addModule: (widthCm: number, depthCm: number) => void;
@@ -99,6 +107,7 @@ export const useClosetStore = create<ClosetStore>()(
     (set) => ({
       project: null,
       selectedModuleId: null,
+      _hasHydrated: false,
 
       initNiche: (widthCm, heightCm, depthCm) => {
         const area = buildNewArea("Closet", "niche", { width: widthCm, height: heightCm, depth: depthCm });
@@ -199,6 +208,14 @@ export const useClosetStore = create<ClosetStore>()(
       name: "closet-draft-v1",
       partialize: (state) => ({ project: state.project }),
       storage: createDebouncedLocalStorage(PERSIST_DEBOUNCE_MS),
+      // Documented zustand pattern for "rehydration has genuinely applied":
+      // called once at store setup; the returned callback fires once
+      // hydration finishes (whether it found a real draft or confirmed
+      // there was nothing to restore), and mutating the draft here is how
+      // persist wants consumers to flip a hydration-done flag.
+      onRehydrateStorage: () => (state) => {
+        if (state) state._hasHydrated = true;
+      },
     }
   )
 );
