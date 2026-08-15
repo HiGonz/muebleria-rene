@@ -2,6 +2,7 @@ export interface DebouncedMaxWaitScheduler {
   trigger: () => void;
   flushNow: () => void;
   cancel: () => void;
+  rearm: () => void;
 }
 
 // Hand-rolled debounce-with-maxWait, same shape as createDebouncedLocalStorage
@@ -38,5 +39,13 @@ export function createDebouncedMaxWaitScheduler(run: () => void, debounceMs: num
     fire();
   };
 
-  return { trigger, flushNow, cancel };
+  // Arms ONLY the non-resetting maxWait timer (not the debounce timer), and
+  // only if one isn't already armed. Used for retrying a persistently-failing
+  // save without the fast (debounceMs) retry loop trigger() would cause —
+  // slows a stuck retry to once per maxWaitMs instead of once per debounceMs.
+  const rearm = () => {
+    if (!maxWaitTimer) maxWaitTimer = setTimeout(fire, maxWaitMs);
+  };
+
+  return { trigger, flushNow, cancel, rearm };
 }

@@ -706,6 +706,19 @@ export const useKitchenStore = create<KitchenStore>()(
       name: "kitchen-draft-v3",
       partialize: (state) => ({ draft: state.draft, projectId: state.projectId }),
       storage: createDebouncedLocalStorage(PERSIST_DEBOUNCE_MS),
+      // Unlike the v1→v2 bump, `autosaveEnabled` has a sensible universal
+      // default (see initialDraft) that can just be backfilled onto any
+      // pre-existing persisted draft — no need to orphan in-progress local
+      // drafts over it. Without this, Zustand's default shallow merge
+      // ({...currentState, ...persistedState}) replaces the whole `draft`
+      // object with the persisted (pre-feature) one, leaving
+      // draft.autosaveEnabled undefined (falsy) for every returning user.
+      version: 1,
+      migrate: (persistedState) => {
+        const state = persistedState as Partial<PersistedKitchenState> | undefined;
+        if (!state?.draft) return { draft: initialDraft, projectId: null };
+        return { draft: { ...initialDraft, ...state.draft }, projectId: state.projectId ?? null };
+      },
     }
   )
 );

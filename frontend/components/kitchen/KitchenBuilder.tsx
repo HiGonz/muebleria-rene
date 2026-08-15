@@ -183,6 +183,11 @@ export function KitchenBuilder() {
   // Shared by the desktop header's own Guardar button and the mobile
   // overflow menu's — same action, same request in flight either way.
   const handleSave = async () => {
+    // Cancel any pending autosave FIRST — otherwise an autosave debounce
+    // armed by a recent edit can fire concurrently with this manual save,
+    // and both POST saveKitchenProject(draft, null) for an unsaved draft,
+    // creating a duplicate/orphaned project row.
+    cancelAutosave();
     setSaving(true);
     try {
       const savedId = await saveKitchenProject(draft, projectId);
@@ -197,7 +202,7 @@ export function KitchenBuilder() {
     }
   };
 
-  const autosaveStatus = useKitchenAutosave({
+  const { status: autosaveStatus, cancel: cancelAutosave } = useKitchenAutosave({
     draft,
     projectId,
     enabled: draft.autosaveEnabled,

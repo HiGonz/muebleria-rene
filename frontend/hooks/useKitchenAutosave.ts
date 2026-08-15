@@ -28,7 +28,16 @@ interface UseKitchenAutosaveArgs {
 // project, the very first real change on an unsaved draft creates its
 // backend row as a side effect of the normal autosave schedule, with no
 // special-cased "first save" code path.
-export function useKitchenAutosave({ draft, projectId, enabled, onProjectCreated }: UseKitchenAutosaveArgs): AutosaveStatus {
+export interface UseKitchenAutosaveResult {
+  status: AutosaveStatus;
+  // Cancels any pending autosave (armed timers) AND clears the pending-edit
+  // flag, so a manual save can claim the in-flight-save slot without a
+  // debounce/maxWait tick firing a redundant, duplicate-creating save right
+  // after (see handleSave in KitchenBuilder.tsx).
+  cancel: () => void;
+}
+
+export function useKitchenAutosave({ draft, projectId, enabled, onProjectCreated }: UseKitchenAutosaveArgs): UseKitchenAutosaveResult {
   const [status, setStatus] = useState<AutosaveStatus>({ kind: "idle" });
 
   // Refs so the scheduler's callback (captured once, see below) always reads
@@ -73,9 +82,12 @@ export function useKitchenAutosave({ draft, projectId, enabled, onProjectCreated
         // fire() (inside the scheduler) already cancelled both timers before
         // calling this flush(), so without re-arming here, flushNow() would
         // see no timers pending and silently no-op on tab hide/unload even
-        // though pendingRef is true. Re-trigger so the timer-armed state
-        // stays consistent with pendingRef.
-        schedulerRef.current?.trigger();
+        // though pendingRef is true. rearm() (not trigger()) arms only the
+        // non-resetting maxWait timer — a persistently-failing save (expired
+        // session, offline) then retries once per MAX_WAIT_MS instead of
+        // every DEBOUNCE_MS, which trigger() would cause under continuous
+        // edits (an unbounded fast retry loop).
+        schedulerRef.current?.rearm();
         setStatus({ kind: "error", message: error instanceof Error ? error.message : "No fue posible guardar." });
       })
       .finally(() => {
@@ -128,5 +140,10 @@ export function useKitchenAutosave({ draft, projectId, enabled, onProjectCreated
     };
   }, []);
 
-  return status;
+  const cancel = () => {
+    schedulerRef.current?.cancel();
+    pendingRef.current = false;
+  };
+
+  return { status, cancel };
 }
