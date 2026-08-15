@@ -5,7 +5,7 @@ import { persist } from "zustand/middleware";
 import type { PersistStorage, StorageValue } from "zustand/middleware";
 import type {
   ClosetArea, ClosetBlock, ClosetBlockKind, ClosetConjunto, ClosetModule, ClosetProject,
-  DoorBlockConfig, DrawerBlockConfig, HangRodBlockConfig, OpenBlockConfig,
+  ClosetWallRotation, DoorBlockConfig, DrawerBlockConfig, HangRodBlockConfig, OpenBlockConfig,
 } from "@/types/closet";
 import {
   buildNewArea, buildNewBlock, buildNewClosetModule, buildNewConjunto,
@@ -76,6 +76,7 @@ interface ClosetStore {
   setHasHydrated: () => void;
 
   initNiche: (widthCm: number, heightCm: number, depthCm: number) => void;
+  initRoom: (widthCm: number, depthCm: number, ceilingHeightCm: number) => void;
   addModule: (widthCm: number, depthCm: number) => void;
   removeModule: (moduleId: string) => void;
   selectModule: (moduleId: string | null) => void;
@@ -89,7 +90,7 @@ interface ClosetStore {
   addConjunto: () => void;
   removeConjunto: (conjuntoId: string) => void;
   selectConjunto: (conjuntoId: string | null) => void;
-  updateConjuntoX: (conjuntoId: string, xCm: number) => void;
+  updateConjuntoXZRotation: (conjuntoId: string, xCm: number, zCm: number, rotation: ClosetWallRotation) => void;
   setTopShelf: (conjuntoId: string, coversModuleIds: string[]) => void;
   removeTopShelf: (conjuntoId: string) => void;
 }
@@ -145,6 +146,17 @@ export const useClosetStore = create<ClosetStore>()(
       initNiche: (widthCm, heightCm, depthCm) => {
         const area = buildNewArea("Closet", "niche", { width: widthCm, height: heightCm, depth: depthCm });
         const firstConjunto = buildNewConjunto(0, 0);
+        area.conjuntos = [firstConjunto];
+        set({
+          project: { id: null, clientName: "", projectName: "Closet nuevo", notes: "", areas: [area] },
+          selectedModuleId: null,
+          selectedConjuntoId: firstConjunto.id,
+        });
+      },
+
+      initRoom: (widthCm, depthCm, ceilingHeightCm) => {
+        const area = buildNewArea("Closet", "room", { width: widthCm, depth: depthCm, ceilingHeight: ceilingHeightCm });
+        const firstConjunto = buildNewConjunto(0, 0, 0);
         area.conjuntos = [firstConjunto];
         set({
           project: { id: null, clientName: "", projectName: "Closet nuevo", notes: "", areas: [area] },
@@ -257,8 +269,13 @@ export const useClosetStore = create<ClosetStore>()(
           if (!s.project) return {};
           const area = s.project.areas[0];
           if (!area) return {};
-          const rightmostEndCm = area.conjuntos.reduce((max, c) => Math.max(max, c.x + conjuntoWidthCm(c)), 0);
-          const newConjunto = buildNewConjunto(area.conjuntos.length ? rightmostEndCm + 10 : 0, 0);
+          // A new conjunto always starts on the north wall (rotation 0) —
+          // only conjuntos already on that same wall are relevant to "how
+          // far right is already occupied" (a west/east-wall conjunto's x
+          // isn't a north-wall offset at all, see conjuntoAlongWallCm).
+          const northWallConjuntos = area.conjuntos.filter((c) => c.rotation === 0);
+          const rightmostEndCm = northWallConjuntos.reduce((max, c) => Math.max(max, c.x + conjuntoWidthCm(c)), 0);
+          const newConjunto = buildNewConjunto(northWallConjuntos.length ? rightmostEndCm + 10 : 0, 0, 0);
           return {
             project: updateAreaInProject(s.project, area.id, (a) => ({ ...a, conjuntos: [...a.conjuntos, newConjunto] })),
             selectedConjuntoId: newConjunto.id,
@@ -282,10 +299,10 @@ export const useClosetStore = create<ClosetStore>()(
 
       selectConjunto: (conjuntoId) => set({ selectedConjuntoId: conjuntoId, selectedModuleId: null }),
 
-      updateConjuntoX: (conjuntoId, xCm) =>
+      updateConjuntoXZRotation: (conjuntoId, xCm, zCm, rotation) =>
         set((s) => {
           if (!s.project) return {};
-          return { project: updateConjuntoInProject(s.project, conjuntoId, (c) => ({ ...c, x: xCm })) };
+          return { project: updateConjuntoInProject(s.project, conjuntoId, (c) => ({ ...c, x: xCm, z: zCm, rotation })) };
         }),
 
       setTopShelf: (conjuntoId, coversModuleIds) =>
