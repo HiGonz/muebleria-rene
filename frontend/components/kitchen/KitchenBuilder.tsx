@@ -5,9 +5,10 @@ import dynamic from "next/dynamic";
 import { AnimatePresence, motion } from "framer-motion";
 import { Settings, Palette, Share2, MoreVertical } from "lucide-react";
 import { toast } from "sonner";
-import { getKitchenProject, saveKitchenProject } from "@/services/api";
+import { getKitchenProject, saveKitchenProject, updateKitchenAutosaveEnabled } from "@/services/api";
 import { useKitchenStore } from "@/store/useKitchenStore";
 import { useIsMobile } from "@/lib/useIsMobile";
+import { useKitchenAutosave } from "@/hooks/useKitchenAutosave";
 import { ModuleSelector } from "./ModuleSelector";
 import { ModuleInspector } from "./ModuleInspector";
 import { KitchenSummary } from "./KitchenSummary";
@@ -15,6 +16,7 @@ import { BuilderFab } from "./BuilderFab";
 import { GlobalMaterialsModal } from "./GlobalMaterialsModal";
 import { RoomSettingsModal } from "./RoomSettingsModal";
 import { ShareModal } from "./ShareModal";
+import { AutosaveStatusLabel } from "./AutosaveStatusLabel";
 import { Button } from "@/components/ui/button";
 import { useRouter, useSearchParams } from "next/navigation";
 
@@ -39,6 +41,7 @@ export function KitchenBuilder() {
   const {
     draft, projectId, activeTab, showSelector, setActiveTab, resetDraft, loadProject, updateModulePosition, nudgeModule,
     openSelector, closeSelector, setEditingModule, undoStack, redoStack, undo, redo, updateOpening, removeModule, toggleModuleLock,
+    adoptSavedProjectId, setAutosaveEnabled,
   } = useKitchenStore();
   const handleOpeningMove = useCallback((id: string, offset: number) => updateOpening(id, { offset }), [updateOpening]);
   // Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z — global within the builder (not scoped
@@ -191,6 +194,22 @@ export function KitchenBuilder() {
     }
   };
 
+  const autosaveStatus = useKitchenAutosave({
+    draft,
+    projectId,
+    enabled: draft.autosaveEnabled,
+    onProjectCreated: adoptSavedProjectId,
+  });
+
+  const handleAutosaveToggle = (value: boolean) => {
+    setAutosaveEnabled(value);
+    if (projectId !== null) {
+      updateKitchenAutosaveEnabled(projectId, value).catch(() =>
+        toast.error("No fue posible actualizar el guardado automático.")
+      );
+    }
+  };
+
   if (projectLoading) {
     return (
       <div className="flex h-screen items-center justify-center bg-ink">
@@ -267,6 +286,16 @@ export function KitchenBuilder() {
               <span className="hidden sm:inline sm:ml-1.5">Compartir</span>
             </Button>
           )}
+          <AutosaveStatusLabel status={autosaveStatus} autosaveEnabled={draft.autosaveEnabled} />
+          <label className="flex items-center gap-1.5 text-[11px] text-warmgray cursor-pointer select-none" title="Guardado automático">
+            <input
+              type="checkbox"
+              checked={draft.autosaveEnabled}
+              onChange={(e) => handleAutosaveToggle(e.target.checked)}
+              className="accent-indigo-500"
+            />
+            Auto
+          </label>
           <Button variant="primary" className="h-8 px-3 text-xs" disabled={saving} onClick={handleSave}>
             {saving ? "Guardando..." : "Guardar"}
           </Button>
@@ -336,6 +365,18 @@ export function KitchenBuilder() {
               <button role="menuitem" onClick={() => { setShowGlobalMaterials(true); setShowMobileMenu(false); }} className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-xs text-ivory transition-colors hover:bg-ivory/8">
                 <Palette size={14} className="text-warmgray" /> Materiales globales
               </button>
+              <div className="mt-1 flex items-center justify-between border-t border-ivory/8 px-3 pt-2">
+                <AutosaveStatusLabel status={autosaveStatus} autosaveEnabled={draft.autosaveEnabled} />
+                <label className="flex items-center gap-1.5 text-[11px] text-warmgray cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={draft.autosaveEnabled}
+                    onChange={(e) => handleAutosaveToggle(e.target.checked)}
+                    className="accent-indigo-500"
+                  />
+                  Auto
+                </label>
+              </div>
               <div className="mt-1 border-t border-ivory/8 pt-1">
                 <button
                   role="menuitem"
