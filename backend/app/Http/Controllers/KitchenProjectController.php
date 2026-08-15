@@ -30,13 +30,14 @@ class KitchenProjectController extends Controller
     public function store(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'client_name'    => 'required|string|max:120',
+            'client_name'    => 'nullable|string|max:120',
             'client_phone'   => 'nullable|string|max:30',
             'project_name'   => 'required|string|max:120',
             'notes'          => 'nullable|string|max:1000',
             'room_width'     => 'required|integer|min:100|max:2000',
             'room_depth'     => 'required|integer|min:100|max:2000',
             'ceiling_height' => 'required|integer|min:200|max:400',
+            'autosave_enabled' => 'sometimes|boolean',
             'openings'                 => 'nullable|array',
             'openings.*.id'            => 'required|string|max:60',
             'openings.*.type'          => ['required', Rule::in(['window', 'door'])],
@@ -60,15 +61,16 @@ class KitchenProjectController extends Controller
 
         $project = DB::transaction(function () use ($validated, $request) {
             $project = KitchenProject::create([
-                'user_id'        => $request->user()->id,
-                'client_name'    => $validated['client_name'],
-                'client_phone'   => $validated['client_phone'] ?? null,
-                'project_name'   => $validated['project_name'],
-                'notes'          => $validated['notes'] ?? null,
-                'room_width'     => $validated['room_width'],
-                'room_depth'     => $validated['room_depth'],
-                'ceiling_height' => $validated['ceiling_height'],
-                'openings'       => $validated['openings'] ?? [],
+                'user_id'          => $request->user()->id,
+                'client_name'      => $validated['client_name'] ?? null,
+                'client_phone'     => $validated['client_phone'] ?? null,
+                'project_name'     => $validated['project_name'],
+                'notes'            => $validated['notes'] ?? null,
+                'room_width'       => $validated['room_width'],
+                'room_depth'       => $validated['room_depth'],
+                'ceiling_height'   => $validated['ceiling_height'],
+                'openings'         => $validated['openings'] ?? [],
+                'autosave_enabled' => $validated['autosave_enabled'] ?? true,
             ]);
 
             foreach ($validated['modules'] ?? [] as $mod) {
@@ -105,13 +107,14 @@ class KitchenProjectController extends Controller
         $this->authorizeProject($request, $kitchenProject);
 
         $validated = $request->validate([
-            'client_name'    => 'sometimes|string|max:120',
+            'client_name'    => 'sometimes|nullable|string|max:120',
             'client_phone'   => 'nullable|string|max:30',
             'project_name'   => 'sometimes|string|max:120',
             'notes'          => 'nullable|string|max:1000',
             'room_width'     => 'sometimes|integer|min:100|max:2000',
             'room_depth'     => 'sometimes|integer|min:100|max:2000',
             'ceiling_height' => 'sometimes|integer|min:200|max:400',
+            'autosave_enabled' => 'sometimes|boolean',
             'openings'                 => 'nullable|array',
             'openings.*.id'            => 'required|string|max:60',
             'openings.*.type'          => ['required', Rule::in(['window', 'door'])],

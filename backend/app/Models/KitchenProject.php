@@ -24,6 +24,7 @@ class KitchenProject extends Model
         'ceiling_height',
         'openings',
         'status',
+        'autosave_enabled',
     ];
 
     protected $casts = [
@@ -31,6 +32,7 @@ class KitchenProject extends Model
         'room_depth' => 'integer',
         'ceiling_height' => 'integer',
         'openings' => 'array',
+        'autosave_enabled' => 'boolean',
     ];
 
     public function user(): BelongsTo
