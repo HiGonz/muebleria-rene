@@ -7,6 +7,7 @@ import { AppShell } from "@/components/layout/AppShell";
 import { listKitchenProjects, updateKitchenProjectStatus, KITCHEN_PROJECT_STATUSES, type KitchenProjectStatus } from "@/services/api";
 import { formatDate } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { useKitchenStore } from "@/store/useKitchenStore";
 
 type KitchenProjectRow = Awaited<ReturnType<typeof listKitchenProjects>>[number];
@@ -87,7 +88,11 @@ export default function KitchenProjectsPage() {
                     <p className="text-xs text-zinc-500">KIT-{p.id}</p>
                   </td>
                   <td className="px-5 py-3">
-                    <p className="text-zinc-200">{p.clientName}</p>
+                    {p.clientName ? (
+                      <p className="text-zinc-200">{p.clientName}</p>
+                    ) : (
+                      <Badge tone="amber">Borrador</Badge>
+                    )}
                     <p className="text-xs text-zinc-500">{p.clientPhone}</p>
                   </td>
                   <td className="px-5 py-3 text-zinc-300 whitespace-nowrap">{p.roomWidth} × {p.roomDepth} cm</td>
