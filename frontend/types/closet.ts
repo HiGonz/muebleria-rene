@@ -3,6 +3,11 @@
 
 export type ClosetSpaceType = "niche" | "room";
 
+// A conjunto's rotation is always one of the 4 cardinal directions — it
+// never rotates freely. This keeps every conjunto footprint axis-aligned
+// in room coordinates, so collision math is plain AABB overlap.
+export type ClosetWallRotation = 0 | 90 | 180 | 270;
+
 // "niche": envelope against one wall, no walk-around — the scene frames
 // the box. "room" (later phase): 4-wall walkable space. Both are cm.
 export type ClosetSpace =
@@ -24,7 +29,7 @@ export interface ClosetArea {
 export interface ClosetConjunto {
   id: string;
   label: string;
-  x: number; z: number; rotation: 0 | 90 | 180 | 270; // cm/degrees — placement within the área
+  x: number; z: number; rotation: ClosetWallRotation; // cm/degrees — placement within the área
   modules: ClosetModule[]; // left-to-right order
   topShelf?: ClosetTopShelf;
 }

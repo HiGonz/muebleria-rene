@@ -1,6 +1,6 @@
 import type {
   ClosetArea, ClosetBlock, ClosetBlockKind, ClosetConjunto, ClosetModule,
-  ClosetSpace, ClosetSpaceType, ClosetTopShelf, DoorBlockConfig, DrawerBlockConfig,
+  ClosetSpace, ClosetSpaceType, ClosetTopShelf, ClosetWallRotation, DoorBlockConfig, DrawerBlockConfig,
   HangRodBlockConfig, OpenBlockConfig,
 } from "@/types/closet";
 
@@ -103,7 +103,7 @@ export function buildNewClosetModule(width: number, depth: number): ClosetModule
   return { id: newId("modulo"), label: "Módulo", width, depth, blocks: [] };
 }
 
-export function buildNewConjunto(x: number, z: number, rotation: 0 | 90 | 180 | 270 = 0): ClosetConjunto {
+export function buildNewConjunto(x: number, z: number, rotation: ClosetWallRotation = 0): ClosetConjunto {
   return { id: newId("conjunto"), label: "Conjunto", x, z, rotation, modules: [] };
 }
 
@@ -194,4 +194,131 @@ export function layoutTopShelf(topShelf: ClosetTopShelf, conjunto: ClosetConjunt
     xEndCm: Math.max(...covered.map((p) => p.endCm)),
     yTopCm: Math.max(...covered.map((p) => moduleTotalHeightCm(p.item.module.blocks))),
   };
+}
+
+// ─── Room wall geometry (phase 3 — a room área has 4 walls; a conjunto
+// attaches to exactly one, sliding along it) ────────────────────────────────
+//
+// Rotation-to-wall convention:
+//   0   = north wall (z=0),         along-wall axis = x
+//   180 = south wall (z=roomDepth), along-wall axis = x
+//   90  = west wall  (x=0),         along-wall axis = z
+//   270 = east wall  (x=roomWidth), along-wall axis = z
+
+export function wallLengthCm(rotation: ClosetWallRotation, roomWidthCm: number, roomDepthCm: number): number {
+  return rotation === 0 || rotation === 180 ? roomWidthCm : roomDepthCm;
+}
+
+// A conjunto's x/z pair always has one axis pinned to its wall (derived,
+// never read) and one free (stored, user-controlled) — this returns
+// whichever of x/z is currently the free one for the conjunto's own
+// rotation.
+export function conjuntoAlongWallCm(conjunto: ClosetConjunto): number {
+  return conjunto.rotation === 0 || conjunto.rotation === 180 ? conjunto.x : conjunto.z;
+}
+
+// Perpendicular extent (cm) a conjunto's modules stick out from its wall —
+// the deepest module, same value the top shelf mesh uses for its own depth.
+export function conjuntoDepthCm(conjunto: ClosetConjunto): number {
+  return conjunto.modules.reduce((max, m) => Math.max(max, m.depth), 0);
+}
+
+export interface ConjuntoBox { minX: number; maxX: number; minZ: number; maxZ: number }
+
+// World-space AABB (cm) for a conjunto placed on one of a room's 4 walls.
+// Rotation is always a cardinal (0/90/180/270), so this is always
+// axis-aligned — no oriented-rectangle math needed.
+export function conjuntoBox(
+  alongWallCm: number, rotation: ClosetWallRotation,
+  widthCm: number, depthCm: number, roomWidthCm: number, roomDepthCm: number,
+): ConjuntoBox {
+  switch (rotation) {
+    case 0: return { minX: alongWallCm, maxX: alongWallCm + widthCm, minZ: 0, maxZ: depthCm };
+    case 180: return { minX: alongWallCm, maxX: alongWallCm + widthCm, minZ: roomDepthCm - depthCm, maxZ: roomDepthCm };
+    case 90: return { minX: 0, maxX: depthCm, minZ: alongWallCm, maxZ: alongWallCm + widthCm };
+    case 270: return { minX: roomWidthCm - depthCm, maxX: roomWidthCm, minZ: alongWallCm, maxZ: alongWallCm + widthCm };
+  }
+}
+
+// Same tolerance rationale as CONJUNTO_OVERLAP_TOLERANCE_CM above, in 2D.
+// Written fresh rather than importing kitchen's boxesOverlap — closetData.ts
+// has zero component-layer imports today, and a services file importing a
+// components/3d .tsx file for a 5-line tolerance check isn't worth the
+// layering inversion.
+const CONJUNTO_BOX_OVERLAP_TOLERANCE_CM = 0.3;
+
+export function closetBoxesOverlap(a: ConjuntoBox, b: ConjuntoBox): boolean {
+  return (
+    a.minX < b.maxX - CONJUNTO_BOX_OVERLAP_TOLERANCE_CM && a.maxX > b.minX + CONJUNTO_BOX_OVERLAP_TOLERANCE_CM &&
+    a.minZ < b.maxZ - CONJUNTO_BOX_OVERLAP_TOLERANCE_CM && a.maxZ > b.minZ + CONJUNTO_BOX_OVERLAP_TOLERANCE_CM
+  );
+}
+
+// Which wall a floor point is closest to. Ties (a point near a corner,
+// equidistant between two walls) resolve to the conjunto's current wall,
+// so hovering near a corner mid-drag doesn't flicker the target wall.
+export function nearestWallForConjunto(
+  xCm: number, zCm: number, roomWidthCm: number, roomDepthCm: number, currentRotation: ClosetWallRotation,
+): ClosetWallRotation {
+  const distances: Array<{ rotation: ClosetWallRotation; dist: number }> = [
+    { rotation: 0, dist: zCm },
+    { rotation: 180, dist: roomDepthCm - zCm },
+    { rotation: 90, dist: xCm },
+    { rotation: 270, dist: roomWidthCm - xCm },
+  ];
+  const minDist = Math.min(...distances.map((d) => d.dist));
+  const tieToleranceCm = 0.01;
+  const nearest = distances.filter((d) => d.dist <= minDist + tieToleranceCm);
+  return nearest.some((d) => d.rotation === currentRotation) ? currentRotation : nearest[0].rotation;
+}
+
+// Same outward-search shape as findNearestFreeConjuntoX above, generalized
+// to test the moving conjunto's full room-space AABB against every other
+// conjunto in the área regardless of which wall it's on — this is what
+// makes collision corner-aware: two conjuntos on adjacent walls are just
+// two boxes compared like any other pair.
+export function findNearestFreeWallPosition(
+  targetAlongWallCm: number, rotation: ClosetWallRotation,
+  widthCm: number, depthCm: number, roomWidthCm: number, roomDepthCm: number,
+  otherBoxes: ConjuntoBox[],
+): number | null {
+  const lengthCm = wallLengthCm(rotation, roomWidthCm, roomDepthCm);
+  const maxAlongWall = lengthCm - widthCm;
+  if (maxAlongWall < 0) return null;
+  const clamp = (v: number) => Math.min(Math.max(v, 0), maxAlongWall);
+  const overlapsAny = (alongWallCm: number) => {
+    const box = conjuntoBox(alongWallCm, rotation, widthCm, depthCm, roomWidthCm, roomDepthCm);
+    return otherBoxes.some((other) => closetBoxesOverlap(box, other));
+  };
+
+  const clamped = clamp(targetAlongWallCm);
+  if (!overlapsAny(clamped)) return clamped;
+
+  const stepCm = 1;
+  for (let offset = stepCm; offset <= lengthCm; offset += stepCm) {
+    for (const dir of [1, -1] as const) {
+      const candidate = clamp(targetAlongWallCm + dir * offset);
+      if (!overlapsAny(candidate)) return candidate;
+    }
+  }
+  return null;
+}
+
+// World position (cm) for one module inside a room-attached conjunto.
+// packOffsetCm/depthOffsetCm are the module's own local offsets (from
+// stackAlongAxis and module.depth/2, same values niche already uses) —
+// this just routes them onto whichever world axes the conjunto's wall
+// implies. Four independent per-wall cases, each correct by inspection,
+// rather than a single rotation-matrix transform (which mixes the two
+// local axes' signs and is much easier to get subtly wrong).
+export function wallLocalToWorldCm(
+  rotation: ClosetWallRotation, alongWallCm: number, packOffsetCm: number, depthOffsetCm: number,
+  roomWidthCm: number, roomDepthCm: number,
+): { xCm: number; zCm: number } {
+  switch (rotation) {
+    case 0: return { xCm: alongWallCm + packOffsetCm, zCm: depthOffsetCm };
+    case 180: return { xCm: alongWallCm + packOffsetCm, zCm: roomDepthCm - depthOffsetCm };
+    case 90: return { xCm: depthOffsetCm, zCm: alongWallCm + packOffsetCm };
+    case 270: return { xCm: roomWidthCm - depthOffsetCm, zCm: alongWallCm + packOffsetCm };
+  }
 }
