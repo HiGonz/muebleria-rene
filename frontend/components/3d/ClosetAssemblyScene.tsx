@@ -192,7 +192,7 @@ function useRoomConjuntoDrag({ conjuntos, roomWidthCm, roomDepthCm, controlsRef,
 }) {
   const { camera, gl } = useThree();
   const [dragPreview, setDragPreview] = useState<{ id: string; xCm: number; zCm: number; rotation: ClosetWallRotation } | null>(null);
-  const dragRef = useRef<{ conjuntoId: string; pointerId: number; grabOffsetCm: number; rotation: ClosetWallRotation } | null>(null);
+  const dragRef = useRef<{ conjuntoId: string; pointerId: number; grabOffsetCm: number; rotation: ClosetWallRotation; lastAlongWallCm: number } | null>(null);
 
   const getFloorPointCm = (clientX: number, clientY: number): { xCm: number; zCm: number } | null => {
     const rect = gl.domElement.getBoundingClientRect();
@@ -214,7 +214,7 @@ function useRoomConjuntoDrag({ conjuntos, roomWidthCm, roomDepthCm, controlsRef,
 
     const alongWallStartCm = conjuntoAlongWallCm(conjunto);
     const floorAlongWallStartCm = conjunto.rotation === 0 || conjunto.rotation === 180 ? floorStart.xCm : floorStart.zCm;
-    dragRef.current = { conjuntoId: conjunto.id, pointerId, grabOffsetCm: floorAlongWallStartCm - alongWallStartCm, rotation: conjunto.rotation };
+    dragRef.current = { conjuntoId: conjunto.id, pointerId, grabOffsetCm: floorAlongWallStartCm - alongWallStartCm, rotation: conjunto.rotation, lastAlongWallCm: alongWallStartCm };
     setDragPreview({ id: conjunto.id, xCm: conjunto.x, zCm: conjunto.z, rotation: conjunto.rotation });
 
     const widthCm = conjuntoWidthCm(conjunto);
@@ -230,8 +230,19 @@ function useRoomConjuntoDrag({ conjuntos, roomWidthCm, roomDepthCm, controlsRef,
       if (!floorPoint) return null;
       const rotation = nearestWallForConjunto(floorPoint.xCm, floorPoint.zCm, roomWidthCm, roomDepthCm, state.rotation);
       const floorAlongWallCm = rotation === 0 || rotation === 180 ? floorPoint.xCm : floorPoint.zCm;
+      if (rotation !== state.rotation) {
+        // Wall just changed mid-drag — floorAlongWallCm is now measured on a
+        // different axis than the grab offset was captured on, so reusing that
+        // offset verbatim would jump the conjunto to wherever the raw pointer
+        // coordinate happens to land on the new axis. Re-anchor the offset so
+        // the along-wall position stays exactly where it last rendered, and
+        // only pointer movement AFTER the wall switch moves it further.
+        state.grabOffsetCm = floorAlongWallCm - state.lastAlongWallCm;
+      }
+      const alongWallCm = floorAlongWallCm - state.grabOffsetCm;
       state.rotation = rotation;
-      return { alongWallCm: floorAlongWallCm - state.grabOffsetCm, rotation };
+      state.lastAlongWallCm = alongWallCm;
+      return { alongWallCm, rotation };
     };
 
     const toXZ = (alongWallCm: number, rotation: ClosetWallRotation): { xCm: number; zCm: number } =>
