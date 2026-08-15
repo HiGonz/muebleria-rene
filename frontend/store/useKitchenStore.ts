@@ -136,6 +136,7 @@ interface KitchenStore {
   resetDraft: () => void;
   loadSampleKitchen: (variant?: SampleKitchenVariant) => void;
   loadProject: (projectId: number, draft: KitchenDraft) => void;
+  adoptSavedProjectId: (projectId: number) => void;
 
   // Module actions
   addModule: (type: KitchenModuleType) => void;
@@ -219,6 +220,9 @@ export const useKitchenStore = create<KitchenStore>()(
 
       loadProject: (projectId, draft) =>
         set({ draft, projectId, showSelector: false, activeTab: "3d", undoStack: [], redoStack: [] }),
+
+      adoptSavedProjectId: (projectId) =>
+        set({ projectId }),
 
       // ── Module actions ────────────────────────────────────────────────────
       addModule: (type) =>

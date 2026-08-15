@@ -53,7 +53,7 @@ export default function KitchenProjectsPage() {
     <AppShell title="Proyectos de Cocina" subtitle="Diseños modulares de cocinas completas">
       <div className="mb-6 flex items-center justify-between">
         <p className="text-sm text-zinc-400">{projects ? `${projects.length} proyecto${projects.length !== 1 ? "s" : ""}` : "Cargando..."}</p>
-        <Link href="/kitchen" onClick={resetDraft}>
+        <Link href="/kitchen" replace onClick={resetDraft}>
           <Button variant="primary">+ Nueva cocina</Button>
         </Link>
       </div>
@@ -65,7 +65,7 @@ export default function KitchenProjectsPage() {
             <h3 className="text-base font-semibold text-white">Sin proyectos de cocina</h3>
             <p className="mt-1 text-sm text-zinc-500">Empieza diseñando una cocina modular completa.</p>
           </div>
-          <Link href="/kitchen" onClick={resetDraft}>
+          <Link href="/kitchen" replace onClick={resetDraft}>
             <Button variant="primary">Diseñar primera cocina</Button>
           </Link>
         </div>
@@ -107,7 +107,7 @@ export default function KitchenProjectsPage() {
                   <td className="px-5 py-3 text-xs text-zinc-500 whitespace-nowrap">{formatDate(p.createdAt)}</td>
                   <td className="px-5 py-3 text-xs text-zinc-500 whitespace-nowrap">{formatDate(p.updatedAt)}</td>
                   <td className="px-5 py-3">
-                    <Link href={`/kitchen?projectId=${p.id}`} className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors whitespace-nowrap">
+                    <Link href={`/kitchen?projectId=${p.id}`} replace className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors whitespace-nowrap">
                       Abrir →
                     </Link>
                   </td>

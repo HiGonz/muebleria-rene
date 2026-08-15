@@ -88,6 +88,8 @@ interface Paginated<T> {
   data: T[];
 }
 
+export const KITCHEN_DRAFT_CLIENT_PLACEHOLDER = "Cliente por asignar";
+
 // ─── Mappers ─────────────────────────────────────────────────────────────────
 function mapProject(p: BackendProject): ProjectRecord {
   return {
@@ -111,10 +113,11 @@ function mapProject(p: BackendProject): ProjectRecord {
 }
 
 function mapKitchenPayload(draft: KitchenDraft) {
+  const clientName = draft.clientName.trim();
   return {
-    client_name: draft.clientName,
+    client_name: clientName || KITCHEN_DRAFT_CLIENT_PLACEHOLDER,
     client_phone: draft.clientPhone || null,
-    project_name: draft.projectName,
+    project_name: draft.projectName.trim() || "Cocina nueva",
     notes: draft.notes || null,
     room_width: draft.roomWidth,
     room_depth: draft.roomDepth,
@@ -141,8 +144,9 @@ function mapKitchenPayload(draft: KitchenDraft) {
 }
 
 function mapKitchenResponseToDraft(json: BackendKitchenProject): KitchenDraft {
+  const clientName = json.client_name === KITCHEN_DRAFT_CLIENT_PLACEHOLDER ? "" : json.client_name;
   return {
-    clientName: json.client_name,
+    clientName,
     clientPhone: json.client_phone ?? "",
     projectName: json.project_name,
     notes: json.notes ?? "",
@@ -287,7 +291,7 @@ export async function listKitchenProjects() {
   return page.data.map((p) => ({
     id: p.id,
     projectName: p.project_name,
-    clientName: p.client_name,
+    clientName: p.client_name === KITCHEN_DRAFT_CLIENT_PLACEHOLDER ? "" : p.client_name,
     clientPhone: p.client_phone ?? "",
     roomWidth: p.room_width,
     roomDepth: p.room_depth,

@@ -32,10 +32,13 @@ const TABS = [
   { id: "summary" as const, label: "Resumen",  icon: "📋" },
 ];
 
+const KITCHEN_BUILDER_HISTORY_GUARD = "__kitchenBuilderHistoryGuard";
+const KITCHEN_BACK_TOAST_ID = "kitchen-builder-back-blocked";
+
 export function KitchenBuilder() {
   const {
     draft, projectId, activeTab, showSelector, setActiveTab, resetDraft, loadProject, updateModulePosition, nudgeModule,
-    openSelector, setEditingModule, undoStack, redoStack, undo, redo, updateOpening, removeModule, toggleModuleLock,
+    openSelector, closeSelector, setEditingModule, undoStack, redoStack, undo, redo, updateOpening, removeModule, toggleModuleLock,
   } = useKitchenStore();
   const handleOpeningMove = useCallback((id: string, offset: number) => updateOpening(id, { offset }), [updateOpening]);
   // Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z — global within the builder (not scoped
@@ -68,6 +71,7 @@ export function KitchenBuilder() {
   // Desktop (md:) is untouched.
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const mobileMenuRef = useRef<HTMLDivElement>(null);
+  const backOverlayRef = useRef({ showSelector, editingModuleId: draft.editingModuleId });
 
   // Loading /kitchen?projectId=123 pulls that saved project from the backend
   // into the draft — only once per id, so it doesn't clobber edits in progress.
@@ -105,6 +109,52 @@ export function KitchenBuilder() {
     document.addEventListener("mousedown", onClickOutside);
     return () => document.removeEventListener("mousedown", onClickOutside);
   }, [showMobileMenu]);
+
+  useEffect(() => {
+    backOverlayRef.current = { showSelector, editingModuleId: draft.editingModuleId };
+  }, [showSelector, draft.editingModuleId]);
+
+  useEffect(() => {
+    const guardToken = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const guardedState = () => ({
+      ...((window.history.state && typeof window.history.state === "object") ? window.history.state : {}),
+      [KITCHEN_BUILDER_HISTORY_GUARD]: guardToken,
+    });
+    const installGuard = () => {
+      const state = window.history.state;
+      if (state && typeof state === "object" && state[KITCHEN_BUILDER_HISTORY_GUARD]) {
+        window.history.replaceState(guardedState(), "", window.location.href);
+      } else {
+        window.history.pushState(guardedState(), "", window.location.href);
+      }
+    };
+
+    installGuard();
+
+    const onPopState = () => {
+      window.history.pushState(guardedState(), "", window.location.href);
+
+      const { showSelector: selectorOpen, editingModuleId } = backOverlayRef.current;
+      if (editingModuleId) {
+        backOverlayRef.current = { ...backOverlayRef.current, editingModuleId: null };
+        setEditingModule(null);
+        return;
+      }
+      if (selectorOpen) {
+        backOverlayRef.current = { ...backOverlayRef.current, showSelector: false };
+        closeSelector();
+        return;
+      }
+
+      toast("No puedes salir del constructor usando el botón Atrás.", {
+        id: KITCHEN_BACK_TOAST_ID,
+        duration: 2400,
+      });
+    };
+
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, [closeSelector, setEditingModule]);
   // draft.editingModuleId is persisted, so it can point at a module that no
   // longer exists (deleted in another session, stale localStorage, etc). Treat
   // that the same as "not editing" everywhere, instead of trusting the raw id
