@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useClosetStore } from "@/store/useClosetStore";
 import { ClosetAssemblyScene } from "@/components/3d/ClosetAssemblyScene";
+import { ClosetAreaCreationScreen } from "./ClosetAreaCreationScreen";
 import { ClosetModuleStackEditor } from "./ClosetModuleStackEditor";
 import { ClosetTopShelfEditor } from "./ClosetTopShelfEditor";
 import { NumericField } from "./NumericField";
@@ -17,35 +18,32 @@ export function ClosetBuilder() {
   const selectedConjuntoId = useClosetStore((s) => s.selectedConjuntoId);
   const selectedModuleId = useClosetStore((s) => s.selectedModuleId);
   const initNiche = useClosetStore((s) => s.initNiche);
+  const initRoom = useClosetStore((s) => s.initRoom);
   const addModule = useClosetStore((s) => s.addModule);
   const removeModule = useClosetStore((s) => s.removeModule);
   const selectModule = useClosetStore((s) => s.selectModule);
   const addConjunto = useClosetStore((s) => s.addConjunto);
   const removeConjunto = useClosetStore((s) => s.removeConjunto);
   const selectConjunto = useClosetStore((s) => s.selectConjunto);
-  const updateConjuntoX = useClosetStore((s) => s.updateConjuntoX);
+  const updateConjuntoXZRotation = useClosetStore((s) => s.updateConjuntoXZRotation);
   // Width is set once here at creation time (also editable later per-module
   // in ClosetModuleStackEditor) — a hangrod module often needs to be wider
   // than a drawer module next to it, so a single fixed default isn't enough.
   const [newModuleWidthCm, setNewModuleWidthCm] = useState(DEFAULT_MODULE_WIDTH_CM);
 
-  // First-ever visit (nothing in localStorage yet) starts from a reasonable
-  // default niche so the scene isn't empty on load. Gated on hasHydrated so
-  // this can never fire before persist's rehydration has genuinely applied
-  // (or genuinely confirmed there's nothing to restore) — otherwise a real
-  // draft can be silently overwritten by a fresh empty niche on refresh.
-  useEffect(() => {
-    if (hasHydrated && !project) initNiche(300, 240, 60);
-  }, [hasHydrated, project, initNiche]);
-
   // Not yet hydrated: render nothing rather than treating "haven't checked
   // storage yet" the same as "genuinely empty" (which would otherwise flash
   // briefly before the real draft applies).
   if (!hasHydrated) return null;
-  if (!project) return null;
+
+  // No draft yet (first-ever visit, or everything was cleared) — let the
+  // user pick a space type and dimensions instead of silently auto-creating
+  // one, so room áreas are actually reachable.
+  if (!project) return <ClosetAreaCreationScreen onCreateNiche={initNiche} onCreateRoom={initRoom} />;
+
   const area = project.areas[0];
-  if (!area || !isNicheSpace(area.space)) return null;
-  const { height: areaHeightCm } = area.space;
+  if (!area) return null;
+  const maxHeightCm = isNicheSpace(area.space) ? area.space.height : area.space.ceilingHeight;
 
   const selectedConjunto = area.conjuntos.find((c) => c.id === selectedConjuntoId) ?? area.conjuntos[0] ?? null;
   const selectedModule = selectedConjunto?.modules.find((m) => m.id === selectedModuleId) ?? null;
@@ -63,7 +61,7 @@ export function ClosetBuilder() {
       </header>
       <div className="flex flex-1 overflow-hidden">
         <div className="relative flex-1">
-          <ClosetAssemblyScene project={project} onConjuntoMove={updateConjuntoX} />
+          <ClosetAssemblyScene project={project} onConjuntoMove={updateConjuntoXZRotation} />
         </div>
         <aside className="flex w-80 shrink-0 flex-col overflow-y-auto border-l border-ivory/8">
           <div className="border-b border-ivory/8 p-3">
@@ -125,7 +123,7 @@ export function ClosetBuilder() {
 
               {selectedModule && (
                 <>
-                  <ClosetModuleStackEditor module={selectedModule} maxHeightCm={areaHeightCm} />
+                  <ClosetModuleStackEditor module={selectedModule} maxHeightCm={maxHeightCm} />
                   <div className="border-b border-ivory/8 p-3">
                     <button
                       onClick={() => removeModule(selectedModule.id)}
