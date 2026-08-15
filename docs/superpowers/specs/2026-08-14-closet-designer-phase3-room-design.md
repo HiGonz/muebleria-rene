@@ -123,14 +123,19 @@ as-is). Falls back the same way phase 2 does: if truly nothing on that
 wall fits, the conjunto doesn't move.
 
 **Rendering** — a conjunto's modules stay packed in local wall-space via
-the unchanged `stackAlongAxis`; the whole conjunto renders as one
-`<group position={...} rotation-y={...}>`. The local-to-world placement
-is a fresh, explicit `wallLocalToWorldCm(rotation, alongWallCm,
-roomWidthCm, roomDepthCm)` — a 4-way switch on the cardinal rotation
-values, not kitchen's `rotateLocal` trig identity: with only 4 fixed
-rotations the explicit form is easier to get right and to unit-test than
-re-deriving the right sign convention from a generic rotation formula
-written for a different offset semantic. `ConjuntoLayer` branches on `spaceType`
+the unchanged `stackAlongAxis`. Each module's world position is computed
+directly via a fresh `wallLocalToWorldM(rotation, alongWallCm,
+packOffsetCm, depthOffsetCm, roomWidthCm, roomDepthCm)` — a 4-way switch
+on the cardinal rotation, one obvious case per wall (e.g. west wall: the
+pack offset runs along world `z`, the depth offset runs along world `x`
+starting from `x=0`) — extending the same explicit-world-coordinates
+style `ConjuntoLayer` already uses for niche, rather than introducing a
+rotated-group transform: a single Y-axis rotation matrix necessarily
+mixes the two local axes' signs (confirmed by hand-deriving it against
+kitchen's `rotateLocal` matrix while drafting this plan), which is easy
+to get subtly wrong and hard to eyeball-verify, whereas four independent
+per-wall formulas are each trivially correct by inspection and cheap to
+unit-test with concrete numbers. `ConjuntoLayer` branches on `spaceType`
 to pick the niche (existing, x-only) or room (new, wall+free-axis) drag
 handler, but both funnel into the same `onConjuntoMove` store callback —
 extended to `updateConjuntoXZRotation(conjuntoId, xCm, zCm, rotation)`
