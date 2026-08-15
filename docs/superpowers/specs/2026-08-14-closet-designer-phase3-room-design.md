@@ -77,13 +77,15 @@ A fresh, closet-owned `RoomBackdrop` (parallel name to the existing
 a floor plane, sized from `width`/`depth`/`ceilingHeight` — no wall
 thickness, no openings, no dimension-line overlay. `ClosetAssemblyScene`
 branches on `area.spaceType`: niche keeps its existing fixed-distance
-framing camera; room uses `OrbitControls` with unrestricted rotation,
-target at the room's center `[width/200, ceilingHeight/200, depth/200]`,
-initial camera position elevated and pulled back looking inward. Reuses
-the already-exported `CameraRig` and camera-persistence trio
-(`cameraStorageKey`/`readPersistedCameraView`/`createDebouncedCameraWriter`)
-per the original spec's §1 — only the initial position/target expressions
-are closet-room-specific, not imported from kitchen.
+framing camera; room uses the same `Canvas camera={{position, fov}}` +
+`<OrbitControls target=... />` pattern niche already uses today (no
+`CameraRig` — niche doesn't use one either), just with unrestricted
+rotation, a target at the room's center, and an initial position
+elevated and pulled back looking inward. No camera-position persistence,
+matching niche's own current behavior (it has none) — this keeps the
+phase free of any new import from `KitchenAssemblyScene.tsx`, dropping
+the camera-persistence-trio reuse this section originally proposed, once
+it was clear niche's own camera already works fine without it.
 
 ## 5. Conjunto placement, drag, and collision
 
