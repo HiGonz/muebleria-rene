@@ -87,16 +87,16 @@ are closet-room-specific, not imported from kitchen.
 
 ## 5. Conjunto placement, drag, and collision
 
-**Footprint box** — `conjuntoBox(conjunto, xCm, zCm, rotation, depthCm)`,
-new in `closetData.ts`, closet-owned (parallel to kitchen's `moduleBox`
-but without corner-footprint/mount-height logic that doesn't apply here):
-given the pinned/free coordinate split from §2 and the conjunto's own
-`conjuntoWidthCm`/max-module-depth, returns `{minX, maxX, minZ, maxZ}` in
-room coordinates. The already-exported `boxesOverlap` (generic over any
-`{minX,maxX,minZ,maxZ}` shape, no kitchen-specific typing) is reused
-as-is to test two conjunto boxes for overlap — this is what makes
-collision corner-aware for free: two conjuntos on adjacent walls just
-produce two boxes that get compared like any other pair.
+**Footprint box** — `conjuntoBox(alongWallCm, rotation, widthCm, depthCm,
+roomWidthCm, roomDepthCm)`, new in `closetData.ts`, returns `{minX, maxX,
+minZ, maxZ}` in room coordinates per the pinned/free split from §2. Its
+overlap test (`closetBoxesOverlap`) is written fresh in `closetData.ts`
+rather than importing kitchen's `boxesOverlap` — `closetData.ts` has zero
+component-layer imports today (only from `types/closet.ts`), and a
+services-file-importing-a-`components/3d` `.tsx` file would invert that
+layering for a 5-line tolerance check that isn't worth the coupling. This
+is still what makes collision corner-aware: two conjuntos on adjacent
+walls just produce two boxes compared like any other pair.
 
 **Wall selection during drag** — fresh, closet-owned
 `nearestWallForConjunto(xCm, zCm, roomWidthCm, roomDepthCm)`, simpler than
@@ -124,9 +124,13 @@ wall fits, the conjunto doesn't move.
 
 **Rendering** — a conjunto's modules stay packed in local wall-space via
 the unchanged `stackAlongAxis`; the whole conjunto renders as one
-`<group position={...} rotation-y={...}>` using the already-exported
-`rotateLocal` for the position math, rather than computing each module's
-world coordinates individually. `ConjuntoLayer` branches on `spaceType`
+`<group position={...} rotation-y={...}>`. The local-to-world placement
+is a fresh, explicit `wallLocalToWorldCm(rotation, alongWallCm,
+roomWidthCm, roomDepthCm)` — a 4-way switch on the cardinal rotation
+values, not kitchen's `rotateLocal` trig identity: with only 4 fixed
+rotations the explicit form is easier to get right and to unit-test than
+re-deriving the right sign convention from a generic rotation formula
+written for a different offset semantic. `ConjuntoLayer` branches on `spaceType`
 to pick the niche (existing, x-only) or room (new, wall+free-axis) drag
 handler, but both funnel into the same `onConjuntoMove` store callback —
 extended to `updateConjuntoXZRotation(conjuntoId, xCm, zCm, rotation)`
