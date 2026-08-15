@@ -17,6 +17,7 @@ import { GlobalMaterialsModal } from "./GlobalMaterialsModal";
 import { RoomSettingsModal } from "./RoomSettingsModal";
 import { ShareModal } from "./ShareModal";
 import { AutosaveStatusLabel } from "./AutosaveStatusLabel";
+import { AutosaveNotice } from "./AutosaveNotice";
 import { Button } from "@/components/ui/button";
 import { useRouter, useSearchParams } from "next/navigation";
 
@@ -176,6 +177,8 @@ export function KitchenBuilder() {
   }, [activeTab, setActiveTab]);
 
   const modulesCount = draft.modules.length;
+  const isDraftProject = draft.clientName.trim() === "";
+  const noticeProjectKey = projectId !== null ? String(projectId) : "new";
 
   // Shared by the desktop header's own Guardar button and the mobile
   // overflow menu's — same action, same request in flight either way.
@@ -391,6 +394,8 @@ export function KitchenBuilder() {
           )}
         </div>
       </header>
+
+      <AutosaveNotice projectKey={noticeProjectKey} autosaveEnabled={draft.autosaveEnabled} isDraft={isDraftProject} />
 
       {/* ── Main content ────────────────────────────────────────────────────── */}
       <div className="flex flex-1 overflow-hidden">
