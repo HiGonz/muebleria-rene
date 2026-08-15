@@ -487,6 +487,9 @@ export interface KitchenDraft {
   clientPhone: string;
   projectName: string;
   notes: string;
+  // Autosave-to-backend on/off — survives across browsers/devices because
+  // it's saved on the project row itself, not a local UI setting.
+  autosaveEnabled: boolean;
   // Kitchen configuration — a free rectangular room, modules placed freely inside it
   roomWidth: number;     // cm
   roomDepth: number;     // cm

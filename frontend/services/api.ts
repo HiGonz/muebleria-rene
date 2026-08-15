@@ -68,7 +68,7 @@ interface BackendKitchenModule {
 
 interface BackendKitchenProject {
   id: number;
-  client_name: string;
+  client_name: string | null;
   client_phone: string | null;
   project_name: string;
   notes: string | null;
@@ -77,6 +77,7 @@ interface BackendKitchenProject {
   ceiling_height: number;
   openings: WallOpening[] | null;
   status: string;
+  autosave_enabled: boolean;
   created_at: string;
   updated_at: string;
   modules?: BackendKitchenModule[];
@@ -87,8 +88,6 @@ interface BackendKitchenProject {
 interface Paginated<T> {
   data: T[];
 }
-
-export const KITCHEN_DRAFT_CLIENT_PLACEHOLDER = "Cliente por asignar";
 
 // ─── Mappers ─────────────────────────────────────────────────────────────────
 function mapProject(p: BackendProject): ProjectRecord {
@@ -115,13 +114,14 @@ function mapProject(p: BackendProject): ProjectRecord {
 function mapKitchenPayload(draft: KitchenDraft) {
   const clientName = draft.clientName.trim();
   return {
-    client_name: clientName || KITCHEN_DRAFT_CLIENT_PLACEHOLDER,
+    client_name: clientName || null,
     client_phone: draft.clientPhone || null,
     project_name: draft.projectName.trim() || "Cocina nueva",
     notes: draft.notes || null,
     room_width: draft.roomWidth,
     room_depth: draft.roomDepth,
     ceiling_height: draft.ceilingHeight,
+    autosave_enabled: draft.autosaveEnabled,
     openings: draft.openings,
     modules: draft.modules.map((m) => ({
       module_type: m.type,
@@ -130,11 +130,6 @@ function mapKitchenPayload(draft: KitchenDraft) {
       height: m.dimensions.height,
       width: m.dimensions.width,
       depth: m.dimensions.depth,
-      // 2-decimal precision, not whole cm — rounding each module's position
-      // independently to a whole centimeter let two cabinets that were
-      // snapped exactly flush (see snapToNeighbor) drift up to ~1cm apart
-      // after a save/reload, since each one's rounding could go a different
-      // direction. Still rounds off float noise from the drag math itself.
       x: Math.round(m.x * 100) / 100,
       z: Math.round(m.z * 100) / 100,
       rotation: m.rotation,
@@ -144,12 +139,12 @@ function mapKitchenPayload(draft: KitchenDraft) {
 }
 
 function mapKitchenResponseToDraft(json: BackendKitchenProject): KitchenDraft {
-  const clientName = json.client_name === KITCHEN_DRAFT_CLIENT_PLACEHOLDER ? "" : json.client_name;
   return {
-    clientName,
+    clientName: json.client_name ?? "",
     clientPhone: json.client_phone ?? "",
     projectName: json.project_name,
     notes: json.notes ?? "",
+    autosaveEnabled: json.autosave_enabled,
     roomWidth: json.room_width,
     roomDepth: json.room_depth,
     ceilingHeight: json.ceiling_height,
@@ -291,7 +286,7 @@ export async function listKitchenProjects() {
   return page.data.map((p) => ({
     id: p.id,
     projectName: p.project_name,
-    clientName: p.client_name === KITCHEN_DRAFT_CLIENT_PLACEHOLDER ? "" : p.client_name,
+    clientName: p.client_name ?? "",
     clientPhone: p.client_phone ?? "",
     roomWidth: p.room_width,
     roomDepth: p.room_depth,
@@ -305,6 +300,10 @@ export async function listKitchenProjects() {
 
 export async function updateKitchenProjectStatus(id: number, status: KitchenProjectStatus): Promise<void> {
   await http.put(`/kitchen-projects/${id}`, { status });
+}
+
+export async function updateKitchenAutosaveEnabled(id: number, autosaveEnabled: boolean): Promise<void> {
+  await http.put(`/kitchen-projects/${id}`, { autosave_enabled: autosaveEnabled });
 }
 
 export async function getKitchenProject(id: number): Promise<KitchenDraft> {
