@@ -79,6 +79,7 @@ const initialDraft: KitchenDraft = {
   clientPhone: "",
   projectName: "Cocina nueva",
   notes: "",
+  autosaveEnabled: true,
   roomWidth: 400,
   roomDepth: 300,
   ceilingHeight: 240,
@@ -137,6 +138,7 @@ interface KitchenStore {
   loadSampleKitchen: (variant?: SampleKitchenVariant) => void;
   loadProject: (projectId: number, draft: KitchenDraft) => void;
   adoptSavedProjectId: (projectId: number) => void;
+  setAutosaveEnabled: (enabled: boolean) => void;
 
   // Module actions
   addModule: (type: KitchenModuleType) => void;
@@ -223,6 +225,9 @@ export const useKitchenStore = create<KitchenStore>()(
 
       adoptSavedProjectId: (projectId) =>
         set({ projectId }),
+
+      setAutosaveEnabled: (enabled) =>
+        set((s) => ({ draft: { ...s.draft, autosaveEnabled: enabled } })),
 
       // ── Module actions ────────────────────────────────────────────────────
       addModule: (type) =>
