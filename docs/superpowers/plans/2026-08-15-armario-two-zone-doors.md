@@ -859,7 +859,25 @@ EOF
 - Consumes: `ModuleOptions.doorZoneSplit` (Task 1); `module.type` (already
   in scope).
 
-- [ ] **Step 1: Add an `isTwoZoneCabinet` check and the new control**
+**Design note (revised after initial user testing, before this task was
+dispatched):** the first draft of this control exposed `doorZoneSplit`
+directly as "how many of the total doors are on top," alongside the
+existing generic total-doors field — indirect and easy to misread as
+"set 2 doors" not realizing it silently means 1-top-1-bottom by
+default with no visible way to choose otherwise. Two-zone cabinets
+instead get **two independent fields**, "Puertas arriba" and "Puertas
+abajo," each directly settable to 0-4 — matching the actual mental
+model (each zone has its own door count) rather than a
+total-plus-split-point. The generic "Núm. puertas" field is hidden for
+these 5 types (superseded, would otherwise show a number that doesn't
+map to either visible field). Both new fields write `opt.doors`
+(top+bottom) and `opt.doorZoneSplit` (top count) together in one
+`updateModule` call — not two sequential `updateOpt` calls, which would
+race (the second call's `{...opt, ...}` spread would read the
+already-stale `opt` from the closure, silently dropping the first
+call's change).
+
+- [ ] **Step 1: Add an `isTwoZoneCabinet` check and the new controls**
 
 Find:
 
@@ -885,7 +903,7 @@ Replace with:
         {activeTab === "frentes" && (isLower || isUpper || isTower) && !isLightCrown && (
           <Section label={isCajonera ? "Cajones" : "Puertas y cajones"}>
             <div className="grid grid-cols-2 gap-3">
-              {!isCajonera && !isFixedDrawerHueco && (
+              {!isCajonera && !isFixedDrawerHueco && !isTwoZoneCabinet && (
                 <FieldGroup label="Núm. puertas">
                   <div className="space-y-1.5">
                     <QuickCountButtons value={opt.doors} options={[1, 2]} onChange={(v) => updateOpt("doors", v)} />
@@ -893,19 +911,36 @@ Replace with:
                   </div>
                 </FieldGroup>
               )}
-              {isTwoZoneCabinet && (
-                <FieldGroup label="Puertas arriba">
-                  <NumInput
-                    value={Math.min(opt.doors, Math.max(0, opt.doorZoneSplit ?? 1))}
-                    onChange={(v) => updateOpt("doorZoneSplit", Math.max(0, Math.min(opt.doors, v)))}
-                    min={0}
-                    max={opt.doors}
-                  />
-                  <p className="mt-1 text-[10px] text-warmgray/70">
-                    Resto abajo: {Math.max(0, opt.doors - Math.max(0, Math.min(opt.doors, opt.doorZoneSplit ?? 1)))}. 0 puertas en una zona la deja abierta (hueco).
-                  </p>
-                </FieldGroup>
-              )}
+              {isTwoZoneCabinet && (() => {
+                const twoZoneTop = Math.max(0, Math.min(opt.doors, opt.doorZoneSplit ?? 1));
+                const twoZoneBottom = Math.max(0, opt.doors - twoZoneTop);
+                return (
+                  <>
+                    <FieldGroup label="Puertas arriba">
+                      <NumInput
+                        value={twoZoneTop}
+                        onChange={(v) => {
+                          const newTop = Math.max(0, v);
+                          updateModule(module.id, { options: { ...opt, doors: newTop + twoZoneBottom, doorZoneSplit: newTop } });
+                        }}
+                        min={0}
+                        max={4}
+                      />
+                    </FieldGroup>
+                    <FieldGroup label="Puertas abajo">
+                      <NumInput
+                        value={twoZoneBottom}
+                        onChange={(v) => {
+                          const newBottom = Math.max(0, v);
+                          updateModule(module.id, { options: { ...opt, doors: twoZoneTop + newBottom, doorZoneSplit: twoZoneTop } });
+                        }}
+                        min={0}
+                        max={4}
+                      />
+                    </FieldGroup>
+                  </>
+                );
+              })()}
 ```
 
 - [ ] **Step 2: Define `isTwoZoneCabinet`**
@@ -952,13 +987,17 @@ than something to fix in this task.
 ```bash
 git add components/kitchen/ModuleInspector.tsx
 git commit -m "$(cat <<'EOF'
-Add "Puertas arriba" zone-split control for two-zone cabinets
+Add independent "Puertas arriba"/"Puertas abajo" controls for two-zone cabinets
 
-Lets a user set how many of a two-zone cabinet's total doors are in
-the top zone vs. the bottom (doorZoneSplit), clamped to [0, opt.doors].
-The existing hinge-side/type/glass sections are now reachable for all
-5 two-zone types too, since their catalog defaults no longer force
-useDetailedLayout — no gating changes needed there.
+Two separate 0-4 fields, one per zone, matching the actual mental model
+instead of exposing doorZoneSplit as an indirect "how many of the total
+are on top" number. Both fields write opt.doors and opt.doorZoneSplit
+together in one updateModule call to avoid a stale-closure race between
+two sequential updateOpt calls. The generic "Núm. puertas" field is
+hidden for these 5 types (superseded). The existing hinge-side/type/
+glass sections are now reachable for all 5 two-zone types too, since
+their catalog defaults no longer force useDetailedLayout — no gating
+changes needed there.
 EOF
 )"
 ```
