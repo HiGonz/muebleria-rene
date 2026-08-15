@@ -374,7 +374,7 @@ export function ClosetAssemblyScene({ project, onConjuntoMove }: {
   const widthM = width / 100;
   const depthM = depth / 100;
   const ceilingHeightM = ceilingHeight / 100;
-  const initialPos: [number, number, number] = [widthM / 2, ceilingHeightM * 0.85, Math.max(widthM, depthM) * 1.1 + depthM / 2];
+  const initialPos: [number, number, number] = [widthM * 0.15, ceilingHeightM * 0.6, depthM * 0.15];
   const targetPos: [number, number, number] = [widthM / 2, ceilingHeightM / 2, depthM / 2];
 
   return (
