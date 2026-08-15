@@ -70,6 +70,12 @@ export function useKitchenAutosave({ draft, projectId, enabled, onProjectCreated
         // version the manual Guardar button already covers; this is the
         // persistent quiet one (see the status indicator in the UI).
         pendingRef.current = true;
+        // fire() (inside the scheduler) already cancelled both timers before
+        // calling this flush(), so without re-arming here, flushNow() would
+        // see no timers pending and silently no-op on tab hide/unload even
+        // though pendingRef is true. Re-trigger so the timer-armed state
+        // stays consistent with pendingRef.
+        schedulerRef.current?.trigger();
         setStatus({ kind: "error", message: error instanceof Error ? error.message : "No fue posible guardar." });
       })
       .finally(() => {
