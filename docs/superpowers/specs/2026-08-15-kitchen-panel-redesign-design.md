@@ -53,10 +53,16 @@ way to glance at the model while adjusting a module on a phone.
   icons, positioned top area) and a dimension/cotas overlay on the 3D
   model. Matches the requested "toolbar + cotas" behavior already —
   confirmed with the user, left untouched.
-- `useIsMobile()` (`lib/useIsMobile.ts`) already exists and is used
-  elsewhere in `KitchenBuilder.tsx` for the mobile/desktop header split —
-  reused as the mount gate for the new bottom sheet vs. the existing
-  desktop panel.
+- `useIsMobile()` (`lib/useIsMobile.ts`) already exists and is imported in
+  `KitchenBuilder.tsx`, but **is not actually called anywhere** — dead
+  import today. Its breakpoint (`max-width: 1023px`, Tailwind `lg`) also
+  doesn't match the header's own mobile/desktop split, which uses
+  Tailwind's `md:`/`hidden md:flex` classes (768px) directly. Corrected
+  during planning (verified against code, not assumed): the plan fixes
+  `useIsMobile`'s query to 767px (matching `md`/768px, the spec's own
+  breakpoint) and actually wires it up as the mount gate for the new
+  bottom sheet vs. the existing desktop panel — the first real use of
+  this hook.
 - `NumberInput` (`components/ui/input.tsx`) is a plain numeric text input
   (typed value, no +/- stepper UI) — the mobile Medidas tab needs a new
   stepper affordance around it, not a replacement of its logic.
