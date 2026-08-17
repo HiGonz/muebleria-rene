@@ -7,8 +7,10 @@ import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { formatCurrency } from "@/lib/utils";
 import { listQuotes } from "@/services/api";
+import { useRoleGuard, PAGE_ROLES } from "@/lib/roleAccess";
 
 export default function QuotesPage() {
+  useRoleGuard(PAGE_ROLES["/quotes"]);
   const [quotes, setQuotes] = useState<Awaited<ReturnType<typeof listQuotes>> | null>(null);
 
   useEffect(() => {
