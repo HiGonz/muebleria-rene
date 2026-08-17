@@ -2,8 +2,11 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BarChart3, Boxes, FileText, LayoutDashboard, PlusSquare, Shirt, UtensilsCrossed, X } from "lucide-react";
+import { BarChart3, Boxes, FileText, LayoutDashboard, Palette, PlusSquare, Shirt, UtensilsCrossed, Users, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useKitchenStore } from "@/store/useKitchenStore";
+import { useAuthStore } from "@/store/useAuthStore";
+import { PAGE_ROLES } from "@/lib/roleAccess";
 
 const items = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -15,12 +18,17 @@ const items = [
   // "/closet/projects" que enlazar aquí.
   { href: "/closet", label: "Diseñar closet", icon: Shirt },
   { href: "/materials", label: "Materiales", icon: Boxes },
+  { href: "/finishes", label: "Acabados", icon: Palette },
+  { href: "/users", label: "Usuarios", icon: Users },
   { href: "/quotes", label: "Cotizaciones", icon: FileText },
   { href: "/projects", label: "Proyectos", icon: BarChart3 },
 ];
 
 export function Sidebar({ open, onClose }: { open?: boolean; onClose?: () => void }) {
   const pathname = usePathname();
+  const resetKitchenDraft = useKitchenStore((s) => s.resetDraft);
+  const role = useAuthStore((s) => s.user?.role);
+  const visibleItems = items.filter((item) => !role || (PAGE_ROLES[item.href]?.includes(role) ?? true));
 
   return (
     <>
@@ -53,14 +61,23 @@ export function Sidebar({ open, onClose }: { open?: boolean; onClose?: () => voi
           <h1 className="mt-2 text-2xl font-semibold">Studio CAD</h1>
         </div>
         <nav className="space-y-2">
-          {items.map((item) => {
+          {visibleItems.map((item) => {
             const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
             const Icon = item.icon;
             return (
               <Link
                 key={item.href}
                 href={item.href}
-                onClick={onClose}
+                onClick={() => {
+                  onClose?.();
+                  // Entering the builder from anywhere else in the app should
+                  // start a blank kitchen, same as "+ Nueva cocina" on the
+                  // kitchen list — not silently resume whatever draft/saved
+                  // project was last open in the persisted store. Skipped
+                  // when already on /kitchen so tapping this in the mobile
+                  // drawer (just to close it) doesn't wipe in-progress work.
+                  if (item.href === "/kitchen" && !active) resetKitchenDraft();
+                }}
                 className={cn(
                   "flex items-center gap-3 rounded-2xl px-4 py-3 text-sm text-zinc-300 transition hover:bg-white/6 hover:text-white",
                   active && "bg-indigo-500/16 text-white shadow-[inset_0_0_0_1px_rgba(99,102,241,0.45)]",
