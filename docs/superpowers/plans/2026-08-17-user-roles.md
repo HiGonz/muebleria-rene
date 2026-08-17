@@ -1289,8 +1289,9 @@ git commit -m "feat(frontend): role-filtered sidebar + page-guard hook"
 - Modify: `frontend/app/finishes/page.tsx`
 - Modify: `frontend/app/quotes/page.tsx`
 - Modify: `frontend/app/projects/new/page.tsx`
-- Modify: `frontend/app/kitchen/page.tsx`
 - Modify: `frontend/app/closet/page.tsx`
+
+**Note:** `/kitchen` is deliberately NOT guarded here. `frontend/app/kitchen/page.tsx` is a thin wrapper with no logic of its own (`<Suspense><KitchenBuilder /></Suspense>`) — the real `projectId` reading lives inside `KitchenBuilder.tsx`, and taller needs `/kitchen?projectId=X` to work (opening an existing project to view/advance it) even though they can't reach `/kitchen` with no `projectId` (starting a blank design). That distinction can't be expressed as a flat per-pathname role list, so its guard is added inside `KitchenBuilder.tsx` itself as part of Task 11, conditioned on whether a `projectId` is present.
 
 **Interfaces:**
 - Consumes: `useRoleGuard`, `PAGE_ROLES` (Task 8).
@@ -1313,10 +1314,9 @@ Apply the same two changes to:
 - `finishes/page.tsx` → `PAGE_ROLES["/finishes"]`
 - `quotes/page.tsx` → `PAGE_ROLES["/quotes"]`
 - `projects/new/page.tsx` → `PAGE_ROLES["/projects/new"]`
-- `kitchen/page.tsx` → `PAGE_ROLES["/kitchen"]`
 - `closet/page.tsx` → `PAGE_ROLES["/closet"]`
 
-(`kitchen/projects/page.tsx` and `projects/page.tsx` are NOT touched here — all three roles can view both, so there's nothing to guard. `dashboard/page.tsx` likewise allows all three.)
+(`kitchen/projects/page.tsx` and `projects/page.tsx` are NOT touched here — all three roles can view both, so there's nothing to guard. `dashboard/page.tsx` likewise allows all three. `kitchen/page.tsx` is intentionally skipped — see the Note under Files above; its guard is added in Task 11 instead, inside `KitchenBuilder.tsx`.)
 
 - [ ] **Step 2: Type-check**
 
@@ -1400,11 +1400,26 @@ git commit -m "feat: show project owner on both project list pages"
 - Modify: `frontend/components/kitchen/KitchenBuilder.tsx`
 
 **Interfaces:**
-- Consumes: `useAuthStore().user?.role`, `updateKitchenProjectStatus` (already exists).
+- Consumes: `useAuthStore().user?.role`, `updateKitchenProjectStatus` (already exists), `useRoleGuard` (Task 8, used here directly instead of at the page level — see Task 9's Note on why `/kitchen` isn't guarded generically).
 
-- [ ] **Step 1: Gate the Resumen tab and every design/pricing action**
+- [ ] **Step 1: Guard "blank new design" without blocking "open an existing project"**
 
-In `frontend/components/kitchen/KitchenBuilder.tsx`, add the import and read the role near the component's other hooks:
+`KitchenBuilder.tsx` already reads `projectId` from `useSearchParams()` in its own mount effect (search for `searchParams.get("projectId")` — it's already there, used to decide whether to fetch a saved project). Near that same existing logic, add:
+
+```typescript
+import { useRoleGuard } from "@/lib/roleAccess";
+```
+
+```typescript
+  const hasProjectId = searchParams.get("projectId") !== null;
+  useRoleGuard(hasProjectId ? ["admin", "seller", "taller"] : ["admin", "seller"]);
+```
+
+(Placed after `searchParams` itself is defined, since it reads that value. This lets taller reach `/kitchen?projectId=X` — opening a project that already exists — while still bouncing them away from a bare `/kitchen`, which is "start a blank design," something only admin/seller can do.)
+
+- [ ] **Step 2: Gate the Resumen tab and every design/pricing action**
+
+Add the import and read the role near the component's other hooks:
 
 ```typescript
 import { useAuthStore } from "@/store/useAuthStore";
@@ -1427,7 +1442,7 @@ Guard the "Guardar", "Nuevo", "Habitación", "Materiales", "Compartir" header bu
 
 In the 3D tab's own content (`{activeTab === "3d" && (...)}` block), pass `readOnly={isTaller}` to `<KitchenAssemblyScene>` — it already supports this prop (used identically by the public viewer, Task-independent, already shipped).
 
-- [ ] **Step 2: Add taller's status control**
+- [ ] **Step 3: Add taller's status control**
 
 Still inside the header (desktop and mobile variants), where the existing `{!isTaller && (...)}`-wrapped "Guardar" button sits, add an always-visible (for taller specifically) status `<select>` reusing the exact pattern already on `kitchen/projects/page.tsx`'s list (`KITCHEN_PROJECT_STATUS_COLORS`, `updateKitchenProjectStatus`), restricted to the 3 statuses the backend allows taller to set:
 
@@ -1456,16 +1471,16 @@ Still inside the header (desktop and mobile variants), where the existing `{!isT
 
 Note: `draft.status` — verify this field actually exists on the `KitchenDraft`/store draft shape (check `types/kitchen.ts`'s `KitchenDraft` interface and `useKitchenStore`'s draft handling); if `status` isn't currently tracked in the frontend draft at all (the backend has it, but the frontend might not read it back into the draft), add it to `KitchenDraft` and to `mapKitchenResponseToDraft`/`saveKitchenProject`'s payload mapping in `services/api.ts` as part of this step — this is a real gap to verify, not an assumption to skip.
 
-- [ ] **Step 3: Type-check**
+- [ ] **Step 4: Type-check**
 
 Run: `cd frontend && npx tsc --noEmit`
 Expected: no new errors.
 
-- [ ] **Step 4: Manual verification**
+- [ ] **Step 5: Manual verification**
 
-Log in as `taller@demo.com`, open an existing kitchen project (one seeded/created as `seller`, status `Aprobado`), confirm: only "Vista 3D" tab shows, no Guardar/Nuevo/Habitación/Materiales/Compartir buttons, the 3D view is orbitable but modules can't be dragged/edited (no FAB cluster on tap), and the status dropdown is present and successfully moves the project to `En producción`.
+Log in as `taller@demo.com`, first confirm a bare `/kitchen` (no `?projectId=`) redirects away (Step 1's guard). Then open an existing kitchen project (one seeded/created as `seller`, status `Aprobado`) via `/kitchen?projectId=X`, confirm: only "Vista 3D" tab shows, no Guardar/Nuevo/Habitación/Materiales/Compartir buttons, the 3D view is orbitable but modules can't be dragged/edited (no FAB cluster on tap), and the status dropdown is present and successfully moves the project to `En producción`.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
 git add frontend/components/kitchen/KitchenBuilder.tsx frontend/types/kitchen.ts frontend/services/api.ts
