@@ -45,10 +45,27 @@ interface BackendQuote {
 interface BackendMaterial {
   id: number;
   name: string;
+  code: string | null;
   type: string;
   unit: string;
   cost_per_unit: string | number;
   stock: string | number;
+  active: boolean;
+  default_floor: boolean;
+  default_wall: boolean;
+}
+
+interface BackendFinish {
+  id: number;
+  name: string;
+  code: string;
+  type: "panel" | "cubierta" | "ambos";
+  source_image_url: string;
+  texture_url: string;
+  swatch_color: string;
+  repeat_scale: number | string;
+  roughness: number | string;
+  extra_cost_per_m2: number | string;
   active: boolean;
 }
 
@@ -166,7 +183,7 @@ function mapKitchenResponseToDraft(json: BackendKitchenProject): KitchenDraft {
 
 // ─── Auth ────────────────────────────────────────────────────────────────────
 export async function login(email: string, password: string) {
-  const data = await http.post<{ token: string; user: { name: string; email: string; role: "admin" | "seller" } }>("/login", { email, password });
+  const data = await http.post<{ token: string; user: { name: string; email: string; role: "admin" | "seller" | "taller" } }>("/login", { email, password });
   return { token: data.token, user: { name: data.user.name, email: data.user.email, role: data.user.role } };
 }
 
@@ -269,12 +286,190 @@ export async function listMaterials() {
   return materials.map((m) => ({
     id: m.id,
     name: m.name,
+    code: m.code,
     type: m.type,
     unit: m.unit,
     cost: Number(m.cost_per_unit),
     stock: Number(m.stock),
     active: m.active,
+    defaultFloor: m.default_floor,
+    defaultWall: m.default_wall,
   }));
+}
+
+export interface MaterialInput {
+  name: string;
+  code?: string | null;
+  type: string;
+  unit: string;
+  cost: number;
+  stock: number;
+  active: boolean;
+  defaultFloor?: boolean;
+  defaultWall?: boolean;
+}
+
+function mapMaterial(m: BackendMaterial) {
+  return { id: m.id, name: m.name, code: m.code, type: m.type, unit: m.unit, cost: Number(m.cost_per_unit), stock: Number(m.stock), active: m.active, defaultFloor: m.default_floor, defaultWall: m.default_wall };
+}
+
+export async function createMaterial(input: MaterialInput) {
+  const material = await http.post<BackendMaterial>("/materials", {
+    name: input.name,
+    code: input.code || null,
+    type: input.type,
+    unit: input.unit,
+    cost_per_unit: input.cost,
+    stock: input.stock,
+    active: input.active,
+    default_floor: input.defaultFloor,
+    default_wall: input.defaultWall,
+  });
+  return mapMaterial(material);
+}
+
+export async function updateMaterial(id: number, patch: Partial<MaterialInput>) {
+  const body: Record<string, unknown> = {};
+  if (patch.name !== undefined) body.name = patch.name;
+  if (patch.code !== undefined) body.code = patch.code || null;
+  if (patch.type !== undefined) body.type = patch.type;
+  if (patch.unit !== undefined) body.unit = patch.unit;
+  if (patch.cost !== undefined) body.cost_per_unit = patch.cost;
+  if (patch.stock !== undefined) body.stock = patch.stock;
+  if (patch.active !== undefined) body.active = patch.active;
+  if (patch.defaultFloor !== undefined) body.default_floor = patch.defaultFloor;
+  if (patch.defaultWall !== undefined) body.default_wall = patch.defaultWall;
+  const material = await http.put<BackendMaterial>(`/materials/${id}`, body);
+  return mapMaterial(material);
+}
+
+export async function deleteMaterial(id: number) {
+  await http.delete(`/materials/${id}`);
+}
+
+// ─── Finishes ────────────────────────────────────────────────────────────────
+export interface Finish {
+  id: number;
+  name: string;
+  code: string;
+  type: "panel" | "cubierta" | "ambos";
+  sourceImageUrl: string;
+  textureUrl: string;
+  swatchColor: string;
+  repeatScale: number;
+  roughness: number;
+  extraCostPerM2: number;
+  active: boolean;
+}
+
+function mapFinish(f: BackendFinish): Finish {
+  return {
+    id: f.id,
+    name: f.name,
+    code: f.code,
+    type: f.type,
+    sourceImageUrl: f.source_image_url,
+    textureUrl: f.texture_url,
+    swatchColor: f.swatch_color,
+    repeatScale: Number(f.repeat_scale),
+    roughness: Number(f.roughness),
+    extraCostPerM2: Number(f.extra_cost_per_m2),
+    active: f.active,
+  };
+}
+
+export async function listFinishes(): Promise<Finish[]> {
+  const finishes = await http.get<BackendFinish[]>("/finishes");
+  return finishes.map(mapFinish);
+}
+
+export interface FinishInput {
+  name: string;
+  code: string;
+  type: "panel" | "cubierta" | "ambos";
+  photo?: File;
+  repeatScale?: number;
+  roughness?: number;
+  extraCostPerM2?: number;
+  active?: boolean;
+}
+
+function finishFormData(input: Partial<FinishInput>): FormData {
+  const fd = new FormData();
+  if (input.name !== undefined) fd.set("name", input.name);
+  if (input.code !== undefined) fd.set("code", input.code);
+  if (input.type !== undefined) fd.set("type", input.type);
+  if (input.photo) fd.set("photo", input.photo);
+  if (input.repeatScale !== undefined) fd.set("repeat_scale", String(input.repeatScale));
+  if (input.roughness !== undefined) fd.set("roughness", String(input.roughness));
+  if (input.extraCostPerM2 !== undefined) fd.set("extra_cost_per_m2", String(input.extraCostPerM2));
+  if (input.active !== undefined) fd.set("active", input.active ? "1" : "0");
+  return fd;
+}
+
+export async function createFinish(input: FinishInput): Promise<Finish> {
+  const finish = await http.postForm<BackendFinish>("/finishes", finishFormData(input));
+  return mapFinish(finish);
+}
+
+export async function updateFinish(id: number, patch: Partial<FinishInput>): Promise<Finish> {
+  const fd = finishFormData(patch);
+  fd.set("_method", "PUT");
+  const finish = await http.postForm<BackendFinish>(`/finishes/${id}`, fd);
+  return mapFinish(finish);
+}
+
+export async function deleteFinish(id: number): Promise<void> {
+  await http.delete(`/finishes/${id}`);
+}
+
+// ─── Users ───────────────────────────────────────────────────────────────────
+interface BackendUser {
+  id: number;
+  name: string;
+  email: string;
+  role: "admin" | "seller" | "taller";
+  active: boolean;
+}
+
+export interface User {
+  id: number;
+  name: string;
+  email: string;
+  role: "admin" | "seller" | "taller";
+  active: boolean;
+}
+
+function mapUser(u: BackendUser): User {
+  return { id: u.id, name: u.name, email: u.email, role: u.role, active: u.active };
+}
+
+export async function listUsers(): Promise<User[]> {
+  const users = await http.get<BackendUser[]>("/users");
+  return users.map(mapUser);
+}
+
+export interface UserInput {
+  name: string;
+  email: string;
+  role: "admin" | "seller" | "taller";
+  password?: string;
+  active?: boolean;
+}
+
+export async function createUser(input: UserInput): Promise<User> {
+  const user = await http.post<BackendUser>("/users", input);
+  return mapUser(user);
+}
+
+export async function updateUser(id: number, patch: Partial<UserInput>): Promise<User> {
+  const user = await http.put<BackendUser>(`/users/${id}`, patch);
+  return mapUser(user);
+}
+
+export async function deactivateUser(id: number): Promise<User> {
+  const user = await http.delete<BackendUser>(`/users/${id}`);
+  return mapUser(user);
 }
 
 // ─── Kitchen Projects ────────────────────────────────────────────────────────
@@ -336,4 +531,8 @@ export async function createKitchenShare(id: number): Promise<KitchenShare> {
 
 export async function revokeKitchenShare(id: number): Promise<void> {
   await http.delete(`/kitchen-projects/${id}/share`);
+}
+
+export async function deleteKitchenProject(id: number): Promise<void> {
+  await http.delete(`/kitchen-projects/${id}`);
 }
