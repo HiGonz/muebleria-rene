@@ -288,18 +288,20 @@ editable before accepting.
 recipe json round-tripping unchanged; the new `towers` column persisting
 and defaulting to an empty list on existing projects.
 
-**Frontend.** The repo has no unit-test runner, so per the standing
-convention verification is `npx tsc --noEmit` plus manual checks. That
-convention is a poor fit for one part of this feature, and the spec says
-so rather than pretending otherwise: **the height-resolution rule in §2
-is real arithmetic that decides whether a generated tower closes exactly
-against its opening**, and it will be wrong in edge cases nobody clicks
-through by hand — a pinned section plus a maletero plus a 15cm floor,
-say. It should live in a framework-free `services/closetTower.ts`
-alongside the generator, and it is the strongest case yet for adding
-Vitest to this repo for that one module. Decide that at review; if the
-answer is no, the plan will cover it with a manual matrix of the
-boundary cases instead.
+**Frontend.** The repo had no unit-test runner; **this feature adds
+Vitest**, decided at spec review. The reason is §2: the height-resolution
+rule is real arithmetic that decides whether a generated tower closes
+exactly against its opening, and it will be wrong in edge cases nobody
+clicks through by hand — a pinned section plus a maletero plus the 15cm
+floor, say.
+
+Scope of the runner, deliberately narrow: Vitest runs in a Node
+environment over framework-free modules only. No jsdom, no React Testing
+Library, no component tests. The two modules under test are
+`services/closetTower.ts` (height resolution) and the generator that
+turns a recipe into modules. Everything else in the repo keeps verifying
+by `npx tsc --noEmit` plus manual checks, and Playwright keeps owning
+end-to-end. Widening the runner later is a separate decision.
 
 Manual checks either way: a generated tower shows joined panels in the 3D
 view and a single shared cut list in Resumen; adding a second tower beside
