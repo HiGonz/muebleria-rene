@@ -509,7 +509,7 @@ Those are the only two references. Expect a temporary compile error inside the c
 
 Run: `cd frontend && npx tsc --noEmit`
 
-Then read `catalogForProjectType` once more against the spec: for `cocina` the only things subtracted are `category === "closet"` (4 types) and `librero_giratorio_espejo` (1 type). 73 − 5 = 68 kitchen types. Confirm the count claim by eye against `MODULE_CATALOG`; do not add a script for it.
+Then read `catalogForProjectType` once more against the spec: for `cocina` the only things subtracted are `category === "closet"` (4 types) and `librero_giratorio_espejo` (1 type). 72 − 5 = 67 kitchen types. Confirm the count claim by eye against `MODULE_CATALOG`; do not add a script for it.
 
 - [ ] **Step 4: Commit**
 

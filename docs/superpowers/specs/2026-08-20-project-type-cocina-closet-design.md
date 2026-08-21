@@ -54,7 +54,7 @@ to filter to one kind.
   writes the row inside a transaction; `update` handles a status-only
   path (via `KitchenProjectStateMachine`) separately from the full
   design update.
-- The catalog holds 73 module types across 9 categories.
+- The catalog holds 72 module types across 9 categories.
 
 ## Non-goals
 
@@ -182,12 +182,25 @@ than an empty grid, so it reads as reserved rather than broken.
 Hiding a selector group is presentation. The real rule lives in the
 store: `addModule(type)` resolves the project's allowed type set from
 `draft.projectType` and refuses anything outside it, with a toast. Same
-check in `placeAccessoryInNiche` and `duplicateModule`, which can both
-introduce a type without going through the selector.
+check in `placeAccessoryInNiche`, which can introduce a type without
+going through the selector.
 
-The allowed set is derived from the same `projectTypes` declaration the
-selector uses — one source of truth, so a group added to one type can
-never disagree with what the store permits.
+`duplicateModule` is deliberately **not** guarded. It copies a module
+already present in the draft, so it cannot introduce a disallowed type —
+and guarding it would break duplicating a pre-existing module on a
+legacy project, which the "never retro-validate" rule below explicitly
+protects.
+
+Both consumers read the same `projectTypes` declaration, so browsing and
+enforcement cannot drift apart. The derivation is asymmetric on purpose:
+`closet`'s allowed set is the union of its groups' matches, while
+`cocina`'s is the whole catalog minus what moved out (`category ===
+"closet"` plus `CLOSET_ONLY_TYPES`). Deriving kitchens from group
+matches instead would silently drop any catalog type no group happens to
+cover, which is a regression risk the closet side does not have —
+nothing was ever browsable as a closet before. `cocina` is also the
+fall-through for any unrecognised value, so a draft persisted before
+this change behaves exactly as it did.
 
 `buildSampleKitchen` (the demo project) stays kitchen-only; the closet
 path starts empty.
