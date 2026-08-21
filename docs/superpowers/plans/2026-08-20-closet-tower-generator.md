@@ -686,8 +686,14 @@ function maleteroRuns(recipes: TowerRecipe[]): TowerRecipe[][] {
   const withMaletero = recipes.filter((r) => r.maletero !== null);
   const runs: TowerRecipe[][] = [];
 
+  // The numeric parts of the key are quantised to the same resolution the
+  // adjacency test uses. Membership in a run must not hinge on exact float
+  // equality when the adjacency check beside it already does not — two
+  // towers meant for the same row whose across-coordinate drifted by a
+  // rounding error would otherwise split into two maleteros.
+  const q = (n: number) => Math.round(n / TOWER_ADJACENCY_TOLERANCE_CM);
   for (const group of groupBy(withMaletero, (r) =>
-    [r.rotation, r.depthCm, stackTopCm(r), r.maletero!.heightCm, alongIsX(r.rotation) ? r.z : r.x].join("|"),
+    [r.rotation, r.depthCm, q(stackTopCm(r)), q(r.maletero!.heightCm), q(alongIsX(r.rotation) ? r.z : r.x)].join("|"),
   )) {
     const sorted = [...group].sort((a, b) => alongCoord(a) - alongCoord(b));
     let current: TowerRecipe[] = [sorted[0]];
@@ -733,7 +739,12 @@ export function generateMaleteroModules(recipes: TowerRecipe[], opts?: { boardMa
     const min = alongCoord(first) - first.widthCm / 2;
     const centerAlong = min + totalWidth / 2;
     const across = alongIsX(first.rotation) ? first.z : first.x;
-    const doorCount = Math.max(1, first.maletero!.doorCount);
+    // Max, not the first tower's: a run's door count must not depend on
+    // which tower happens to sort leftmost, or dragging two towers past
+    // each other would silently change how many lids the merged opening
+    // gets. A wider opening also never wants fewer doors than the
+    // narrowest declaration in it.
+    const doorCount = Math.max(1, ...run.map((r) => r.maletero!.doorCount));
 
     return {
       id: `${run.map((r) => r.id).join("+")}__maletero`,
