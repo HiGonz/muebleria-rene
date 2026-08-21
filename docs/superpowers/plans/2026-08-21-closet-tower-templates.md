@@ -386,6 +386,21 @@ Append to `backend/tests/Feature/ClosetTowerTemplateTest.php`, inside the class:
         $this->assertDatabaseMissing('closet_tower_templates', ['id' => $t->id]);
     }
 
+    public function test_the_list_says_who_may_delete_each_template(): void
+    {
+        $owner = User::factory()->create(['role' => 'seller']);
+        ClosetTowerTemplate::create(['user_id' => $owner->id, 'name' => 'Suya', 'recipe' => self::recipe()]);
+
+        Sanctum::actingAs($owner);
+        $this->getJson('/api/closet-tower-templates')->assertJsonPath('0.can_delete', true);
+
+        Sanctum::actingAs(User::factory()->create(['role' => 'seller']));
+        $this->getJson('/api/closet-tower-templates')->assertJsonPath('0.can_delete', false);
+
+        Sanctum::actingAs(User::factory()->create(['role' => 'admin']));
+        $this->getJson('/api/closet-tower-templates')->assertJsonPath('0.can_delete', true);
+    }
+
     public function test_an_admin_deletes_someone_elses_template(): void
     {
         $owner = User::factory()->create(['role' => 'seller']);
@@ -420,10 +435,20 @@ use Illuminate\Validation\Rule;
 
 class ClosetTowerTemplateController extends Controller
 {
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
+        $user = $request->user();
+
         return response()->json(
             ClosetTowerTemplate::with('user:id,name')->latest()->get()
+                // The client cannot compute this: the signed-in user object
+                // it holds carries name/email/role and no id. Deciding here
+                // also keeps the answer identical to what destroy() enforces,
+                // so the button and the endpoint can never disagree.
+                ->map(fn (ClosetTowerTemplate $t) => $t->setAttribute(
+                    'can_delete',
+                    $user->role === 'admin' || $t->user_id === $user->id,
+                ))
         );
     }
 
@@ -517,7 +542,7 @@ Add the controller's `use` statement at the top of the file, matching how the ot
 - [ ] **Step 5: Run the tests**
 
 Run: `cd backend && php artisan test --filter=ClosetTowerTemplateTest`
-Expected: PASS, 11 tests.
+Expected: PASS, 12 tests.
 
 - [ ] **Step 6: Full suite**
 
@@ -738,14 +763,16 @@ interface BackendTowerTemplate {
   recipe: TowerTemplateRecipe;
   user_id: number;
   user?: { id: number; name: string } | null;
+  can_delete: boolean;
 }
 
 export interface TowerTemplate {
   id: number;
   name: string;
   recipe: TowerTemplateRecipe;
-  ownerId: number;
   ownerName: string;
+  // Decided by the server — see the note in ClosetTowerTemplateController::index.
+  canDelete: boolean;
 }
 
 function mapTowerTemplate(t: BackendTowerTemplate): TowerTemplate {
@@ -753,8 +780,8 @@ function mapTowerTemplate(t: BackendTowerTemplate): TowerTemplate {
     id: t.id,
     name: t.name,
     recipe: t.recipe,
-    ownerId: t.user_id,
     ownerName: t.user?.name ?? "—",
+    canDelete: t.can_delete ?? false,
   };
 }
 
@@ -773,7 +800,7 @@ export async function deleteTowerTemplate(id: number): Promise<void> {
 }
 ```
 
-Import `TowerTemplateRecipe` as a type from `@/lib/towerTemplate`. If `http` has no `delete` helper, use whatever verb helper the file already exposes for deletions — check how `deleteKitchenProject` or the finishes destroy call does it and match that exactly rather than inventing one.
+Import `TowerTemplateRecipe` as a type from `@/lib/towerTemplate`. `http.delete<T>(path)` already exists in `services/http.ts` — use it as written above.
 
 - [ ] **Step 2: Typecheck**
 
@@ -881,7 +908,7 @@ Add an optional `seed?: TowerRecipe | null` prop. When `recipe` is null and `see
 In `ModuleSelector`, the `group?.id === TORRES_GROUP_ID` branch currently renders one tile. Load templates with `listTowerTemplates()` in an effect when that branch first opens — not on every selector mount — and render, above the existing "Torre personalizada" tile:
 
 - a tile per template showing 🏗️, its `name`, and a small grey line reading `${sections} secciones · ${widthCm}×${totalHeightCm} cm`, plus "con maletero" when it has one;
-- a small delete control on each tile, shown only when the signed-in user is the owner or an admin (`useAuthStore` exposes the user; the owner is `template.ownerId`). Confirm before deleting — reuse whatever confirmation pattern the file's neighbours use, or a `window.confirm` if there is none — then `deleteTowerTemplate` and drop it from local state.
+- a small delete control on each tile, shown only when `template.canDelete` is true. **Do not compute this on the client**: the signed-in user object in `useAuthStore` carries name, email and role and has no `id`, so an owner comparison is impossible here — the server decides and sends the answer. Confirm before deleting — reuse whatever confirmation pattern the file's neighbours use, or a `window.confirm` if there is none — then `deleteTowerTemplate` and drop it from local state.
 
 Clicking a template tile opens the dialog with `seed={templateToRecipe(template.recipe, crypto.randomUUID(), () => crypto.randomUUID())}`.
 
@@ -893,8 +920,6 @@ The loading and seeding wiring, which is the load-bearing part — the tile mark
   const [templates, setTemplates] = useState<TowerTemplate[] | null>(null);
   const [templatesFailed, setTemplatesFailed] = useState(false);
   const [seed, setSeed] = useState<TowerRecipe | null>(null);
-  const role = useAuthStore((s) => s.user?.role);
-  const userId = useAuthStore((s) => s.user?.id);
 
   // Loaded when the Torres group is first opened, not on every selector
   // mount — most visits to this panel never reach Torres.
@@ -911,7 +936,8 @@ The loading and seeding wiring, which is the load-bearing part — the tile mark
     setShowTowerDialog(true);
   };
 
-  const canDelete = (t: TowerTemplate) => role === "admin" || t.ownerId === userId;
+  // Deletion rights come from the server (t.canDelete) — the client has no
+  // user id to compare against.
 ```
 
 The existing `<TowerDialog>` render in this file gains `seed={seed}`, and its `onClose` must reset `setSeed(null)` so the next "Torre personalizada" click does not reopen the last template.
