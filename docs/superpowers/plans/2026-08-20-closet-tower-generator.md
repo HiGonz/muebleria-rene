@@ -446,6 +446,11 @@ describe("generateTowerModules", () => {
   it("maps each content to its module type and count option", () => {
     const mods = generateTowerModules(
       recipe({
+        // 280, not the 240 default: these four sections' typical heights sum
+        // to 255 (90+40+100+25), so at 240 the flex section would be squeezed
+        // to 10cm, the recipe would refuse to resolve, and the generator would
+        // correctly return [] — leaving this test asserting against nothing.
+        totalHeightCm: 280,
         sections: [
           section({ id: "a", content: "cajones", count: 3 }),
           section({ id: "b", content: "repisas", count: 5 }),
