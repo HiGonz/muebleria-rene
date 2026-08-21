@@ -1,1 +1,7 @@
 .superpowers/
+.claude/
+
+# Los repos de código viven aparte y se clonan dentro de estas carpetas.
+# Este repo solo guarda documentación (specs, planes) — ver README.
+/frontend/
+/backend/
