@@ -49,9 +49,8 @@ intent. A slow seller cannot do it with a client watching.
   exactly as they do now.
 - **A 2D elevation as the closet builder's main view.** The tower dialog
   has its own elevation preview; the builder keeps its 3D + Resumen tabs.
-- **Re-merging maleteros on drag.** Merging happens when a tower is
-  configured or via an explicit action, never by dragging two towers
-  together (see §4).
+- **A composite maletero door.** The lid belongs to one wide module, not
+  to a group of modules (see §4).
 
 ## Current state (verified against the code)
 
@@ -211,11 +210,17 @@ Its width is the combined width of the contiguous run of towers whose
 recipes have a maletero; its `x` is centred on that run; its
 `mountHeight` is the run's shared section-stack top.
 
-**Merging is regeneration, not detection.** Adding a tower with a
-maletero beside one that has one re-emits the run's single maletero
-module, wider. Removing a tower, or switching its maletero off, re-emits
-it narrower — or splits it into two modules if the removal broke the run
-in half. Nothing watches positions at runtime.
+**Merging is regeneration, not detection.** Every change to any recipe —
+adding a tower, editing one, switching a maletero off, or **dragging a
+tower to a new position** — regenerates the modules for the whole recipe
+list, and the run computation runs again from scratch. Push two towers
+together and their maleteros fuse into one wider module; pull them apart
+and it splits. Nothing watches positions at runtime; the regeneration is
+what notices.
+
+Dragging a generated module moves its whole tower and writes the new
+position onto the recipe. The recipe is where a tower's position lives —
+without that write, the next regeneration would teleport the tower back.
 
 This is what makes "default one door, optionally 2 or N" free: a wide
 module with N doors is an ordinary module in the current model, so the
@@ -228,12 +233,12 @@ the same depth, same rotation, and their section stacks reach the same
 top height. Different heights mean two separate maleteros, which is also
 physically true.
 
-**The cost of this choice, stated plainly:** two towers created
-separately and then dragged next to each other in the 3D view do not fuse
-their maleteros. Selecting two adjacent towers offers a **"Unir
-maleteros"** action that re-runs the generation over both. This is an
-explicit step where the old system had an implicit one, which is the
-trade for deleting all the runtime join logic.
+**Revised during planning.** This section originally said merging would
+never happen on drag, and offered an explicit "Unir maleteros" action
+instead. Writing the plan showed that dragging has to write back to the
+recipe anyway — otherwise a dragged tower snaps back on the next
+regeneration — and once it does, merging on drag falls out for free.
+There is no "Unir maleteros" button.
 
 ## 5. The dialog
 
