@@ -67,9 +67,11 @@ to filter to one kind.
 - **The closet tower.** A dedicated `torre_closet` module with a dynamic
   section-based configurator is a separate design. This spec only
   reserves an empty "Torres" group for it to land in.
-- **Removing the manual stacking.** Dropping `findTowerChain` and the
-  by-hand `mountHeight` closet workflow belongs with the tower, not
-  here.
+- **Removing the manual stacking.** Out of scope for this spec. Done
+  separately afterwards: the drag-to-stack snap (`findClosetSupportRun`)
+  was removed, while `findTowerChain` stays so projects saved with
+  stacked modules keep their render and cut list. Dropping the chain
+  itself belongs with the closet tower.
 - **The legacy `/closet` designer.** Orphaned (no nav link, its own
   parallel data model) and untouched by this work.
 - **A distinct closet UI.** Same tabs, same 3D room, same summary. A
