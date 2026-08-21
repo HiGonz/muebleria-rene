@@ -179,6 +179,20 @@ class ClosetTowerTemplateTest extends TestCase
         $this->assertSame([], $template->fresh()->recipe);
     }
 
+    public function test_a_template_outlives_the_user_who_saved_it(): void
+    {
+        $owner = User::factory()->create(['role' => 'seller']);
+        $template = ClosetTowerTemplate::create([
+            'user_id' => $owner->id, 'name' => 'Torre', 'recipe' => self::recipe(),
+        ]);
+
+        $owner->delete();
+
+        $this->assertDatabaseHas('closet_tower_templates', [
+            'id' => $template->id, 'user_id' => null,
+        ]);
+    }
+
     public function test_it_belongs_to_its_owner(): void
     {
         $owner = User::factory()->create(['role' => 'seller', 'name' => 'Vendedora']);
@@ -214,9 +228,12 @@ return new class extends Migration
     {
         Schema::create('closet_tower_templates', function (Blueprint $table) {
             $table->id();
-            // The creator. Templates are readable shop-wide — a tower design
-            // is shop knowledge — but only the owner or an admin may delete.
-            $table->foreignId('user_id')->constrained()->cascadeOnDelete();
+            // The creator, recorded for the delete rule: only the owner or
+            // an admin may remove a template. Nullable and nullOnDelete
+            // because a tower design belongs to the shop and must outlive
+            // whoever saved it — cascading would let one offboarded seller
+            // take the shop's templates with them.
+            $table->foreignId('user_id')->nullable()->constrained()->nullOnDelete();
             $table->string('name', 120);
             // A TowerRecipe minus its placement: no x/z/rotation. See the
             // closet-tower design spec §6.
@@ -248,10 +265,11 @@ class ClosetTowerTemplate extends Model
 {
     protected $fillable = ['user_id', 'name', 'recipe'];
 
-    // Laravel's castAttribute short-circuits on null before an `array` cast
-    // runs, so a null column would read back as null rather than []. The
-    // attribute default keeps every read an array — same guard the towers
-    // column on kitchen_projects needed.
+    // The recipe column is NOT NULL — a template without a recipe is not a
+    // thing — so this default is what lets a create() that omits the field
+    // succeed with [] instead of throwing on the constraint. (Distinct from
+    // the guard on KitchenProject::$towers, which exists because THAT column
+    // is nullable and Laravel's array cast short-circuits on null.)
     protected $attributes = ['recipe' => '[]'];
 
     protected function casts(): array
@@ -269,7 +287,7 @@ class ClosetTowerTemplate extends Model
 - [ ] **Step 5: Run the tests**
 
 Run: `cd backend && php artisan test --filter=ClosetTowerTemplateTest`
-Expected: PASS, 3 tests.
+Expected: PASS, 4 tests.
 
 - [ ] **Step 6: Commit**
 
