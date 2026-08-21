@@ -226,9 +226,14 @@ describe("resolveTowerHeights", () => {
   });
 
   it("refuses when the remainder falls under the floor, naming the squeezed section", () => {
+    // 100 total minus the 90cm drawer bank leaves 10cm for the flex section,
+    // under the 15cm floor. Do not raise this to a number that leaves 15cm or
+    // more: a remainder above the floor is a VALID tower, and the flex
+    // section is allowed to resolve below its typical height. That is the
+    // whole point of flex.
     const res = resolveTowerHeights(
       recipe({
-        totalHeightCm: 120,
+        totalHeightCm: 100,
         sections: [
           section({ id: "a", content: "cajones" }),
           section({ id: "b", content: "colgar" }),
