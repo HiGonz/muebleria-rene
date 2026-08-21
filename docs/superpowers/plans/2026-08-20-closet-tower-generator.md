@@ -1003,10 +1003,26 @@ Add the **same block of rules** to `update`'s full-design validate array (the se
 Run: `cd backend && php artisan test --filter=KitchenProjectTowersTest`
 Expected: PASS, 5 tests.
 
-- [ ] **Step 7: Full suite**
+- [ ] **Step 7: Make sure `towers` can never read back as null**
+
+This is not optional and the endpoint test will NOT catch it. Laravel's
+`castAttribute` short-circuits on null before an `array` cast runs, so a NULL
+column reads back as `null`, not `[]`. `store()` writing
+`$validated['towers'] ?? []` masks that on the create path only — every row
+that predates this migration, and any bare `KitchenProject::create()` that
+omits the field, still yields null.
+
+Fix both halves:
+- In the migration, right after the `Schema::table` that adds the column,
+  backfill existing rows: set `towers` to `'[]'` wherever it is null.
+- In the model, add `protected $attributes = ['towers' => '[]'];` so a
+  `create()` omitting the field lands `[]`.
+
+Then add the test that actually proves it — create a project directly through
+the model with no `towers` key and assert `$project->fresh()->towers === []`.
 
 Run: `cd backend && php artisan test`
-Expected: PASS. If `test_towers_default_to_an_empty_list` fails because a row created straight through the model returns `null` rather than `[]`, set the column default in the migration with `->default(new Expression("('[]')"))`, or normalise in an accessor — pick the one that keeps the other tests green and say which in your report.
+Expected: PASS, with the suite up by the new tests.
 
 - [ ] **Step 8: Commit**
 
