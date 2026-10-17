@@ -232,6 +232,8 @@ Impacto: **B**loqueante · **A**lto · **M**edio · **Ba**jo
 **Fase 2 — Operación cómoda**
 Adjuntos (H-15), envío WhatsApp/correo + seguimiento (H-16), folios consecutivos (H-18), inventario con movimientos y faltantes (H-19), proveedores y OC (H-20), bitácora de cambios (H-13), KPIs del dueño (H-31), nota de entrega con firma (H-22), vista de taller simple/tablet (H-32), márgenes y descuentos configurables con aprobación (H-07).
 
+Pendiente Fase 2 (clientes): herramienta de admin para **unir clientes**. Mueve proyectos, pedidos y pagos al cliente que se conserva y deja registro de la unión. El backfill ya no une por nombre; solo por teléfono normalizado, y reporta posibles duplicados por nombre para revisión manual.
+
 **Fase 3 — Nivel industrial**
 Costeo real vs estimado, mano de obra por horas, mermas reales, garantía/postventa (H-24), versionado de diseño con comparativo, etiquetas/QR por pieza, notificaciones multicanal, link público con caducidad/PIN, retiro del módulo legado, pruebas E2E por rol.
 
