@@ -234,6 +234,8 @@ Adjuntos (H-15), envío WhatsApp/correo + seguimiento (H-16), folios consecutivo
 
 Pendiente Fase 2 (clientes): herramienta de admin para **unir clientes**. Mueve proyectos, pedidos y pagos al cliente que se conserva y deja registro de la unión. El backfill ya no une por nombre; solo por teléfono normalizado, y reporta posibles duplicados por nombre para revisión manual.
 
+Backlog Sprint 3 (API): las rutas `/api/*` responden **500** en lugar de 401 cuando la petición llega sin `Accept: application/json` (Laravel intenta redirigir a una ruta `login` que no existe). Forzar respuestas JSON en las rutas api y no redirigir a una ruta de login inexistente. Detectado el 2026-10-17 en producción; el frontend siempre manda la cabecera, así que no afecta a los usuarios hoy.
+
 **Fase 3 — Nivel industrial**
 Costeo real vs estimado, mano de obra por horas, mermas reales, garantía/postventa (H-24), versionado de diseño con comparativo, etiquetas/QR por pieza, notificaciones multicanal, link público con caducidad/PIN, retiro del módulo legado, pruebas E2E por rol.
 
