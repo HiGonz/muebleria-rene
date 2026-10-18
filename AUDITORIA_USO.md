@@ -258,6 +258,17 @@ Costeo real vs estimado, mano de obra por horas, mermas reales, garantía/postve
 - En proyectos sin `customer_id`, botón **«Asignar cliente»** con búsqueda precargada con el texto de `client_name`.
 - (Ya anotado arriba) Respuestas JSON forzadas en `/api/*`, para que no haya 500 sin `Accept: application/json`.
 
+### Sprint 3b — módulo legado retirado, pendiente de borrar (2026-10-18)
+
+**Qué se hizo.** `/quotes` y `/projects/legacy` (y todo lo que cuelga de ahí) **redirigen al dashboard nuevo** (`next.config.ts`). No hay enlace en el menú. **No se borró nada**: ni las pantallas, ni los endpoints, ni las tablas, ni los datos.
+
+**Qué hay que borrar en el futuro** (cuando se confirme que nadie lo usa; antes, sacar un respaldo):
+- **Frontend:** `app/quotes/`, `app/projects/legacy/`, `components/quotes/`, `components/projects/ProjectWizard.tsx` y sus pasos (`Step*.tsx`), `components/dashboard/ProjectsTable.tsx`, `store/useProjectStore.ts`, `services/mockData.ts`, y las funciones de `projects` y `quotes` de `services/api.ts`; las entradas `/quotes`, `/projects/legacy*` de `lib/roleAccess.ts` y las redirecciones de `next.config.ts`.
+- **Backend:** rutas `/projects`, `/quotes` y `/dashboard/stats`; `ProjectController`, `QuoteController`, `DashboardController::index`; modelos `Project`, `ProjectDimension`, `ProjectMaterial`, `Quote`.
+- **Tablas** (migración de borrado, con respaldo previo): `projects`, `project_dimensions`, `project_materials`, `quotes`. En producción hoy tienen 1, 1, 0 y 0 filas.
+
+**Pendiente:** confirmar con René que no usa el módulo antiguo y, entonces, hacer el borrado en un sprint propio.
+
 ---
 
 ## 8. Preguntas de negocio para ti
