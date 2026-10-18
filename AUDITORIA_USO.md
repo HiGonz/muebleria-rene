@@ -239,6 +239,25 @@ Backlog Sprint 3 (API): las rutas `/api/*` responden **500** en lugar de 401 cua
 **Fase 3 — Nivel industrial**
 Costeo real vs estimado, mano de obra por horas, mermas reales, garantía/postventa (H-24), versionado de diseño con comparativo, etiquetas/QR por pieza, notificaciones multicanal, link público con caducidad/PIN, retiro del módulo legado, pruebas E2E por rol.
 
+### Sprint 2 — decisión: el backfill de clientes NO se corre en producción (2026-10-17)
+
+**Decisión.** Sprint 2 (clientes, pedidos, pagos, settings, folios PED) está desplegado y migrado en producción, pero el comando `customers:backfill-from-projects` **no se ejecuta ahí**. Los proyectos existentes conservan su texto en `client_name`/`client_phone` (la interfaz ya cae a ese texto cuando un proyecto no tiene `customer_id`), y los clientes reales se crean desde ahora con el selector del builder y al aprobar un pedido.
+
+**Por qué.** En los datos reales `client_name` se usó como **dirección o ubicación de la obra** («Halcones 40 viñedos», «Allende 2720», «Manantiales 86»…), no como el nombre de una persona. Crear clientes a partir de ese texto llenaría el catálogo de direcciones y lo dejaría sucio desde el primer día.
+
+**Números del dry-run en producción (272 proyectos activos):**
+- 246 clientes se crearían y 247 proyectos se vincularían; solo 1 se uniría a un cliente existente por teléfono.
+- 25 proyectos se omitirían por no tener nombre ni teléfono.
+- 18 grupos de «posibles duplicados» por nombre (por ejemplo Allende 2720 ×4, Manantiales 86 ×4): casi todos son la misma ubicación repetida en varios proyectos, no personas distintas con el mismo nombre.
+- El dry-run no dejó datos (0 clientes, 0 proyectos vinculados, 0 pedidos, 0 pagos); solo avanzó la secuencia de ids de `customers`.
+
+**Se conserva** el comando de backfill y su `--dry-run` (con el reporte de duplicados), pero no se corre en producción.
+
+**Backlog Sprint 3 (clientes; no implementado):**
+- Separar en el proyecto **«Cliente»** (persona, del catálogo `customers`) de **«Ubicación / obra»** (texto libre o dirección). En los proyectos existentes, `client_name` pasaría a ser la ubicación.
+- En proyectos sin `customer_id`, botón **«Asignar cliente»** con búsqueda precargada con el texto de `client_name`.
+- (Ya anotado arriba) Respuestas JSON forzadas en `/api/*`, para que no haya 500 sin `Accept: application/json`.
+
 ---
 
 ## 8. Preguntas de negocio para ti
