@@ -271,6 +271,19 @@ Costeo real vs estimado, mano de obra por horas, mermas reales, garantía/postve
 
 ---
 
+### Backlog — servidor web de producción (anotado 2026-10-19, sin hacer)
+**Hallazgo:** el backend en Railway corre con `php artisan serve` (servidor integrado de PHP): atiende **una petición a la vez**. En las pruebas locales con el mismo servidor, un cliente con conexiones abiertas o una petición lenta (un PDF, subir fotos) deja a todos los demás esperando segundos. Con pocos usuarios no se nota; con taller, vendedores y clientes abriendo enlaces de seguimiento a la vez, sí. Para «nivel industrial» hay que pasar a un servidor real.
+
+| Opción | Esfuerzo | Riesgo | Comentario |
+|---|---|---|---|
+| **A. FrankenPHP/Caddy sin Octane** (servidor con varios hilos, PHP clásico por petición) | 0.5–1 día | Bajo–medio | Cambia el comando de arranque y agrega una configuración de Caddy; nuestro código no cambia. Es el mayor beneficio por el menor cambio. |
+| **B. nginx + php-fpm** en un Dockerfile propio | 1–1.5 días | Medio | Estándar y conocido, pero hay que mantener la imagen y un supervisor para fpm + nginx + planificador; builds más lentos. |
+| **C. Laravel Octane (FrankenPHP en modo worker)** | 1.5–2.5 días | Medio–alto | El más rápido, pero la aplicación vive entre peticiones: hay que revisar estado estático, singletons y fugas de memoria, y correr toda la suite bajo Octane. Conviene solo después de A, si hace falta. |
+
+**Recomendación:** A, y medir antes y después (tiempos de `/api/orders`, `/api/dashboard/overview`, PDF de cotización con 10 peticiones simultáneas). Riesgos comunes: no tenemos ambiente de pruebas, así que el cambio se probaría en un servicio temporal de Railway apuntando a una copia de la base antes de tocar `backend`; hay que conservar `scripts/scheduler-supervisor.sh` (planificador) y las migraciones al arrancar; vigilar memoria por el número de hilos/workers del plan; y confirmar las cabeceras de proxy (HTTPS, IP real para los `throttle`).
+
+---
+
 ## 8. Preguntas de negocio para ti
 
 1. ¿Cuántas personas usan el sistema y quién **aprueba** realmente: ¿el dueño siempre, o el vendedor con anticipo?
